@@ -1,0 +1,6 @@
+{
+  "name": "TournaHub",
+  "description": "A production-grade tournament management platform for players and admins with real-time match tracking, wallet management, and secure prize distribution.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
