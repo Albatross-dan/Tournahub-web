@@ -87,7 +87,7 @@ export default function AdminFixtures() {
 
     setBusy(true);
     try {
-      await matchService.verifyResult(matchId, winnerId, s1, s2);
+      await (matchService as any).verifyResult(matchId, winnerId, s1, s2);
       await fetchMatches(selectedTournament!);
     } catch (err: any) {
       alert(err.message || 'Verification failed');

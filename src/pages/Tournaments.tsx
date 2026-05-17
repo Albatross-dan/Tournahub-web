@@ -17,8 +17,8 @@ export default function Tournaments() {
   const { tournaments, loading } = useRealtimeTournaments('all', 24); 
   const { userRegistrations } = useUserRegistrations();
 
-  const filteredTournaments = tournaments.filter(t => {
-    const matchesSearch = t.name.toLowerCase().includes(search.toLowerCase());
+  const filteredTournaments = (tournaments || []).filter(t => {
+    const matchesSearch = (t.name || '').toLowerCase().includes(search.toLowerCase());
     if (!matchesSearch) return false;
     
     if (filter === 'all') return true;

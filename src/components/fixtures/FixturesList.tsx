@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { matchService } from '../../services/matchService';
-import { getStorageUrl, getPublicIdentity } from '../../lib/utils';
-import { Users, Calendar } from 'lucide-react';
+import { tournamentService } from '../../services/tournamentService';
 import { motion } from 'motion/react';
 import { cn, formatDate } from '../../lib/utils';
 import LoadingState from '../ui/LoadingState';
-import { useTournamentBadges } from '../../hooks/useTournamentBadges';
+import { PlayerBadge } from '../ui/PlayerBadge';
+import { useMatchCompletionSync } from '../../hooks/useMatchCompletionSync';
+import { Calendar } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 interface FixturesListProps {
   tournamentId: string;
@@ -14,15 +15,35 @@ interface FixturesListProps {
 export default function FixturesList({ tournamentId }: FixturesListProps) {
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const { badges } = useTournamentBadges(tournamentId);
+  const { refreshCount } = useMatchCompletionSync(tournamentId);
 
   useEffect(() => {
     fetchMatches();
-  }, [tournamentId]);
+
+    const channel = supabase
+      .channel(`fixtures-badges-${tournamentId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tournament_badge_selections',
+          filter: `tournament_id=eq.${tournamentId}`,
+        },
+        () => {
+          fetchMatches();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [tournamentId, refreshCount]);
 
   async function fetchMatches() {
     try {
-      const data = await matchService.getByTournament(tournamentId);
+      const data = await tournamentService.getFixturesWithBadges(tournamentId);
       setMatches(data || []);
     } catch (err) {
       console.error('Error fetching matches:', err);
@@ -98,23 +119,23 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between">
+                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 md:gap-4 overflow-hidden">
                         <PlayerCard 
-                          profile={match.player1} 
-                          isWinner={match.winner === (match.player1?.id || match.player1)} 
+                          username={match.player1_username} 
+                          badgeId={match.player1_badge_id}
                           score={match.score1}
                           align="left"
-                          badgeUrl={badges[match.player1?.id || match.player1]}
+                          isWinner={match.status === 'completed' && match.score1 > match.score2}
                         />
-                        <div className="px-4">
-                          <div className="text-[10px] font-black text-zinc-600 bg-zinc-800/50 px-2 py-1 rounded">VS</div>
+                        <div className="shrink-0 flex flex-col items-center justify-center px-1">
+                          <div className="text-[8px] md:text-[10px] font-black text-zinc-600 bg-zinc-800/50 px-2 py-0.5 md:py-1 rounded-full italic">VS</div>
                         </div>
                         <PlayerCard 
-                          profile={match.player2} 
-                          isWinner={match.winner === (match.player2?.id || match.player2)} 
+                          username={match.player2_username} 
+                          badgeId={match.player2_badge_id} 
                           score={match.score2}
                           align="right"
-                          badgeUrl={badges[match.player2?.id || match.player2]}
+                          isWinner={match.status === 'completed' && match.score2 > match.score1}
                         />
                       </div>
                     </motion.div>
@@ -135,45 +156,48 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
   );
 }
 
-function PlayerCard({ profile, isWinner, score, align, badgeUrl }: { profile: any, isWinner: boolean, score: number | null, align: 'left' | 'right', badgeUrl?: string }) {
+function PlayerCard({ 
+  username, 
+  badgeId, 
+  score, 
+  align, 
+  isWinner 
+}: { 
+  username: string | null; 
+  badgeId: string | null; 
+  score: number | null; 
+  align: 'left' | 'right'; 
+  isWinner?: boolean;
+}) {
   const isLeft = align === 'left';
-  const hasProfileObject = profile && typeof profile === 'object';
-  const username = getPublicIdentity(profile);
-  const avatarUrl = hasProfileObject ? profile.avatar_url : null;
   
   return (
-    <div className={cn("flex items-center space-x-3 flex-1", !isLeft && "flex-row-reverse space-x-reverse text-right")}>
-      <div className={cn(
-        "w-12 h-12 rounded-xl bg-zinc-800 border-2 transition-colors flex flex-shrink-0 items-center justify-center overflow-hidden shadow-inner",
-        isWinner ? "border-primary" : "border-zinc-700"
-      )}>
-        {badgeUrl ? (
-          <img 
-            src={getStorageUrl('team-badges', badgeUrl) || ''} 
-            className="w-full h-full object-contain p-1.5" 
-            referrerPolicy="no-referrer"
-          />
-        ) : avatarUrl ? (
-          <img 
-            src={getStorageUrl('avatars', avatarUrl) || ''} 
-            className="w-full h-full object-cover" 
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          <Users className="w-5 h-5 text-zinc-600" />
+    <div className={cn(
+      "flex items-center gap-2 md:gap-3 min-w-0", 
+      !isLeft && "flex-row-reverse text-right"
+    )}>
+      <PlayerBadge 
+        badgeId={badgeId} 
+        username={username || 'TBD'} 
+        size="md"
+        className={cn(
+          "w-10 h-10 md:w-14 md:h-14 rounded-xl border-2 transition-all",
+          isWinner ? "border-primary shadow-lg shadow-primary/20" : "border-zinc-800"
         )}
-      </div>
-      <div className="min-w-0">
+      />
+      <div className="min-w-0 flex-1">
         <p className={cn(
-          "font-bold text-sm uppercase italic tracking-tight truncate pb-1",
-          isWinner ? "text-primary" : "text-white"
+          "font-black text-[9px] md:text-xs uppercase italic tracking-tighter truncate leading-tight",
+          isWinner ? "text-primary" : "text-zinc-400"
         )}>
-          {username}
+          {username || 'TBD'}
         </p>
-        {(score !== null && score !== undefined) && (
-          <p className="text-2xl font-black text-white italic tracking-tighter leading-none">
+        {(score !== null && score !== undefined) ? (
+          <p className="text-xl md:text-3xl font-black text-white italic tracking-tighter leading-none mt-1">
             {score}
           </p>
+        ) : (
+          <div className="h-4 md:h-6" />
         )}
       </div>
     </div>

@@ -81,7 +81,7 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
               className="flex items-center justify-between w-full"
             >
               <span className="text-xl font-bold tracking-tighter text-white flex items-center">
-                <Trophy className="w-6 h-6 text-primary mr-2" />
+                <img src="/logo.png" alt="TournaHub" className="w-10 h-10 mr-3 object-contain" referrerPolicy="no-referrer" />
                 Tourna<span className="text-primary text-2xl font-extrabold -ml-1">Hub</span>
               </span>
               <button onClick={() => setIsOpen(false)} className="lg:hidden text-slate-400 hover:text-white p-2">
@@ -96,7 +96,7 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
               exit={{ opacity: 0 }}
               className="w-full flex justify-center"
             >
-              <Trophy className="w-8 h-8 text-primary" />
+              <img src="/logo.png" alt="TournaHub" className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
             </motion.div>
           )}
         </AnimatePresence>

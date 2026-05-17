@@ -6,7 +6,7 @@ import {
   Trophy, Users, Activity, Wallet, 
   Plus, Search, MoreVertical, Edit2, 
   Trash2, ExternalLink, ArrowUpRight,
-  TrendingUp, Clock
+  TrendingUp, Clock, Gamepad2, Radio
 } from 'lucide-react';
 import { Tournament } from '../../types/database';
 import { Link } from 'react-router-dom';
@@ -37,10 +37,10 @@ export default function AdminDashboard() {
       const pool = tournaments.reduce((acc, curr) => acc + (curr.prize_pool || 0), 0);
 
       setStats({
-        totalPlayers: players.count || 0,
-        activeTournaments: tournaments.filter(t => t.status === 'ongoing').length,
-        pendingVerifications: results.count || 0,
-        totalPrizePool: pool
+        totalPlayers: (players as any)?.count || 0,
+        activeTournaments: (tournaments || []).filter(t => t?.status === 'ongoing').length,
+        pendingVerifications: (results as any)?.count || 0,
+        totalPrizePool: pool || 0
       });
     } catch (err) {
       console.error('Error loading admin stats:', err);
@@ -49,7 +49,7 @@ export default function AdminDashboard() {
     }
   }
 
-  const recentTournaments = tournaments.slice(0, 5);
+  const recentTournaments = Array.isArray(tournaments) ? tournaments.slice(0, 5) : [];
 
   return (
     <AdminShell>
@@ -76,28 +76,32 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <AdminStatCard 
             title="Total Contenders" 
-            value={stats.totalPlayers.toLocaleString()} 
+            value={(stats.totalPlayers || 0).toLocaleString()} 
             icon={<Users />} 
             color="bg-blue-500/10 text-blue-400 border-blue-500/20"
             trend="+12% this week"
           />
-          <AdminStatCard 
-            title="Active Operations" 
-            value={stats.activeTournaments.toString()} 
-            icon={<Trophy />} 
-            color="bg-primary/10 text-primary border-primary/20"
-            trend="Live Now"
-          />
-          <AdminStatCard 
-            title="Approvals Required" 
-            value={stats.pendingVerifications.toString()} 
-            icon={<Activity />} 
-            color="bg-amber-500/10 text-amber-400 border-amber-500/20"
-            trend="Action Pending"
-          />
+          <Link to="/admin/tournaments" className="block h-full">
+            <AdminStatCard 
+              title="Active Operations" 
+              value={(stats.activeTournaments || 0).toString()} 
+              icon={<Trophy />} 
+              color="bg-primary/10 text-primary border-primary/20"
+              trend="View Deployment Registry"
+            />
+          </Link>
+          <Link to="/admin/moderation" className="block h-full">
+            <AdminStatCard 
+              title="Approvals Required" 
+              value={(stats.pendingVerifications || 0).toString()} 
+              icon={<Activity />} 
+              color="bg-amber-500/10 text-amber-400 border-amber-500/20"
+              trend="Moderate Results"
+            />
+          </Link>
           <AdminStatCard 
             title="War Chest (Prizes)" 
-            value={formatCurrency(stats.totalPrizePool)} 
+            value={formatCurrency(stats.totalPrizePool || 0)} 
             icon={<Wallet />} 
             color="bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
             trend="Locked & Ready"
@@ -110,10 +114,10 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
                 <div className="w-1.5 h-6 bg-primary rounded-full" />
-                <h2 className="text-xl font-black text-white italic uppercase tracking-tight">Recent Deployment Activity</h2>
+                <h2 className="text-xl font-black text-white italic uppercase tracking-tight">Deployment Activity</h2>
               </div>
-              <Link to="/admin/tournaments" className="text-primary text-[10px] font-black uppercase tracking-widest hover:underline flex items-center group">
-                All Logs <ArrowUpRight className="ml-1 w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              <Link to="/admin/fixtures" className="text-primary text-[10px] font-black uppercase tracking-widest hover:underline flex items-center group">
+                All Results <ArrowUpRight className="ml-1 w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
               </Link>
             </div>
             
@@ -122,19 +126,19 @@ export default function AdminDashboard() {
                 <table className="w-full text-left">
                   <thead className="bg-slate-900/50 border-b border-slate-800">
                     <tr>
-                      <th className="px-6 py-5 text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">Tournament Operation</th>
+                      <th className="px-6 py-5 text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">Operation Intel</th>
                       <th className="px-6 py-5 text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none text-center">Status</th>
-                      <th className="px-6 py-5 text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none text-right">Prize Feed</th>
+                      <th className="px-6 py-5 text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none text-right text-primary">Prize Feed</th>
                       <th className="px-6 py-5"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/50">
                     {recentTournaments.map((t, idx) => (
-                      <tr key={t.id || idx} className="group hover:bg-white/5 transition-all">
+                      <tr key={t?.id || idx} className="group hover:bg-white/5 transition-all">
                         <td className="px-6 py-5">
                           <div className="flex items-center space-x-4">
                             <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden">
-                              {t.banner_url ? (
+                              {t?.banner_url ? (
                                 <img 
                                   src={getStorageUrl('tournament-banners', t.banner_url)} 
                                   className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" 
@@ -148,30 +152,30 @@ export default function AdminDashboard() {
                               )}
                             </div>
                             <div className="flex flex-col">
-                              <span className="font-black text-sm text-white uppercase tracking-tight group-hover:text-primary transition-colors">{t.name}</span>
-                              <span className="text-[10px] text-slate-600 font-mono italic">#{t.id.slice(0, 8)}</span>
+                              <span className="font-black text-sm text-white uppercase tracking-tight group-hover:text-primary transition-colors">{t?.name || 'Untitled'}</span>
+                              <span className="text-[10px] text-slate-600 font-mono italic">#{t?.id?.slice(0, 8) || 'N/A'}</span>
                             </div>
                           </div>
                         </td>
                         <td className="px-6 py-5 text-center">
                           <span className={cn(
                             "px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border",
-                            t.status === 'ongoing' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-slate-800 text-slate-500 border-slate-700'
+                            t?.status === 'ongoing' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-slate-800 text-slate-500 border-slate-700'
                           )}>
-                            {t.status}
+                            {t?.status || 'unknown'}
                           </span>
                         </td>
                         <td className="px-6 py-5 text-right">
                           <span className="text-sm font-black text-emerald-400 italic tracking-tighter">
-                            {formatCurrency(t.prize_pool || 0)}
+                            {formatCurrency(t?.prize_pool || 0)}
                           </span>
                         </td>
                         <td className="px-6 py-5 text-right">
                           <div className="flex items-center justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Link to={`/admin/tournaments/${t.id}/manage`} className="p-2 hover:bg-primary/20 text-primary rounded-lg transition-colors">
+                            <Link to={`/admin/tournaments/${t?.id}/manage`} className="p-2 hover:bg-primary/20 text-primary rounded-lg transition-colors" title="Manage Operations">
                               <TrendingUp className="w-4 h-4" />
                             </Link>
-                            <Link to={`/admin/tournaments/${t.id}`} className="p-2 hover:bg-white/10 text-slate-400 rounded-lg transition-colors">
+                            <Link to={`/admin/tournaments/${t?.id}`} className="p-2 hover:bg-white/10 text-slate-400 rounded-lg transition-colors" title="Edit Intel">
                               <Edit2 className="w-4 h-4" />
                             </Link>
                           </div>
@@ -194,28 +198,33 @@ export default function AdminDashboard() {
           {/* Sidebar Area */}
           <div className="space-y-8">
              <div className="space-y-4">
-               <h3 className="text-lg font-black text-white italic uppercase tracking-tight">Rapid Response</h3>
-               <div className="card p-6 bg-gradient-to-br from-primary/10 to-transparent border-primary/20 space-y-4">
-                 <div className="flex items-center space-x-3 text-primary">
+               <h3 className="text-lg font-black text-white italic uppercase tracking-tight">Moderation Desk</h3>
+               <div className="card p-6 bg-surface/40 border-amber-500/20 space-y-4 shadow-xl shadow-amber-500/5">
+                 <div className="flex items-center space-x-3 text-amber-500">
                    <Clock className="w-5 h-5" />
-                   <span className="text-[10px] font-black uppercase tracking-[0.2em]">Queue Status</span>
+                   <span className="text-[10px] font-black uppercase tracking-[0.2em]">Live Queue</span>
                  </div>
                  <div className="flex justify-between items-end">
-                    <span className="text-4xl font-black text-white italic tracking-tighter leading-none">{stats.pendingVerifications}</span>
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest pb-1">Verifications</span>
+                    <div className="flex flex-col">
+                      <span className="text-4xl font-black text-white italic tracking-tighter leading-none">{stats.pendingVerifications}</span>
+                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-1">Pending Result Validations</span>
+                    </div>
                  </div>
-                 <Link to="/admin/fixtures" className="btn-primary w-full py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all hover:bg-primary/80">
-                   Enter Verification HUD
+                 <Link to="/admin/moderation" className="btn-primary w-full py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all hover:bg-primary/80">
+                   Enter Moderation Desk
                  </Link>
                </div>
              </div>
 
-             <div className="card p-6 border-white/5 space-y-6">
-                <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest italic">System Utilities</h4>
+             <div className="card p-6 border-white/5 space-y-6 bg-slate-900/40">
+                <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest italic">Operations HQ</h4>
                 <div className="space-y-3">
+                  <AdminUtilLink to="/admin/moderation" icon={<Activity className="text-amber-500" />} label="Moderation HQ" />
+                  <AdminUtilLink to="/admin/tournaments" icon={<Trophy />} label="Event Registry" />
                   <AdminUtilLink to="/admin/players" icon={<Users />} label="Contender List" />
+                  <AdminUtilLink to="/admin/fixtures" icon={<Gamepad2 />} label="Results Engine" />
+                  <AdminUtilLink to="/admin/standings" icon={<TrendingUp />} label="Intel Standings" />
                   <AdminUtilLink to="/admin/wallet" icon={<Wallet />} label="Financial Logs" />
-                  <AdminUtilLink to="/admin/standings" icon={< TrendingUp />} label="Intel Standings" />
                 </div>
              </div>
           </div>

@@ -19,6 +19,10 @@ import { TournamentStatus } from '../constants';
 
 import { useRealtimeTournaments } from '../hooks/useRealtimeTournaments';
 
+import VerificationStatusBadge from '../components/match/VerificationStatusBadge';
+import VerificationStatusBanner from '../components/match/VerificationStatusBanner';
+import { VerificationStatus } from '../types/verification.types';
+
 export default function Dashboard() {
   const { user, profile } = useAuth();
   
@@ -66,8 +70,11 @@ export default function Dashboard() {
 
       if (matchesRes.status === 'fulfilled') {
         const matches = (matchesRes.value as any) || [];
-        const pendingMatches = matches.filter((m: any) => m.status === 'pending').slice(0, 5);
-        setScheduledMatches(pendingMatches);
+        // Show matches that are pending, ongoing, or awaiting results/review
+        const filteredMatches = matches.filter((m: any) => 
+          ['pending', 'ongoing', 'awaiting_result', 'match_in_progress', 'lobby_open', 'under_review'].includes(m.status)
+        ).slice(0, 5);
+        setScheduledMatches(filteredMatches);
       }
 
       if (statsRes.status === 'fulfilled') {
@@ -408,35 +415,76 @@ function MatchCard({ match }: { match: any }) {
   const { user } = useAuth();
   const opponent = match.player1?.id === user?.id ? match.player2 : match.player1;
   const opponentName = opponent?.username || (opponent ? opponent.email?.split('@')[0] || 'Unknown' : 'TBD');
+  
+  const verificationStatus = match.result_verification_status as VerificationStatus || 'none';
+
+  const getActionButton = () => {
+    if (['lobby_open', 'match_in_progress'].includes(match.status)) {
+      return <button className="btn-primary py-2 px-6 text-[10px] shadow-none group-hover:shadow-lg group-hover:shadow-primary/20 rounded-xl bg-emerald-600 border-emerald-500">ENTER MATCH</button>;
+    }
+    if (match.status === 'awaiting_result' && ['none', 'disputed'].includes(verificationStatus)) {
+      return <button className="btn-primary py-2 px-6 text-[10px] shadow-none group-hover:shadow-lg group-hover:shadow-primary/20 rounded-xl">SUBMIT RESULT</button>;
+    }
+    if (match.status === 'under_review' || verificationStatus === 'single_submission') {
+      return (
+        <div className="flex items-center space-x-2 bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-xl">
+          <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
+          <span className="text-amber-500 text-[10px] font-black uppercase tracking-widest italic">Verification Pending</span>
+        </div>
+      );
+    }
+    return <button className="btn-primary py-2 px-6 text-[10px] shadow-none group-hover:shadow-lg group-hover:shadow-primary/20 rounded-xl">DEPLOY</button>;
+  };
 
   return (
-    <Link to={`/matches/${match.id}`} className="card p-4 md:p-5 hover:border-primary/50 transition-all duration-300 group flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-2xl">
-      <div className="flex items-center space-x-4 md:space-x-6 w-full sm:w-auto">
-        <div className="text-center shrink-0 min-w-[3.5rem] bg-slate-800/50 p-2 rounded-xl">
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Round</p>
-          <p className="text-xl font-black text-primary italic leading-none">{match.round || '1'}</p>
+    <div className="relative">
+      <Link to={`/matches/${match.id}`} className={cn(
+        "card p-4 md:p-5 hover:border-primary/50 transition-all duration-300 group flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-2xl relative z-10",
+        verificationStatus === 'disputed' && "border-red-500/50 hover:border-red-500"
+      )}>
+        <div className="flex items-center space-x-4 md:space-x-6 w-full sm:w-auto">
+          <div className="text-center shrink-0 min-w-[3.5rem] bg-slate-800/50 p-2 rounded-xl">
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Round</p>
+            <p className="text-xl font-black text-primary italic leading-none">{match.round || '1'}</p>
+          </div>
+          <div className="h-10 w-px bg-slate-800 hidden sm:block" />
+          <div className="min-w-0">
+            <div className="flex items-center space-x-2 mb-1">
+              <p className="text-[10px] text-primary font-black uppercase italic tracking-widest">
+                {match.tournaments?.name || 'Tournament Event'}
+              </p>
+              <VerificationStatusBadge status={verificationStatus} size="sm" />
+            </div>
+            <p className="text-base md:text-lg font-black text-white italic tracking-tighter uppercase truncate">
+              {opponentName} <span className="text-slate-600 px-2 italic font-medium tracking-normal text-sm">vs</span> YOU
+            </p>
+          </div>
         </div>
-        <div className="h-10 w-px bg-slate-800 hidden sm:block" />
-        <div className="min-w-0">
-          <p className="text-[10px] text-primary font-black uppercase italic tracking-widest mb-1">
-            {match.tournaments?.name || 'Tournament Event'}
-          </p>
-          <p className="text-base md:text-lg font-black text-white italic tracking-tighter uppercase truncate">
-            {opponentName} <span className="text-slate-600 px-2 italic font-medium tracking-normal text-sm">vs</span> YOU
-          </p>
+        <div className="flex items-center justify-between sm:justify-end space-x-6 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-t-0 border-slate-800">
+          <div className="text-left sm:text-right">
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 sm:text-right">Schedule</p>
+            <p className="text-xs sm:text-sm font-black text-white flex items-center sm:justify-end italic uppercase tracking-tighter">
+              <Timer className="w-3.5 h-3.5 mr-1.5 text-primary" />
+              {match.scheduled_at ? new Date(match.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'TBD'}
+            </p>
+          </div>
+          {getActionButton()}
         </div>
-      </div>
-      <div className="flex items-center justify-between sm:justify-end space-x-6 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-t-0 border-slate-800">
-        <div className="text-left sm:text-right">
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 text-right">Schedule</p>
-          <p className="text-xs sm:text-sm font-black text-white flex items-center sm:justify-end italic uppercase tracking-tighter">
-            <Timer className="w-3.5 h-3.5 mr-1.5 text-primary" />
-            {match.scheduled_at ? new Date(match.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'TBD'}
-          </p>
-        </div>
-        <button className="btn-primary py-2 px-6 text-[10px] shadow-none group-hover:shadow-lg group-hover:shadow-primary/20 rounded-xl">DEPLOY</button>
-      </div>
-    </Link>
+      </Link>
+      
+      <AnimatePresence>
+        {verificationStatus !== 'none' && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="mt-2"
+          >
+            <VerificationStatusBanner status={verificationStatus} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 

@@ -92,9 +92,9 @@ export default function Navbar() {
   async function fetchBalance() {
     if (!user) return;
     try {
-      const wallet = await walletService.getBalance(user.id);
-      if (wallet) {
-        setBalance((wallet as any).balance);
+      const summary = await walletService.getWalletSummary();
+      if (summary) {
+        setBalance(summary.balance_usd);
       }
       setLastUpdated(new Date().toLocaleTimeString());
     } catch (err) {
@@ -149,16 +149,19 @@ export default function Navbar() {
   }
 
   return (
-    <header className="px-6 py-4 border-b border-slate-800/50 bg-background/50 backdrop-blur-xl sticky top-0 z-50">
+    <header className="px-6 py-4 border-b border-white/5 bg-black/80 backdrop-blur-2xl sticky top-0 z-50">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-surface border border-slate-800 rounded-xl flex items-center justify-center shadow-lg shadow-black/50">
-            <Trophy className="w-5 h-5 text-primary" />
+        <NavLink to="/dashboard" className="flex items-center space-x-4 group cursor-pointer">
+          <div className="relative">
+            <div className="absolute inset-0 bg-primary/20 blur-lg rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+            <img src="/logo.png" alt="TournaHub" className="w-10 h-10 object-contain relative z-10" referrerPolicy="no-referrer" />
           </div>
           <div>
-            <h1 className="text-xl font-black text-white italic -tracking-widest uppercase">TournaHub</h1>
+            <h1 className="text-xl font-black text-white italic -tracking-widest uppercase transition-colors group-hover:text-primary">
+              Tourna<span className="text-primary italic">Hub</span>
+            </h1>
           </div>
-        </div>
+        </NavLink>
 
         <div className="flex items-center space-x-2 md:space-x-4">
           {/* Desktop/Global Menu Toggle */}

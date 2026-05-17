@@ -73,146 +73,172 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="card max-w-md w-full p-8 space-y-8">
-        <div className="text-center space-y-2">
-          <div className="flex justify-center">
-            <div className="bg-primary/20 p-3 rounded-2xl">
-              <Trophy className="w-10 h-10 text-primary" />
+    <div className="min-h-screen bg-black flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background Decorative Elements */}
+      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,209,255,0.05)_0%,transparent_100%)] pointer-events-none" />
+      <div className="absolute -top-[20%] -left-[10%] w-[60%] h-[60%] bg-primary/5 blur-[120px] rounded-full pointer-events-none" />
+      
+      <div className="max-w-md w-full relative z-10">
+        <div className="text-center space-y-6 mb-12">
+          <div className="flex justify-center group">
+            <div className="relative">
+              <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+              <img 
+                src="/logo.png" 
+                alt="TournaHubLogo" 
+                className="w-32 h-32 object-contain relative z-10 transition-transform duration-500 group-hover:scale-110" 
+                referrerPolicy="no-referrer" 
+              />
             </div>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">TournaHub</h1>
-          <p className="text-slate-400">
-            {isSignUp ? 'Create your player account' : 'Welcome back, champion'}
-          </p>
+          <div className="space-y-1">
+            <h1 className="text-4xl font-black italic text-white tracking-tight uppercase">
+              {isSignUp ? 'Sign Up' : 'Sign In'}
+            </h1>
+            <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px]">
+              {isSignUp ? 'Create your professional account' : 'Welcome back to the Arena'}
+            </p>
+          </div>
         </div>
 
-        <form onSubmit={handleAuth} className="space-y-4">
-          {isSignUp && (
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-300 uppercase tracking-widest text-[10px]">Battle Name (Username)</label>
-              <div className="relative">
-                <div className="absolute left-3 top-2.5 h-5 w-5 flex items-center justify-center">
-                  <span className="text-primary font-black italic">@</span>
+        <div className="bg-[#050505]/80 backdrop-blur-2xl border border-white/5 rounded-[2.5rem] p-8 shadow-2xl shadow-black">
+          <form onSubmit={handleAuth} className="space-y-6">
+            {isSignUp && (
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] ml-1">Username</label>
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-primary/5 rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
+                    <span className="text-primary font-black italic text-lg leading-none">@</span>
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    className="w-full bg-black/40 border border-white/10 rounded-2xl pl-12 pr-4 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-white font-medium relative z-10"
+                    placeholder="Enter your username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value.trim())}
+                  />
                 </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] ml-1">Email Address</label>
+              <div className="relative group">
+                <div className="absolute inset-0 bg-primary/5 rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within:text-primary transition-colors pointer-events-none z-20" />
                 <input
-                  type="text"
+                  type="email"
                   required
-                  className="input-field pl-10"
-                  placeholder="TheDragon_99"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value.trim())}
+                  className="w-full bg-black/40 border border-white/10 rounded-2xl pl-12 pr-4 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-white font-medium relative z-10"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
-              <p className="text-[9px] text-slate-500 italic mt-1 uppercase tracking-tight">This will be your ONLY public identity across the platform.</p>
             </div>
-          )}
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-slate-300 uppercase tracking-widest text-[10px]">Email Address</label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-2.5 h-5 w-5 text-slate-500" />
-              <input
-                type="email"
-                required
-                className="input-field pl-10"
-                placeholder="you@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between ml-1">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Password</label>
+                <button
+                  type="button"
+                  onClick={() => navigate('/forgot-password')}
+                  className="text-[9px] uppercase font-black tracking-widest text-slate-600 hover:text-primary transition-colors relative z-20"
+                >
+                  Forgot Password?
+                </button>
+              </div>
+              <div className="relative group">
+                <div className="absolute inset-0 bg-primary/5 rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within:text-primary transition-colors pointer-events-none z-20" />
+                <input
+                  type="password"
+                  required
+                  className="w-full bg-black/40 border border-white/10 rounded-2xl pl-12 pr-4 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-white font-medium relative z-10"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-slate-300">Password</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-2.5 h-5 w-5 text-slate-500" />
-              <input
-                type="password"
-                required
-                className="input-field pl-10"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-sm p-3 rounded-lg animate-in fade-in slide-in-from-top-2">
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div className="bg-green-500/10 border border-green-500/20 text-green-500 text-sm p-3 rounded-lg animate-in fade-in slide-in-from-top-2">
-              {success}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary w-full flex items-center justify-center space-x-2 py-4 text-lg font-black italic uppercase tracking-tighter rounded-2xl"
-          >
-            {loading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <span>{isSignUp ? 'Initialize Profile' : 'Enter Arena'}</span>
+            {error && (
+              <div className="bg-red-500/5 border border-red-500/10 text-red-500 text-[11px] font-bold p-4 rounded-xl flex items-center space-x-3">
+                <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+                <span>{error}</span>
+              </div>
             )}
-          </button>
-        </form>
 
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-slate-800"></div>
-          </div>
-          <div className="relative flex justify-center text-[10px] uppercase font-black tracking-widest">
-            <span className="bg-background px-4 text-slate-500 italic">Secure Uplink</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <button 
-            onClick={() => supabase.auth.signInWithOAuth({ provider: 'discord' })}
-            className="flex items-center justify-center space-x-2 bg-[#5865F2]/10 hover:bg-[#5865F2]/20 border border-[#5865F2]/20 py-3 rounded-xl transition-all group"
-          >
-            <div className="bg-[#5865F2] p-1.5 rounded-lg group-hover:scale-110 transition-transform">
-              <svg className="w-4 h-4 text-white fill-current" viewBox="0 0 24 24"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
-            </div>
-            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Discord</span>
-          </button>
-          <button 
-            onClick={() => supabase.auth.signInWithOAuth({ provider: 'google' })}
-            className="flex items-center justify-center space-x-2 bg-white/5 hover:bg-white/10 border border-white/10 py-3 rounded-xl transition-all group"
-          >
-            <div className="bg-white p-1.5 rounded-lg group-hover:scale-110 transition-transform">
-              <svg className="w-4 h-4" viewBox="0 0 24 24"><path fill="#EA4335" d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.27 0 3.198 2.698 1.24 6.65l4.026 3.115z"/><path fill="#34A853" d="M16.04 18.013c-1.09.693-2.447 1.096-4.04 1.096-3.13 0-5.783-2.115-6.734-4.89l-4.026 3.15C3.198 21.341 7.27 24 12 24c3.055 0 5.864-1.012 7.82-2.823l-3.78-3.164z"/><path fill="#4285F4" d="M19.82 21.177l3.78 3.164c2.502-2.31 4.4-6.07 4.4-11.841 0-.82-.07-1.611-.194-2.373H12v4.544h7.524c-.328 1.674-1.272 3.092-2.617 4.026l3.78 3.164z"/><path fill="#FBBC05" d="M5.266 14.235L1.24 17.385C.454 15.795 0 13.978 0 12c0-1.978.454-3.795 1.24-5.385l4.026 3.115C5.084 10.556 5 11.265 5 12c0 .735.084 1.444.266 2.235z"/></svg>
-            </div>
-            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Google</span>
-          </button>
-        </div>
-
-        <div className="text-center space-y-4 pt-4 border-t border-slate-800">
-          <button
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="text-sm text-primary hover:text-primary-dark font-medium transition-colors"
-          >
-            {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
-          </button>
-          
-          <div className="pt-4">
             <button
-              onClick={() => {
-                localStorage.clear();
-                sessionStorage.clear();
-                window.location.reload();
-              }}
-              className="text-[10px] text-slate-500 hover:text-slate-400 uppercase tracking-widest font-bold"
+              type="submit"
+              disabled={loading}
+              className="w-full relative group overflow-hidden"
             >
-              Stuck? Clear Cache & Reset Session
+              <div className="absolute inset-0 bg-primary transition-transform group-hover:scale-105" />
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+              <div className="relative h-16 flex items-center justify-center space-x-3">
+                {loading ? (
+                  <Loader2 className="w-6 h-6 animate-spin text-black" />
+                ) : (
+                  <span className="text-black text-xl font-black italic uppercase tracking-tighter">
+                    {isSignUp ? 'Sign Up' : 'Sign In'}
+                  </span>
+                )}
+              </div>
             </button>
+          </form>
+
+          <div className="mt-8 pt-8 border-t border-white/5 space-y-6">
+            <button 
+              type="button"
+              onClick={async () => {
+                const { data, error } = await supabase.auth.signInWithOAuth({ 
+                  provider: 'google',
+                  options: {
+                    redirectTo: window.location.origin,
+                    skipBrowserRedirect: true
+                  }
+                });
+                
+                if (error) {
+                  setError(error.message);
+                  return;
+                }
+
+                if (data?.url) {
+                  window.open(data.url, '_blank', 'width=600,height=700');
+                }
+              }}
+              className="w-full flex items-center justify-center space-x-4 bg-white/5 hover:bg-white/10 border border-white/5 py-4 rounded-2xl transition-all"
+            >
+              <div className="bg-white p-1 rounded-md">
+                <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  <path fill="#EA4335" d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.27 0 3.198 2.698 1.24 6.65l4.026 3.115z"/>
+                  <path fill="#34A853" d="M16.04 18.013c-1.09.693-2.447 1.096-4.04 1.096-3.13 0-5.783-2.115-6.734-4.89l-4.026 3.15C3.198 21.341 7.27 24 12 24c3.055 0 5.864-1.012 7.82-2.823l-3.78-3.164z"/>
+                  <path fill="#4285F4" d="M19.82 21.177l3.78 3.164c2.502-2.31 4.4-6.07 4.4-11.841 0-.82-.07-1.611-.194-2.373H12v4.544h7.524c-.328 1.674-1.272 3.092-2.617 4.026l3.78 3.164z"/>
+                  <path fill="#FBBC05" d="M5.266 14.235L1.24 17.385C.454 15.795 0 13.978 0 12c0-1.978.454-3.795 1.24-5.385l4.026 3.115C5.084 10.556 5 11.265 5 12c0 .735.084 1.444.266 2.235z"/>
+                </svg>
+              </div>
+              <span className="text-xs font-black text-white uppercase tracking-widest italic">Continue with Google</span>
+            </button>
+
+            <div className="text-center">
+              <button
+                onClick={() => setIsSignUp(!isSignUp)}
+                className="text-[11px] font-black uppercase tracking-widest text-slate-500 hover:text-primary transition-all underline underline-offset-8 decoration-white/5 hover:decoration-primary/30"
+              >
+                {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+              </button>
+            </div>
           </div>
+        </div>
+        
+        <div className="mt-8 text-center flex items-center justify-center space-x-3 opacity-30 group cursor-help hover:opacity-100 transition-opacity">
+          <div className="h-px w-8 bg-slate-800" />
+          <span className="text-[9px] font-black uppercase tracking-[0.5em] text-slate-600">Encrypted Uplink Established</span>
+          <div className="h-px w-8 bg-slate-800" />
         </div>
       </div>
     </div>

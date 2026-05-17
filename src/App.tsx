@@ -5,6 +5,8 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import LoadingState from './components/ui/LoadingState';
 
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import Tournaments from './pages/Tournaments';
 import TournamentDetails from './pages/TournamentDetails';
@@ -13,6 +15,8 @@ import Matches from './pages/Matches';
 import Chat from './pages/Chat';
 import Notifications from './pages/Notifications';
 import Wallet from './pages/Wallet';
+import WalletHistory from './pages/WalletHistory';
+import WinnerHistory from './pages/WinnerHistory';
 import Profile from './pages/Profile';
 
 // Lazy load admin pages only
@@ -25,6 +29,9 @@ const AdminFixtures = lazy(() => import('./pages/admin/AdminFixtures'));
 const AdminPlayers = lazy(() => import('./pages/admin/AdminPlayers'));
 const AdminWallet = lazy(() => import('./pages/admin/AdminWallet'));
 const AdminStandings = lazy(() => import('./pages/admin/AdminStandings'));
+const ScheduleTournament = lazy(() => import('./pages/admin/ScheduleTournament'));
+const LiveTournament = lazy(() => import('./pages/admin/LiveTournament'));
+const Moderation = lazy(() => import('./pages/admin/Moderation'));
 
 export default function App() {
   return (
@@ -33,6 +40,8 @@ export default function App() {
         <Suspense fallback={<LoadingState fullPage />}>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             
             <Route element={<ProtectedRoute />}>
               <Route path="/dashboard" element={<Dashboard />} />
@@ -43,6 +52,8 @@ export default function App() {
               <Route path="/chat" element={<Chat />} />
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/wallet" element={<Wallet />} />
+              <Route path="/wallet/history" element={<WalletHistory />} />
+              <Route path="/profile/wins" element={<WinnerHistory />} />
               <Route path="/profile" element={<Profile />} />
             </Route>
 
@@ -52,10 +63,13 @@ export default function App() {
               <Route path="/admin/tournaments/create" element={<CreateTournament />} />
               <Route path="/admin/tournaments/:id" element={<EditTournament />} />
               <Route path="/admin/tournaments/:id/manage" element={<ManageTournamentDetails />} />
+              <Route path="/admin/tournaments/:id/schedule" element={<ScheduleTournament />} />
+              <Route path="/admin/tournaments/:id/live" element={<LiveTournament />} />
               <Route path="/admin/fixtures" element={<AdminFixtures />} />
               <Route path="/admin/players" element={<AdminPlayers />} />
               <Route path="/admin/wallet" element={<AdminWallet />} />
               <Route path="/admin/standings" element={<AdminStandings />} />
+              <Route path="/admin/moderation" element={<Moderation />} />
             </Route>
 
             <Route path="/" element={

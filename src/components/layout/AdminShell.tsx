@@ -4,15 +4,18 @@ import {
   LayoutDashboard, Trophy, Users, 
   Gamepad2, Wallet, BarChart3, 
   ChevronRight, LogOut, Shield,
-  Menu, X
+  Menu, X, Gavel
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { useAdminDisputes } from '../../hooks/useAdminDisputes';
+import { useAuth } from '../../contexts/AuthContext';
 
 const NAV_ITEMS = [
   { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
   { name: 'Tournaments', path: '/admin/tournaments', icon: Trophy },
   { name: 'Fixtures', path: '/admin/fixtures', icon: Gamepad2 },
+  { name: 'Disputes', path: '/admin/moderation', icon: Gavel },
   { name: 'Contenders', path: '/admin/players', icon: Users },
   { name: 'Wallet', path: '/admin/wallet', icon: Wallet },
   { name: 'Standings', path: '/admin/standings', icon: BarChart3 },
@@ -21,6 +24,9 @@ const NAV_ITEMS = [
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const location = useLocation();
+  const { user } = useAuth();
+  const { disputedMatches = [], singleSubmissionMatches = [] } = useAdminDisputes(user?.id || '');
+  const totalAlerts = disputedMatches.length + singleSubmissionMatches.length;
 
   return (
     <div className="min-h-screen bg-[#0a0b1e] text-slate-200 font-sans flex">
@@ -35,9 +41,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           {/* Logo Section */}
           <div className="p-6 flex items-center justify-between">
             <Link to="/admin" className="flex items-center space-x-3 group">
-              <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30 group-hover:scale-110 transition-transform">
-                <Shield className="w-6 h-6 text-primary" />
-              </div>
+              <img src="/logo.png" alt="Admin" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform" referrerPolicy="no-referrer" />
               <AnimatePresence>
                 {isSidebarOpen && (
                   <motion.span 
@@ -88,6 +92,19 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                         </motion.span>
                       )}
                     </AnimatePresence>
+                    
+                    {item.name === 'Disputes' && totalAlerts > 0 && (
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className={cn(
+                          "absolute right-4 w-5 h-5 rounded-full bg-red-600 flex items-center justify-center border-2 border-[#0d0f26]",
+                          !isSidebarOpen && "-top-1 -right-1"
+                        )}
+                      >
+                        <span className="text-[10px] font-black text-white">{totalAlerts}</span>
+                      </motion.div>
+                    )}
                   </>
                 )}
               </NavLink>
@@ -133,7 +150,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         {/* Top bar for mobile */}
         <header className="md:hidden flex items-center justify-between p-4 bg-[#0d0f26] border-b border-slate-800/50 mb-6">
           <div className="flex items-center space-x-3">
-             <Shield className="w-6 h-6 text-primary" />
+             <img src="/logo.png" alt="Admin" className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
              <span className="font-black italic uppercase text-white tracking-widest">Admin Hub</span>
           </div>
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 text-slate-400">

@@ -24,6 +24,25 @@ export function formatCurrency(amount: number) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
+    minimumFractionDigits: 2
+  }).format(amount);
+}
+
+export function formatCurrencyDynamic(amount: number, currency: string = 'USD') {
+  // Map our currency codes to locales if needed, defaulting to en-US for display
+  const locales: Record<string, string> = {
+    'KES': 'en-KE',
+    'NGN': 'en-NG',
+    'GHS': 'en-GH',
+    'UGX': 'en-UG',
+    'ZAR': 'en-ZA',
+    'USD': 'en-US'
+  };
+  
+  return new Intl.NumberFormat(locales[currency] || 'en-US', {
+    style: 'currency',
+    currency: currency,
+    minimumFractionDigits: 2
   }).format(amount);
 }
 

@@ -47,7 +47,7 @@ export default function UserIdentity({
         )}>
           {avatarUrl ? (
             <img 
-              src={getStorageUrl('avatars', avatarUrl) || ''} 
+              src={getStorageUrl('avatars', avatarUrl) || undefined} 
               className="w-full h-full object-cover" 
               alt={username}
               referrerPolicy="no-referrer"

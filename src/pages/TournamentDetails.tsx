@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Tournament, Match } from '../types/database';
+import { Tournament } from '../types/database';
 import { tournamentService } from '../services/tournamentService';
 import { useRealtimeTournament } from '../hooks/useRealtimeTournaments';
-import { matchService } from '../services/matchService';
 import Shell from '../components/layout/Shell';
 import { 
   Trophy, Users, Calendar, Info, 
@@ -19,12 +18,15 @@ import FixturesList from '../components/fixtures/FixturesList';
 import StatusBadge from '../components/ui/StatusBadge';
 import { TournamentStatus } from '../constants';
 import BadgeSelector from '../components/badges/BadgeSelector';
-import { useTournamentBadges } from '../hooks/useTournamentBadges';
+import { PlayerBadge } from '../components/ui/PlayerBadge';
+import { useWallet } from '../hooks/useWallet';
+import toast from 'react-hot-toast';
 
 export default function TournamentDetails() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
+  const { summary, limits, refreshWallet } = useWallet('USD');
   
   const { tournament, loading: tournamentLoading } = useRealtimeTournament(id);
   const [regStatus, setRegStatus] = useState<{
@@ -39,14 +41,17 @@ export default function TournamentDetails() {
     waitlist_position: number | null;
   } | null>(null);
 
+  const [isRegStatusLoading, setIsRegStatusLoading] = useState(true);
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
   const [activeTab, setActiveTab] = useState<'info' | 'fixtures' | 'standings' | 'players'>('info');
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-  const [showBadgeSelector, setShowBadgeSelector] = useState(false);
-  const [selectedBadgeId, setSelectedBadgeId] = useState<string | null>(null);
-  const { badges } = useTournamentBadges(id);
+  
+  // Registration Flow State
+  const [showRegFlow, setShowRegFlow] = useState(false);
+  const [regStep, setRegStep] = useState<'picker' | 'confirm'>('picker');
+  const [selectedBadge, setSelectedBadge] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -54,9 +59,9 @@ export default function TournamentDetails() {
     loadRegistrations();
     loadRegistrationStatus();
     
-    // Realtime subscription for registrations
+    // Realtime subscription for registrations and badges
     const channel = supabase
-      .channel(`tournament-registrations-${id}-${Math.random().toString(36).substring(7)}`)
+      .channel(`tournament-activity-${id}`)
       .on(
         'postgres_changes',
         {
@@ -68,6 +73,18 @@ export default function TournamentDetails() {
         () => {
           loadRegistrations();
           loadRegistrationStatus();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tournament_badge_selections',
+          filter: `tournament_id=eq.${id}`,
+        },
+        () => {
+          loadRegistrations();
         }
       )
       .subscribe();
@@ -85,7 +102,10 @@ export default function TournamentDetails() {
   }, [tournament, tournamentLoading, navigate]);
 
   async function loadRegistrationStatus() {
-    if (!id || !user) return;
+    if (!id || !user) {
+      setIsRegStatusLoading(false);
+      return;
+    }
     try {
       const status = await tournamentService.getRegistrationStatus(id, user.id);
       if (status) {
@@ -99,32 +119,42 @@ export default function TournamentDetails() {
         console.info('Retrying registration status load due to lock...');
         setTimeout(loadRegistrationStatus, 1000);
       }
+    } finally {
+      setIsRegStatusLoading(false);
     }
   }
 
   async function loadRegistrations() {
     if (!id) return;
     try {
-      const regs = await tournamentService.getRegistrations(id);
-      setRegistrations(regs);
+      const players = await tournamentService.getRegisteredPlayers(id);
+      // Deduplicate to prevent double entries in standings and players list
+      const uniquePlayers = Array.isArray(players) ? players.reduce((acc: any[], current: any) => {
+        const currentId = current.user_id || current.id;
+        if (!acc.some(p => (p.user_id || p.id) === currentId)) {
+          acc.push(current);
+        }
+        return acc;
+      }, []) : [];
+      setRegistrations(uniquePlayers);
     } catch (err) {
-      console.error('Error loading registrations:', err);
+      console.error('Error loading players:', err);
     } finally {
       setLoading(false);
     }
   }
 
-  const handleRegister = async () => {
+  const handleRegisterWithBadge = async (badgeId: string) => {
     if (!user || !tournament || !id) return;
 
-    if (!navigator.onLine) {
-      setMessage({ type: 'error', text: 'Internet connection required for registration. Please reconnect and try again.' });
-      return;
-    }
-
-    // Show confirmation for paid tournaments
-    if (tournament.entry_fee && tournament.entry_fee > 0) {
-      if (!confirm(`Are you sure you want to register? This will deduct ${formatCurrency(tournament.entry_fee)} from your wallet if successful.`)) {
+    // 1. Pre-check wallet if tournament has entry fee
+    if (tournament.entry_fee > 0) {
+      if (limits?.is_locked) {
+        toast.error(`Your wallet is locked: ${limits.locked_reason}`);
+        return;
+      }
+      if ((summary?.balance_usd || 0) < tournament.entry_fee) {
+        toast.error(`Insufficient balance. You need $${tournament.entry_fee.toFixed(2)} USD. Top up your wallet.`);
         return;
       }
     }
@@ -132,33 +162,63 @@ export default function TournamentDetails() {
     setRegistering(true);
     setMessage(null);
     try {
-      if (!selectedBadgeId) {
-        setShowBadgeSelector(true);
-        setRegistering(false);
-        return;
-      }
-
-      const result = await tournamentService.register(id, selectedBadgeId) as any;
+      const result = await tournamentService.register(id, badgeId);
       
       if (result.success) {
-        setShowBadgeSelector(false);
-        setSelectedBadgeId(null);
-        if (result.status === 'waitlisted') {
-          setMessage({ type: 'success', text: `Tournament is full. You have been added to the waitlist at position ${result.data?.position || 'unknown'}.` });
-        } else {
-          setMessage({ type: 'success', text: 'Registration successful! You are in.' });
-        }
-        // Realtime listeners in hooks will pick up balance/slot/status changes automatically
-        setTimeout(() => setMessage(null), 5000);
-        await loadRegistrations();
-        await loadRegistrationStatus();
+        setShowRegFlow(false);
+        const successMsg = (result as any).already_registered 
+          ? 'You are already registered for this tournament!'
+          : result.status === 'waitlisted' 
+            ? 'Added to waitlist.' 
+            : `Registered! ${tournament.entry_fee > 0 ? `$${tournament.entry_fee} entry fee deducted.` : ''}`;
+        
+        setMessage({ type: 'success', text: successMsg });
+        
+        // Refresh wallet and status
+        await Promise.all([
+          refreshWallet(),
+          loadRegistrations(),
+          loadRegistrationStatus()
+        ]);
       }
     } catch (err: any) {
-      console.error('Registration failed:', err);
-      setMessage({ type: 'error', text: err.message || 'Registration failed. Please try again.' });
+      if (err.message?.toLowerCase().includes('already registered')) {
+        setMessage({ type: 'success', text: 'You are already registered for this tournament!' });
+        setShowRegFlow(false);
+        loadRegistrationStatus();
+        return;
+      }
+      console.error('[TournamentDetails] Registration failed:', err);
+      const code = err.code || (err.message?.includes('BADGE_TAKEN') ? 'BADGE_TAKEN' : null);
+      
+      switch (code) {
+        case 'BADGE_TAKEN':
+          setMessage({ type: 'error', text: 'That badge was just taken. Please choose another.' });
+          setRegStep('picker');
+          break;
+        case 'BADGE_REQUIRED':
+          setMessage({ type: 'error', text: 'Please select a badge before registering.' });
+          setRegStep('picker');
+          break;
+        case 'insufficient_balance':
+          setMessage({ type: 'error', text: 'Insufficient wallet balance for this entry fee.' });
+          setShowRegFlow(false);
+          break;
+        default:
+          setMessage({ type: 'error', text: err.message || 'Registration failed.' });
+      }
     } finally {
       setRegistering(false);
     }
+  };
+
+  const handleRegisterClick = () => {
+    if (!user) {
+      navigate('/login', { state: { from: `/tournaments/${id}` } });
+      return;
+    }
+    setShowRegFlow(true);
+    setRegStep('picker');
   };
 
   const handleCancel = async () => {
@@ -176,8 +236,13 @@ export default function TournamentDetails() {
         
         setMessage({ type: 'success', text: msg });
         setTimeout(() => setMessage(null), 5000);
-        await loadRegistrations();
-        await loadRegistrationStatus();
+        
+        // Refresh wallet and status
+        await Promise.all([
+          refreshWallet(),
+          loadRegistrations(),
+          loadRegistrationStatus()
+        ]);
       }
     } catch (err: any) {
       let errorMsg = err.message || 'Cancellation failed';
@@ -200,16 +265,21 @@ export default function TournamentDetails() {
 
   if (!tournament) return null;
 
-  const isRegistered = regStatus ? regStatus.registered : registrations.some(r => r.user_id === user?.id && ['registered', 'approved', 'checked_in', 'waitlisted'].includes(r.status));
-  const userStatus = regStatus ? regStatus.user_status : registrations.find(r => r.user_id === user?.id)?.status;
-  const isWaitlisted = regStatus ? regStatus.waitlisted : userStatus === 'waitlisted';
-  const spotsLeft = regStatus ? regStatus.spots_left : (tournament.max_players || 0) - (registrations.filter(r => ['registered', 'approved', 'checked_in'].includes(r.status)).length || 0);
+  const isRegistered = !!(
+    (regStatus && regStatus.registered) || 
+    (registrations || []).some(r => (r.user_id === user?.id || r.id === user?.id) && ['registered', 'approved', 'checked_in', 'waitlisted'].includes(r.status || ''))
+  );
+  const userStatus = regStatus ? regStatus.user_status : (registrations || []).find(r => (r.user_id === user?.id || r.id === user?.id))?.status;
+  const isWaitlisted = !!(regStatus ? regStatus.waitlisted : userStatus === 'waitlisted');
+  const playersCount = regStatus ? regStatus.players_registered : (registrations?.length || 0);
+  const spotsLeft = regStatus ? (regStatus.max_players - regStatus.players_registered) : (tournament.max_players || 0) - ((registrations || []).filter(r => ['registered', 'approved', 'checked_in'].includes(r.status || '')).length || 0);
   const currentStatus = regStatus?.tournament_status || tournament.status;
   const isClosed = currentStatus !== TournamentStatus.REGISTRATION_OPEN;
   
   const canRegister = !isRegistered && !isWaitlisted && currentStatus === TournamentStatus.REGISTRATION_OPEN;
-  const isWaitlist = spotsLeft === 0 && canRegister;
-  const isActuallyFull = spotsLeft === 0 && !canRegister && !isRegistered && !isWaitlisted;
+  const isWaitlist = spotsLeft <= 0 && canRegister;
+  const isActuallyFull = spotsLeft <= 0 && !canRegister && !isRegistered && !isWaitlisted;
+  const isActionDisabled = registering || isRegStatusLoading || !user || isRegistered;
 
   return (
     <Shell>
@@ -222,19 +292,44 @@ export default function TournamentDetails() {
           Back to Tournaments
         </button>
 
-        {message && (
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={cn(
-              "px-6 py-4 rounded-2xl font-bold uppercase italic tracking-tighter shadow-xl flex items-center gap-3",
-              message.type === 'success' ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : "bg-red-500/10 text-red-500 border border-red-500/20"
-            )}
-          >
-            {message.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <Shield className="w-5 h-5" />}
-            {message.text}
-          </motion.div>
-        )}
+          {message && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                "px-6 py-4 rounded-2xl font-bold uppercase italic tracking-tighter shadow-xl flex items-center gap-3",
+                message.type === 'success' ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : "bg-red-500/10 text-red-500 border border-red-500/20"
+              )}
+            >
+              {message.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <Shield className="w-5 h-5" />}
+              {message.text}
+            </motion.div>
+          )}
+
+          {isRegistered && !isWaitlisted && regStatus && !(regStatus as any).has_badge && (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="px-6 py-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4"
+            >
+              <div className="flex items-center gap-3">
+                <Shield className="w-6 h-6 text-amber-500 animate-pulse" />
+                <div>
+                  <p className="text-amber-500 font-black uppercase italic tracking-tight">Identity Missing</p>
+                  <p className="text-amber-500/70 text-[10px] font-bold uppercase tracking-widest">You registered but have not selected a badge yet. Fix this now to avoid disqualification.</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  const el = document.getElementById('badge-picker-section');
+                  el?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="px-6 py-2 bg-amber-500 text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-amber-400 transition-colors shrink-0"
+              >
+                Select Badge
+              </button>
+            </motion.div>
+          )}
 
         {/* Hero Banner */}
         <motion.div 
@@ -270,18 +365,21 @@ export default function TournamentDetails() {
               <div className="bg-slate-900/80 backdrop-blur-md border border-slate-700 px-6 sm:px-8 py-3 rounded-xl flex flex-col items-center justify-center min-w-[120px]">
                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Contenders</span>
                 <span className="text-xl font-black text-white italic">
-                  {String(regStatus ? regStatus.players_registered : (tournament.max_players - spotsLeft))} / {tournament.max_players}
+                  {String(playersCount)} / {tournament.max_players}
                 </span>
               </div>
               
               {isRegistered || isWaitlisted ? (
                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-                  <div className="bg-emerald-500/10 border-2 border-emerald-500/20 text-emerald-500 px-6 sm:px-8 py-3 sm:py-5 rounded-xl sm:rounded-[1.5rem] font-black italic uppercase tracking-tighter text-lg sm:text-xl flex items-center justify-center shadow-2xl shadow-emerald-500/10 w-full md:w-auto">
+                  <button 
+                    disabled
+                    className="w-full md:w-auto px-10 sm:px-14 py-3 sm:py-5 bg-emerald-500/10 border-2 border-emerald-500/30 text-emerald-500 rounded-xl sm:rounded-[1.5rem] font-black italic uppercase tracking-tighter text-lg sm:text-xl flex items-center justify-center shadow-xl shadow-emerald-500/5 cursor-not-allowed opacity-90"
+                  >
                     <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                     {isWaitlisted 
                       ? (regStatus?.waitlist_position ? `Waitlist #${regStatus.waitlist_position}` : 'On Waitlist') 
                       : 'Registered'}
-                  </div>
+                  </button>
                   {(regStatus?.user_status === 'registered' || regStatus?.user_status === 'approved' || regStatus?.user_status === 'checked_in' || isWaitlisted) && (
                     <button 
                       onClick={handleCancel}
@@ -298,9 +396,9 @@ export default function TournamentDetails() {
                 </div>
               ) : isWaitlist ? (
                 <button 
-                  onClick={handleRegister}
-                  disabled={registering}
-                  className="btn-secondary w-full md:w-auto px-10 sm:px-14 py-3 sm:py-5 shadow-2xl text-lg sm:text-xl font-black uppercase italic tracking-tighter rounded-xl sm:rounded-[1.5rem] transition-all hover:scale-105 active:scale-95 border-amber-500/50 text-amber-500"
+                  onClick={handleRegisterClick}
+                  disabled={isActionDisabled || isRegistered || isWaitlisted}
+                  className="btn-secondary w-full md:w-auto px-10 sm:px-14 py-3 sm:py-5 shadow-2xl text-lg sm:text-xl font-black uppercase italic tracking-tighter rounded-xl sm:rounded-[1.5rem] transition-all hover:scale-105 active:scale-95 border-amber-500/50 text-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {registering ? <Loader2 className="animate-spin mx-auto w-6 h-6" /> : 'Join Waitlist'}
                 </button>
@@ -310,9 +408,9 @@ export default function TournamentDetails() {
                 </div>
               ) : (
                 <button 
-                  onClick={handleRegister}
-                  disabled={registering || !canRegister}
-                  className="btn-primary w-full md:w-auto px-10 sm:px-14 py-3 sm:py-5 shadow-2xl shadow-primary/30 text-lg sm:text-xl font-black uppercase italic tracking-tighter rounded-xl sm:rounded-[1.5rem] transition-all hover:scale-105 active:scale-95"
+                  onClick={handleRegisterClick}
+                  disabled={isActionDisabled || !canRegister || isRegistered || isWaitlisted}
+                  className="btn-primary w-full md:w-auto px-10 sm:px-14 py-3 sm:py-5 shadow-2xl shadow-primary/30 text-lg sm:text-xl font-black uppercase italic tracking-tighter rounded-xl sm:rounded-[1.5rem] transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:grayscale"
                 >
                   {registering ? <Loader2 className="animate-spin mx-auto w-6 h-6" /> : 'Claim Spot'}
                 </button>
@@ -322,41 +420,100 @@ export default function TournamentDetails() {
         </motion.div>
 
         <AnimatePresence>
-          {showBadgeSelector && (
+          {showRegFlow && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowRegFlow(false)}
+                className="absolute inset-0 bg-black/80 backdrop-blur-md"
+              />
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="relative bg-zinc-950 border border-white/10 rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)]"
+              >
+                {regStep === 'picker' ? (
+                  <div className="p-8">
+                    <div className="flex items-center justify-between mb-8">
+                      <div>
+                        <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Choose Your <span className="text-primary">Identity</span></h2>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Select a unique badge for this arena</p>
+                      </div>
+                      <button onClick={() => setShowRegFlow(false)} className="text-slate-500 hover:text-white uppercase text-[10px] font-black tracking-widest">Cancel</button>
+                    </div>
+                    <div className="max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                      <BadgeSelector 
+                        tournamentId={id!} 
+                        tournamentStatus={currentStatus}
+                        mode="registration" 
+                        onSelect={(badgeId) => {
+                          setSelectedBadge(badgeId);
+                          setRegStep('confirm');
+                        }} 
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-10 space-y-8">
+                    <div className="text-center space-y-2">
+                        <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">Confirm <span className="text-primary">Engagement</span></h2>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Final review before deployment</p>
+                    </div>
+
+                    <div className="flex flex-col items-center py-8 bg-white/5 rounded-3xl border border-white/10 space-y-6">
+                      <div className="w-32 h-32 relative">
+                        <PlayerBadge badgeId={selectedBadge} username="You" size="xl" />
+                        <div className="absolute -top-2 -right-2 bg-emerald-500 text-black px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border-2 border-black">Selected</div>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-1">Entry Ticket</p>
+                        <p className="text-2xl font-black text-white italic">{tournament.entry_fee > 0 ? formatCurrency(tournament.entry_fee) : 'FREE ENTRY'}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 pt-4">
+                      <button 
+                        onClick={() => setRegStep('picker')}
+                        className="btn-secondary py-4 font-black uppercase italic tracking-tighter rounded-2xl"
+                      >
+                        Change Badge
+                      </button>
+                      <button 
+                        onClick={() => handleRegisterWithBadge(selectedBadge!)}
+                        disabled={registering}
+                        className="btn-primary py-4 font-black uppercase italic tracking-tighter rounded-2xl shadow-lg shadow-primary/20"
+                      >
+                        {registering ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Confirm Join'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {id && isRegistered && !isWaitlisted && (
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden"
+              layout
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="space-y-4"
             >
-              <div className="card p-6 bg-slate-900/50 border-primary/20 space-y-6">
-                <div>
-                  <h2 className="text-xl font-black text-white italic uppercase tracking-tighter">Choose Your Identity</h2>
-                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Select a unique badge to represent you in this tournament.</p>
-                </div>
-                
-                <BadgeSelector 
-                  tournamentId={id} 
-                  onSelect={setSelectedBadgeId} 
-                  selectedBadgeId={selectedBadgeId} 
-                />
-                
-                <div className="flex gap-4 pt-4">
-                  <button 
-                    onClick={() => setShowBadgeSelector(false)}
-                    className="flex-1 px-6 py-4 rounded-xl border border-slate-700 text-slate-400 font-black uppercase italic tracking-widest hover:bg-slate-800 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    onClick={handleRegister}
-                    disabled={!selectedBadgeId || registering}
-                    className="flex-1 btn-primary px-6 py-4 rounded-xl font-black uppercase italic tracking-widest shadow-lg shadow-primary/20 disabled:opacity-50"
-                  >
-                    {registering ? <Loader2 className="animate-spin mx-auto w-6 h-6" /> : 'Finalize Entry'}
-                  </button>
-                </div>
-              </div>
+              <BadgeSelector 
+                tournamentId={id}
+                tournamentStatus={currentStatus}
+                mode="management"
+                onSelect={() => {
+                  loadRegistrations();
+                  loadRegistrationStatus();
+                }}
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -450,31 +607,27 @@ export default function TournamentDetails() {
               )}
  
               {activeTab === 'standings' && (
-                <StandingsTable tournamentId={tournament.id} />
+                <StandingsTable tournamentId={tournament.id} registrations={registrations} />
               )}
               {activeTab === 'players' && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                   {registrations.length > 0 ? registrations.map((reg, idx) => (
-                     <div key={`reg-${reg.id || idx}-${idx}`} className="card p-4 flex items-center space-x-3 bg-slate-900/50">
-                       <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-700">
-                         {reg.profiles.avatar_url ? (
-                           <img src={reg.profiles.avatar_url} className="w-full h-full object-cover" />
-                         ) : (
-                           <Users className="w-5 h-5 text-slate-600" />
-                         )}
-                       </div>
-                       <div className="flex-1">
+                   {registrations.length > 0 ? registrations.map((player, idx) => (
+                     <div key={`player-${player.user_id || player.id || idx}`} className="card p-4 flex items-center space-x-3 bg-slate-900/50 hover:border-slate-700 transition-all">
+                       <PlayerBadge 
+                         badgeId={player.badge_id} 
+                         username={player.username || player.profiles?.username || 'Anonymous'} 
+                         size="md" 
+                       />
+                       <div className="flex-1 min-w-0">
                          <div className="flex items-center gap-2">
-                           <p className="font-bold text-white uppercase italic tracking-tight">{reg.profiles.username || 'Anonymous'}</p>
-                           {badges[reg.user_id] && (
-                             <img 
-                               src={getStorageUrl('team-badges', badges[reg.user_id])} 
-                               className="w-4 h-4 object-contain" 
-                               alt="badge"
-                             />
+                           <p className="font-bold text-white uppercase italic tracking-tight truncate">{player.username || player.profiles?.username || 'Anonymous'}</p>
+                         </div>
+                         <div className="flex items-center gap-2">
+                           <p className="text-[10px] text-primary font-bold uppercase tracking-widest">{player.registration_status || player.status || 'Registered'}</p>
+                           {player.badge_id && (
+                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="Badge Selected" />
                            )}
                          </div>
-                         <p className="text-[10px] text-primary font-bold uppercase tracking-widest">{reg.status}</p>
                        </div>
                      </div>
                    )) : (

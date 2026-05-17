@@ -6,9 +6,9 @@
   
   --color-primary: #00d1ff;
   --color-primary-dark: #0099bb;
-  --color-background: #060812;
-  --color-surface: #121421;
-  --color-surface-hover: #1c1f33;
+  --color-background: #000000;
+  --color-surface: #0a0a0a;
+  --color-surface-hover: #121212;
 }
 
 @layer base {

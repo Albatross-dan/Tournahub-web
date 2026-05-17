@@ -49,9 +49,9 @@ export default function AdminPlayers() {
     }
   };
 
-  const filtered = players.filter(p => 
-    p.username?.toLowerCase().includes(search.toLowerCase()) ||
-    p.id.toLowerCase().includes(search.toLowerCase())
+  const filtered = (players || []).filter(p => 
+    (p.username || '').toLowerCase().includes(search.toLowerCase()) ||
+    (p.id || '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (

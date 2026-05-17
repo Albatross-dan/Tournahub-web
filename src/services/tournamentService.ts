@@ -110,8 +110,29 @@ export const tournamentService = {
   },
 
   async delete(id: string) {
-    const { error } = await (supabase as any).from('tournaments').delete().eq('id', id);
-    if (error) throw error;
+    try {
+      console.log(`[tournamentService] Initiating purge for tournament: ${id}`);
+      
+      const { error } = await (supabase as any).rpc('purge_tournament', {
+        p_tournament_id: id,
+      });
+
+      if (error) {
+        console.error('[tournamentService] Purge RPC failed:', error);
+        
+        // Handle specific error message from backend if it returns the constraint message
+        if (error.message?.includes('wallet or financial records')) {
+           throw new Error('This tournament contains protected financial history and cannot be permanently deleted.');
+        }
+        
+        throw error;
+      }
+      
+      console.log(`[tournamentService] Tournament ${id} eradicated successfully.`);
+    } catch (err: any) {
+      console.error('[tournamentService] Critical failure during tournament purge:', err);
+      throw err;
+    }
   },
 
   async register(tournamentId: string, badgeId: string) {
@@ -119,61 +140,35 @@ export const tournamentService = {
     if (authError || !user) throw new Error('You must be signed in to register.');
 
     try {
-      // 1. Attempt registration via RPC
-      // Trying with 'badge_id' instead of 'p_badge_id' if needed, or falling back
+      console.log(`[tournamentService] Attempting registration for tournament ${tournamentId} with badge ${badgeId}`);
+      
       const { data, error } = await (supabase as any).rpc('register_for_tournament', { 
-        p_user_id: user.id,
         p_tournament_id: tournamentId,
+        p_user_id: user.id,
         p_badge_id: badgeId
-      } as any);
+      });
 
       if (error) {
-        console.warn('[tournamentService] Primary registration RPC failed, trying fallback:', error);
-        
-        // If the error is "function not found", it might be an older signature or separate steps are needed
-        if (error.code === 'PGRST202' || error.message?.includes('Could not find the function')) {
-           // Fallback: Register for tournament (base) and then insert badge selection
-           // Assuming a base register_for_tournament exists or we handle it via direct insert if policy allows
-           const { data: regData, error: regError } = await (supabase as any).from('registrations').insert({
-             tournament_id: tournamentId,
-             user_id: user.id,
-             status: 'registered'
-           }).select().single();
-
-           if (regError) {
-             if (regError.code === '23505') throw new Error('Already registered for this tournament.');
-             throw regError;
-           }
-
-           // 2. Insert badge selection directly as per user request B
-           const { error: badgeError } = await (supabase as any)
-             .from('tournament_badge_selections')
-             .insert({
-               tournament_id: tournamentId,
-               user_id: user.id,
-               badge_id: badgeId
-             });
-
-           if (badgeError) {
-             if (badgeError.code === '23505') throw new Error('This badge is already taken by another player in this tournament.');
-             throw badgeError;
-           }
-
-           return { success: true, status: 'registered' };
+        if (error.message?.toLowerCase().includes('already registered')) {
+          return { success: true, status: 'registered', already_registered: true };
         }
+        console.error('[tournamentService] Registration RPC failed:', error);
         
-        // Handle unique constraint violation for badge selection (Postgres code 23505)
-        if (error.code === '23505' || error.message?.includes('tournament_badge_selections') || error.message?.includes('badge_id')) {
-          throw new Error('This badge is already taken by another player in this tournament.');
+        if (error.message?.toLowerCase().includes('balance')) {
+          throw new Error('insufficient_balance');
         }
         
         throw new Error(error.message || 'Registration failed');
       }
 
-      // 2. Handle business logic success/failure from function return
       const result = data as any;
-      if (result && result.success === false) {
-        throw new Error(result.message || 'Registration rejected by arena system.');
+      if (result?.success === false) {
+        if (result.error?.toLowerCase().includes('already registered') || result.message?.toLowerCase().includes('already registered')) {
+           return { success: true, status: result.status || 'registered', already_registered: true };
+        }
+        const err = new Error(result.error || 'Registration rejected');
+        (err as any).code = result.code;
+        throw err;
       }
 
       return { 
@@ -182,9 +177,7 @@ export const tournamentService = {
         data: result
       };
     } catch (err: any) {
-      if (err.message?.includes('23505') || err.message?.includes('duplicate key')) {
-        throw new Error('This badge is already taken by another player in this tournament.');
-      }
+      console.error('[tournamentService] Registration process caught error:', err);
       throw err;
     }
   },
@@ -206,17 +199,21 @@ export const tournamentService = {
       if (error) {
         const { data: reg } = await (supabase as any)
           .from('registrations')
-          .select('*')
+          .select('*, tournament_badge_selections(badge_id)')
           .eq('tournament_id', tournamentId)
           .eq('user_id', targetUserId)
           .maybeSingle();
 
         if (reg) {
+          const badgeSelections = (reg as any).tournament_badge_selections;
+          const badgeId = Array.isArray(badgeSelections) ? badgeSelections[0]?.badge_id : badgeSelections?.badge_id;
           return {
             registered: true,
             waitlisted: (reg as any).status === 'waitlisted',
             user_status: (reg as any).status,
-            registration_id: (reg as any).id
+            registration_id: (reg as any).id,
+            has_badge: !!badgeId,
+            badge_id: badgeId
           };
         }
         return null;
@@ -273,8 +270,121 @@ export const tournamentService = {
     const { data, error } = await (supabase as any)
       .from('registrations')
       .select('*, profiles(*)')
-      .eq('tournament_id', tournamentId);
+      .eq('tournament_id', tournamentId)
+      .in('status', ['registered', 'approved', 'checked_in', 'waitlisted']);
+      
     if (error) throw error;
-    return data as any;
+    
+    // Return only the most recent unique registration for each user
+    const unique = (data || []).reduce((acc: any[], current: any) => {
+      const userId = current.user_id;
+      const existing = acc.find(r => r.user_id === userId);
+      if (!existing) {
+        acc.push(current);
+      } else if (new Date(current.created_at) > new Date(existing.created_at)) {
+        // Keep the newer one if somehow two exist
+        const idx = acc.indexOf(existing);
+        acc[idx] = current;
+      }
+      return acc;
+    }, []);
+    
+    return unique as any;
+  },
+
+  async getLeaderboard(tournamentId: string) {
+    const { data, error } = await (supabase as any).rpc('get_tournament_leaderboard_with_prizes', { 
+      p_tournament_id: tournamentId 
+    } as any);
+    if (error) throw error;
+    
+    // Handle both direct array or wrapped object { leaderboard: [] }
+    const leaderboardRaw = Array.isArray(data) ? data : (data?.leaderboard || []);
+    
+    // Deduplicate leaderboard results just in case
+    const seenIds = new Set();
+    const leaderboard = leaderboardRaw.filter((p: any) => {
+      const id = p.user_id || p.id;
+      if (!id || seenIds.has(id)) return false;
+      seenIds.add(id);
+      return true;
+    });
+    
+    return leaderboard as any[];
+  },
+
+  async getRegisteredPlayers(tournamentId: string) {
+    try {
+      const { data, error } = await (supabase as any).rpc('get_tournament_registered_players', {
+        p_tournament_id: tournamentId
+      });
+      
+      const players = data?.players || (Array.isArray(data) ? data : []);
+      
+      if (error || players.length === 0) {
+        console.warn('[tournamentService] RPC returned no players, falling back to manual fetch');
+        return this.getRegistrations(tournamentId);
+      }
+      return players;
+    } catch (err) {
+      console.error('[tournamentService] getRegisteredPlayers failed:', err);
+      return this.getRegistrations(tournamentId);
+    }
+  },
+
+  async getFixturesWithBadges(tournamentId: string) {
+    const { data, error } = await (supabase as any).rpc('get_tournament_fixtures_with_badges', {
+      p_tournament_id: tournamentId
+    });
+    if (error) {
+      console.error('[tournamentService] getFixturesWithBadges failed:', error);
+      throw error;
+    }
+    return data?.fixtures || [];
+  },
+
+  async listBadgesForPicker(tournamentId: string) {
+    const { data, error } = await (supabase as any).rpc('list_badges_for_tournament_picker', {
+      p_tournament_id: tournamentId
+    });
+    if (error) {
+      console.warn('[tournamentService] list_badges_for_tournament_picker failed, trying old available badges RPC');
+      return this.listAvailableBadges(tournamentId);
+    }
+    return data || [];
+  },
+
+  async listAvailableBadges(tournamentId: string) {
+    // Legacy support
+    const { data, error } = await (supabase as any).rpc('list_available_badges_for_tournament', {
+      p_tournament_id: tournamentId
+    });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getMyBadge(tournamentId: string) {
+    const { data, error } = await (supabase as any).rpc('get_my_badge_for_tournament', {
+      p_tournament_id: tournamentId
+    });
+    if (error) {
+      console.warn('[tournamentService] get_my_badge_for_tournament failed:', error);
+      return { has_badge: false, badge_id: null };
+    }
+    return data || { has_badge: false, badge_id: null };
+  },
+
+  async selectBadge(tournamentId: string, badgeId: string, replace: boolean = false) {
+    const { data, error } = await (supabase as any).rpc('select_badge_for_tournament', {
+      p_tournament_id: tournamentId,
+      p_badge_id: badgeId,
+      p_replace: replace
+    });
+    
+    if (error || data?.error) {
+      throw new Error(data?.error || error?.message || 'Failed to select badge');
+    }
+    
+    return data;
   }
 };

@@ -5,11 +5,14 @@ import { Match } from '../types/database';
 import { supabase } from '../lib/supabase';
 import Shell from '../components/layout/Shell';
 import { Link } from 'react-router-dom';
-import { Gamepad2, Timer, ArrowRight, Trophy, Clock, ClipboardList, MessageSquare, ChevronRight, User } from 'lucide-react';
-import { cn, getPublicIdentity } from '../lib/utils';
+import { Gamepad2, Timer, ArrowRight, Trophy, Clock, ClipboardList, MessageSquare, ChevronRight, User, Calendar } from 'lucide-react';
+import { cn, getPublicIdentity, formatDate } from '../lib/utils';
 import LoadingState from '../components/ui/LoadingState';
-import { motion } from 'motion/react';
 import { formatDistanceToNow } from 'date-fns';
+import VerificationStatusBadge from '../components/match/VerificationStatusBadge';
+import VerificationStatusBanner from '../components/match/VerificationStatusBanner';
+import { VerificationStatus } from '../types/verification.types';
+import { motion, AnimatePresence } from 'motion/react';
 
 export default function Matches() {
   const { user } = useAuth();
@@ -53,8 +56,17 @@ export default function Matches() {
   async function loadMatches(showLoading = true) {
     try {
       if (showLoading) setLoading(true);
+      
+      const timeoutId = setTimeout(() => {
+        if (showLoading) {
+          setLoading(false);
+          console.warn('[Matches] Matches loading timed out after 10s');
+        }
+      }, 10000);
+      
       const data = await matchService.getUserMatches(user!.id);
       setMatches(data || []);
+      clearTimeout(timeoutId);
     } catch (err) {
       console.error(err);
     } finally {
@@ -65,8 +77,17 @@ export default function Matches() {
   async function loadConversations(showLoading = true) {
     try {
       if (showLoading) setLoading(true);
+      
+      const timeoutId = setTimeout(() => {
+        if (showLoading) {
+          setLoading(false);
+          console.warn('[Matches] Conversations loading timed out after 10s');
+        }
+      }, 10000);
+      
       const data = await matchService.getConversations(user!.id);
       setConversations(data || []);
+      clearTimeout(timeoutId);
     } catch (err) {
       console.error(err);
     } finally {
@@ -242,68 +263,121 @@ function EmptyState({ tab, title, description }: { tab: 'matches' | 'chat'; titl
 
 function MatchCard({ match }: { match: any; key?: string }) {
   const { user } = useAuth();
-  const isOngoing = match.status === 'ongoing';
-  const isCompleted = match.status === 'completed';
+  const isOngoing = match.status === 'ongoing' || ['lobby_open', 'match_in_progress'].includes(match.status);
+  const isCompleted = match.status === 'completed' || match.status === 'verified';
+  const isScheduled = !!match.scheduled_at && !isOngoing && !isCompleted;
+  
+  // Check if now is past scheduled time
+  const isPastScheduled = isScheduled && new Date(match.scheduled_at) <= new Date();
+  const displayStatus = isOngoing || isPastScheduled ? 'Live Now' : isScheduled ? 'Scheduled' : isCompleted ? 'Completed' : 'Live Soon';
+  
+  const verification = match.result_verification_status as VerificationStatus || 'none';
 
   const opponent = match.player1?.id === user?.id ? match.player2 : match.player1;
   const opponentName = getPublicIdentity(opponent);
 
   return (
-    <Link 
-      to={`/matches/${match.id}`} 
-      className={cn(
-        "card p-6 block hover:border-primary/50 transition-all group overflow-hidden relative",
-        isOngoing && "border-primary/30"
-      )}
-    >
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-        <div className="flex items-center space-x-6">
-          <div className="text-center w-16">
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Round</p>
-            <p className="text-2xl font-black text-white italic">{match.round}</p>
+    <div className="relative">
+      <Link 
+        to={`/matches/${match.id}`} 
+        className={cn(
+          "card p-6 block hover:border-primary/50 transition-all group overflow-hidden relative z-10",
+          (isOngoing || isPastScheduled) && "border-primary/30 shadow-lg shadow-primary/5",
+          verification === 'disputed' && "border-red-500/30"
+        )}
+      >
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+          <div className="flex items-center space-x-6">
+            <div className="text-center w-16">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Round</p>
+              <p className="text-2xl font-black text-white italic">{match.round}</p>
+            </div>
+            <div className="h-12 w-px bg-slate-800" />
+            <div className="space-y-1 min-w-0">
+               <div className="flex items-center space-x-2">
+                 <span className="text-[10px] font-black text-primary uppercase tracking-widest truncate">
+                   {match.tournaments?.name || 'Tournament'}
+                 </span>
+                 <span className="w-1 h-1 bg-slate-700 rounded-full shrink-0" />
+                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest shrink-0">{match.stage} stage</span>
+                 
+                 <VerificationStatusBadge status={verification} size="sm" />
+               </div>
+               <div className="flex items-center space-x-3">
+                 <span className={cn("text-lg font-bold uppercase italic tracking-tight truncate max-w-[100px] sm:max-w-none", match.winner === user?.id || (isCompleted && match.score1 > match.score2) ? "text-emerald-500" : "text-white")}>You</span>
+                 <span className="text-xs font-black text-slate-600 shrink-0">
+                   {isCompleted || match.score1 !== null ? `${match.score1 ?? 0} - ${match.score2 ?? 0}` : "VS"}
+                 </span>
+                 <span className={cn("text-lg font-bold uppercase italic tracking-tight truncate max-w-[100px] sm:max-w-none", match.winner === opponent?.id || (isCompleted && match.score2 > match.score1) ? "text-emerald-500" : "text-white")}>
+                   {opponentName}
+                 </span>
+               </div>
+               
+               {isScheduled && (
+                 <div className="flex items-center space-x-2 pt-1">
+                   <Calendar className="w-3 h-3 text-slate-600" />
+                   <span className="text-[10px] font-bold text-slate-400 border border-slate-800 px-2 rounded-full uppercase tracking-tighter">
+                     {formatDate(match.scheduled_at)}
+                   </span>
+                 </div>
+               )}
+            </div>
           </div>
-          <div className="h-12 w-px bg-slate-800" />
-          <div className="space-y-1">
-             <div className="flex items-center space-x-2">
-               <span className="text-[10px] font-black text-primary uppercase tracking-widest">
-                 {match.tournaments?.name || 'Tournament'}
-               </span>
-               <span className="w-1 h-1 bg-slate-700 rounded-full" />
-               <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{match.stage} stage</span>
+
+          <div className="flex items-center space-x-6 justify-between md:justify-end">
+             <div className="text-right">
+               {isCompleted ? (
+                 <div className="flex items-center text-slate-500 space-x-2">
+                   <Clock className="w-4 h-4" />
+                   <span className="text-xs font-black uppercase italic">Completed</span>
+                 </div>
+               ) : (
+                 <div className={cn(
+                   "flex items-center space-x-2",
+                   isOngoing || isPastScheduled ? "text-emerald-500" : "text-primary"
+                 )}>
+                   {isOngoing || isPastScheduled ? (
+                     <>
+                      <div className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </div>
+                      <span className="text-xs font-black uppercase italic animate-pulse">Live Now</span>
+                     </>
+                   ) : (
+                     <>
+                      <Timer className="w-4 h-4" />
+                      <span className="text-xs font-black uppercase italic">{isScheduled ? 'Scheduled' : 'Live Soon'}</span>
+                     </>
+                   )}
+                 </div>
+               )}
              </div>
-             <div className="flex items-center space-x-3">
-               <span className={cn("text-lg font-bold uppercase italic tracking-tight", match.winner === user?.id ? "text-emerald-500" : "text-white")}>You</span>
-               <span className="text-xs font-black text-slate-600">
-                 {isCompleted ? `${match.score1 ?? 0} - ${match.score2 ?? 0}` : "VS"}
-               </span>
-               <span className={cn("text-lg font-bold uppercase italic tracking-tight", match.winner === opponent?.id ? "text-emerald-500" : "text-white")}>
-                 {opponentName}
-               </span>
+             <div className="btn-secondary p-3 rounded-xl group-hover:bg-primary group-hover:text-slate-900 transition-all shadow-lg group-hover:shadow-primary/20">
+               <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
              </div>
           </div>
         </div>
 
-        <div className="flex items-center space-x-6 justify-between md:justify-end">
-           <div className="text-right">
-             {isCompleted ? (
-               <div className="flex items-center text-slate-500 space-x-2">
-                 <Clock className="w-4 h-4" />
-                 <span className="text-xs font-black uppercase italic">Completed</span>
-               </div>
-             ) : (
-               <div className="flex items-center text-primary space-x-2">
-                 <Timer className="w-4 h-4" />
-                 <span className="text-xs font-black uppercase italic animate-pulse">Live Soon</span>
-               </div>
-             )}
-           </div>
-           <div className="btn-secondary p-3 rounded-xl group-hover:bg-primary group-hover:text-slate-900 transition-all">
-             <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
-           </div>
-        </div>
-      </div>
-
-      {isOngoing && <div className="absolute top-0 right-0 p-2 bg-primary/10 text-primary text-[10px] font-black uppercase italic tracking-tighter">Match Live</div>}
-    </Link>
+        {(isOngoing || isPastScheduled) && (
+          <div className="absolute top-0 right-0 p-2 bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase italic tracking-tighter border-b border-l border-emerald-500/20 rounded-bl-xl">
+            Match Live
+          </div>
+        )}
+      </Link>
+      
+      <AnimatePresence>
+        {verification !== 'none' && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="mt-2"
+          >
+            <VerificationStatusBanner status={verification} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }

@@ -278,21 +278,87 @@ export const matchService = {
     }
   },
 
-  async submitResult(matchId: string, _userId: string, score1: number, score2: number, screenshotUrl?: string) {
+  async submitResult(matchId: string, score1: number, score2: number, screenshotUrl: string | null) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Authentication required');
+
     const { data, error } = await (supabase as any).rpc('submit_match_result', {
+      p_submitter_id: user.id,
       p_match_id: matchId,
-      p_player1_score: score1,
-      p_player2_score: score2,
+      p_score1: score1,
+      p_score2: score2,
       p_screenshot_url: screenshotUrl
-    } as any);
+    });
     
     if (error) {
       console.error('[matchService] submitResult RPC error details:', error);
-      if (error.message.includes('row-level security policy')) {
-        throw new Error('RLS Policy Violation: You do not have permission to insert this result.');
-      }
       throw error;
     }
+
+    if (data?.error) {
+      throw new Error(data.error);
+    }
+
+    return data;
+  },
+
+  async getMatchVerificationState(matchId: string) {
+    const { data, error } = await (supabase as any).rpc('get_match_verification_state', {
+      p_match_id: matchId,
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  async getDisputedMatches(adminId: string) {
+    const { data, error } = await (supabase as any).rpc('get_disputed_matches', {
+      p_admin_id: adminId,
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  async resolveDispute(params: {
+    adminId: string;
+    matchId: string;
+    winningSubId?: string;
+    overrideScore1?: number;
+    overrideScore2?: number;
+    adminNotes?: string;
+  }) {
+    const rpcParams: any = {
+      p_admin_id: params.adminId,
+      p_match_id: params.matchId,
+      p_admin_notes: params.adminNotes,
+    };
+
+    if (params.winningSubId) {
+      rpcParams.p_winning_sub_id = params.winningSubId;
+    } else {
+      rpcParams.p_override_score1 = params.overrideScore1;
+      rpcParams.p_override_score2 = params.overrideScore2;
+    }
+
+    const { data, error } = await (supabase as any).rpc('admin_resolve_dispute', rpcParams);
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return data;
+  },
+
+  async getExistingSubmission(matchId: string, userId: string) {
+    const { data, error } = await supabase
+      .from('match_results')
+      .select('*')
+      .eq('match_id', matchId)
+      .eq('submitted_by', userId)
+      .not('status', 'in', '("rejected","disputed")')
+      .maybeSingle();
+
+    if (error) {
+      console.error('[matchService] Error fetching existing submission:', error);
+      return null;
+    }
+    return data;
   },
 
   async getConversationId(matchId: string) {
@@ -664,12 +730,68 @@ export const matchService = {
   },
 
   async verifyResult(matchId: string, winnerId: string, score1: number, score2: number) {
-    const { data, error } = await (supabase as any).rpc('verify_match_result', {
+    const { data, error } = await (supabase as any).rpc('verify_match_result_old', {
       p_match_id: matchId,
       p_winner_id: winnerId,
       p_score1: score1,
       p_score2: score2
     } as any);
+    if (error) throw error;
+    return data;
+  },
+
+  async adminVerifyResult(resultId: string, verifierId: string, action: 'approve' | 'reject', adminNotes?: string) {
+    const { data, error } = await (supabase as any).rpc('verify_match_result', {
+      p_result_id: resultId,
+      p_verifier_id: verifierId,
+      p_action: action,
+      p_admin_notes: adminNotes
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return data;
+  },
+
+  async scheduleMatch(matchId: string, scheduledAt: string, adminId: string) {
+    const { data, error } = await (supabase as any).rpc('schedule_match', {
+      p_match_id: matchId,
+      p_scheduled_at: scheduledAt,
+      p_admin_id: adminId
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return data;
+  },
+
+  async batchScheduleMatches(matchIds: string[], scheduledAt: string, adminId: string) {
+    const { data, error } = await (supabase as any).rpc('batch_schedule_matches', {
+      p_match_ids: matchIds,
+      p_scheduled_at: scheduledAt,
+      p_admin_id: adminId
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return data;
+  },
+
+  async transitionScheduledMatches() {
+    const { data, error } = await (supabase as any).rpc('transition_scheduled_matches');
+    if (error) throw error;
+    return data;
+  },
+
+  async getMatchResult(matchId: string) {
+    const { data, error } = await (supabase as any)
+      .from('match_results')
+      .select(`
+        id, player1_score, player2_score, screenshot_url,
+        status, admin_notes, submission_attempt, created_at,
+        submitter:profiles!submitted_by(id, username, avatar_url)
+      `)
+      .eq('match_id', matchId)
+      .eq('status', 'submitted')
+      .maybeSingle();
+    
     if (error) throw error;
     return data;
   },
@@ -713,5 +835,28 @@ export const matchService = {
       wins,
       winRate
     };
+  },
+
+  async getFixturesWithBadges(tournamentId: string) {
+    const { data, error } = await supabase
+      .from('v_fixtures_with_badges' as any)
+      .select('*')
+      .eq('tournament_id', tournamentId)
+      .order('round', { ascending: true });
+    
+    if (error) throw error;
+    return (data || []) as any[];
+  },
+
+  async getStandingsWithBadges(tournamentId: string) {
+    const { data, error } = await supabase
+      .from('v_standings_with_badges' as any)
+      .select('*')
+      .eq('tournament_id', tournamentId)
+      .order('points', { ascending: false })
+      .order('goal_difference', { ascending: false });
+    
+    if (error) throw error;
+    return (data || []) as any[];
   }
 };

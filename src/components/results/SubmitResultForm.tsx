@@ -6,6 +6,9 @@ import { Upload, CheckCircle2, AlertCircle, X, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import LoadingState from '../ui/LoadingState';
 
+import VerificationStatusWidget from './VerificationStatusWidget';
+import { MatchVerificationState } from '../../types/verification';
+
 interface SubmitResultFormProps {
   matchId: string;
   currentUserId: string;
@@ -17,26 +20,28 @@ export default function SubmitResultForm({ matchId, currentUserId, onSuccess }: 
   const [score2, setScore2] = useState<number>(0);
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [verificationState, setVerificationState] = useState<MatchVerificationState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isMatchVerified, setIsMatchVerified] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+
+  const hasAlreadySubmitted = verificationState?.submissions.some(s => s.submitted_by === currentUserId);
+  const isFinalised = verificationState?.locked || 
+                      verificationState?.verification_status === 'verified' || 
+                      verificationState?.verification_status === 'matched';
 
   useEffect(() => {
-    checkExistingResult();
+    loadState();
   }, [matchId]);
 
-  async function checkExistingResult() {
+  async function loadState() {
     try {
-      const { data, error } = await supabase
-        .from('match_results')
-        .select('*')
-        .eq('match_id', matchId)
-        .eq('status', 'verified')
-        .maybeSingle();
-
-      if (data) setIsMatchVerified(true);
+      setInitialLoading(true);
+      const data = await matchService.getMatchVerificationState(matchId);
+      setVerificationState(data);
     } catch (err) {
-      console.error('Error checking match status:', err);
+      console.error('Error loading verification state:', err);
+    } finally {
+      setInitialLoading(false);
     }
   }
 
@@ -54,44 +59,70 @@ export default function SubmitResultForm({ matchId, currentUserId, onSuccess }: 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!screenshot) return setError('Please upload a screenshot for verification');
+    
+    // Front-end validation
+    if (score1 < 0 || score2 < 0) {
+      return setError('Scores cannot be negative');
+    }
     
     setLoading(true);
     setError(null);
 
     try {
-      // 1. Upload screenshot using service
-      const screenshotPath = await storageService.uploadScreenshot(screenshot);
+      let screenshotPath = null;
+      if (screenshot) {
+        // 1. Upload screenshot
+        screenshotPath = await storageService.uploadScreenshot(screenshot, matchId, currentUserId);
+      }
 
-      // 2. Submit result via RPC-based service
-      await matchService.submitResult(matchId, currentUserId, score1, score2, screenshotPath);
+      // 2. Submit result via RPC
+      await matchService.submitResult(matchId, score1, score2, screenshotPath);
 
-      setSubmitted(true);
       if (onSuccess) onSuccess();
+      await loadState();
     } catch (err: any) {
       console.error('Submission error:', err);
-      setError(err.message || 'Failed to submit result');
+      // 8. Error handling map
+      const errMsg = err.message || '';
+      if (errMsg.includes('Match not found')) {
+        setError('Match not found. Please refresh.');
+      } else if (errMsg.includes('You are not a player')) {
+        setError('Authorization error: You are not a player in this match.');
+      } else if (errMsg.includes('Match status is')) {
+        setError(`Invalid match status for submission: ${errMsg}`);
+      } else if (errMsg.includes('already been finalised')) {
+        setError('This match has already been finalised.');
+      } else if (errMsg.includes('already submitted')) {
+        setError('You have already submitted a result for this match.');
+        loadState();
+      } else if (errMsg.includes('Scores cannot be negative')) {
+        setError('Scores cannot be negative.');
+      } else if (errMsg.includes('Screenshot not found')) {
+        setError('Evidence file lost during transmission. Please re-upload and retry.');
+      } else {
+        setError(errMsg || 'Transmission failure. Please retry.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  if (isMatchVerified) {
+  if (initialLoading) {
     return (
-      <div className="card p-8 text-center bg-emerald-500/5 border-emerald-500/20">
-        <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
-        <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">Result Verified</h3>
-        <p className="text-zinc-500 text-sm font-bold uppercase tracking-widest mt-2">The official score has been locked for this match.</p>
+      <div className="card p-8 text-center bg-zinc-900 border-zinc-800">
+        <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mb-4" />
+        <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Checking Submission Status...</p>
       </div>
     );
   }
 
-  if (submitted) {
+  // If the user already submitted OR the match is finalised, show the VerificationStatusWidget
+  if (hasAlreadySubmitted || isFinalised) {
     return (
-      <div className="card p-12 text-center bg-primary/5 border-primary/20">
-        <LoadingState message="Verification Protocol..." />
-        <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mt-6">Awaiting human authority for match clearance.</p>
-      </div>
+      <VerificationStatusWidget 
+        matchId={matchId} 
+        onStateChange={setVerificationState}
+      />
     );
   }
 

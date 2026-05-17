@@ -1,34 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Users } from 'lucide-react';
 import { motion } from 'motion/react';
-import { getStorageUrl, getPublicIdentity, cn } from '../../lib/utils';
+import { cn } from '../../lib/utils';
 import LoadingState from '../ui/LoadingState';
-import { useTournamentBadges } from '../../hooks/useTournamentBadges';
+import { tournamentService } from '../../services/tournamentService';
+import { useMatchCompletionSync } from '../../hooks/useMatchCompletionSync';
+import { PlayerBadge } from '../ui/PlayerBadge';
 
 interface StandingsTableProps {
   tournamentId: string;
   groupName?: string;
+  registrations?: any[];
 }
 
-export default function StandingsTable({ tournamentId, groupName }: StandingsTableProps) {
+export default function StandingsTable({ tournamentId, groupName, registrations }: StandingsTableProps) {
   const [standings, setStandings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { badges } = useTournamentBadges(tournamentId);
+  const { refreshCount } = useMatchCompletionSync(tournamentId);
 
   useEffect(() => {
     fetchStandings();
 
-    // Realtime subscription
-    const channel = supabase
-      .channel(`standings-${tournamentId}-${groupName || 'all'}-${Math.random().toString(36).substring(7)}`)
+    // Realtime subscription for badges
+    const badgeChannel = supabase
+      .channel(`badges-${tournamentId}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'standings',
+          table: 'tournament_badge_selections',
           filter: `tournament_id=eq.${tournamentId}`,
         },
         () => {
@@ -38,74 +40,70 @@ export default function StandingsTable({ tournamentId, groupName }: StandingsTab
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(badgeChannel);
     };
-  }, [tournamentId, groupName]);
+  }, [tournamentId, groupName, refreshCount, registrations]);
 
   async function fetchStandings() {
     try {
-      // Try with direct profile join first
-      const { data, error } = await (supabase as any)
-        .from('standings')
-        .select(`
-          *,
-          profiles (
-            id,
-            username,
-            avatar_url
-          )
-        `)
-        .eq('tournament_id', tournamentId)
-        .order('points', { ascending: false })
-        .order('goal_difference', { ascending: false })
-        .order('goals_for', { ascending: false });
-
-      if (error) {
-        // Fallback: fetch simple standings and then profiles
-        const { data: simpleData, error: simpleError } = await (supabase as any)
-          .from('standings')
-          .select('*')
-          .eq('tournament_id', tournamentId)
-          .order('points', { ascending: false })
-          .order('goal_difference', { ascending: false });
-        
-        if (simpleError) {
-          // Try fetching from league_standings if standings table fails
-          const { data: leagueData, error: leagueError } = await (supabase as any)
-            .from('league_standings')
-            .select('*')
-            .eq('tournament_id', tournamentId)
-            .order('points', { ascending: false });
-          
-          if (leagueError) throw leagueError;
-          setStandings(leagueData || []);
-        } else if (simpleData && simpleData.length > 0) {
-          // If we got standings but no profiles, fetch profiles for these users
-          const userIds = (simpleData as any[]).map(s => s.user_id).filter(Boolean);
-          if (userIds.length > 0) {
-            const { data: profileData } = await (supabase as any)
-              .from('profiles')
-              .select('id, username, avatar_url')
-              .in('id', userIds);
-            
-            const profileMap = (profileData || []).reduce((acc: any, p: any) => {
-              acc[p.id] = p;
-              return acc;
-            }, {});
-
-            setStandings((simpleData as any[]).map(s => ({
-              ...s,
-              profiles: profileMap[s.user_id]
-            })));
-          } else {
-            setStandings(simpleData);
+      setLoading(true);
+      const data = await tournamentService.getLeaderboard(tournamentId);
+      const rawStandings = Array.isArray(data) ? data : [];
+      
+      // Strict deduplication of backend data
+      const getPlayerId = (p: any) => p.user_id || p.id;
+      const seenIds = new Set<string>();
+      let standingsArray = rawStandings.filter(row => {
+        const id = getPlayerId(row);
+        if (!id || seenIds.has(id)) return false;
+        seenIds.add(id);
+        return true;
+      });
+      
+      // If we have registrations, ensure everyone registered is in the leaderboard
+      if (registrations && registrations.length > 0) {
+        registrations.forEach(reg => {
+          const userId = getPlayerId(reg);
+          if (userId && !seenIds.has(userId)) {
+            seenIds.add(userId); // Add to set to prevent double addition
+            // Add skeleton row for registered player with no stats yet
+            standingsArray.push({
+              id: userId, // Ensure we have id for the key
+              user_id: userId,
+              username: reg.username || reg.profiles?.username || 'Anonymous',
+              badge_id: reg.badge_id,
+              played: 0,
+              wins: 0,
+              draws: 0,
+              losses: 0,
+              goals_for: 0,
+              goals_against: 0,
+              goal_difference: 0,
+              points: 0,
+              rank: null
+            });
           }
-        } else {
-          setStandings([]);
-        }
-      } else {
-        setStandings(data || []);
+        });
       }
+
+      // Re-sort standings by points then GD if we added new players
+      standingsArray.sort((a, b) => {
+        if (b.points !== a.points) return b.points - a.points;
+        return b.goal_difference - a.goal_difference;
+      });
+
+      // Update ranks
+      standingsArray = standingsArray.map((row, idx) => ({
+        ...row,
+        rank: idx + 1
+      }));
+
+      // If groupName is provided, filter the results
+      const filteredData = groupName 
+        ? standingsArray.filter((row: any) => row.group_name === groupName)
+        : standingsArray;
+
+      setStandings(filteredData);
     } catch (err: any) {
       console.error('Error fetching standings:', err);
       setError(err.message);
@@ -153,7 +151,7 @@ export default function StandingsTable({ tournamentId, groupName }: StandingsTab
               const isQualified = index < 2; // Highlight top 2
               return (
                 <tr 
-                  key={row.id ? `std-${row.id}` : `std-idx-${index}`} 
+                  key={row.user_id || row.id || `std-idx-${index}`} 
                   className={cn(
                     "text-sm transition-colors hover:bg-zinc-800/30",
                     isQualified && "bg-emerald-500/5"
@@ -170,26 +168,13 @@ export default function StandingsTable({ tournamentId, groupName }: StandingsTab
                   <td className="px-3 md:px-6 py-4">
                     <div className="flex items-center space-x-3">
                       <div className="flex items-center space-x-3 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center overflow-hidden border border-zinc-700 shrink-0">
-                          {badges[row.user_id || row.profiles?.id] ? (
-                            <img 
-                              src={getStorageUrl('team-badges', badges[row.user_id || row.profiles?.id]) || ''} 
-                              className="w-full h-full object-contain p-1" 
-                              alt="badge"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : row.profiles?.avatar_url ? (
-                            <img 
-                              src={getStorageUrl('avatars', row.profiles.avatar_url) || ''} 
-                              className="w-full h-full object-cover" 
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <Users className="w-4 h-4 text-zinc-600" />
-                          )}
-                        </div>
+                        <PlayerBadge 
+                          badgeId={row.badge_id} 
+                          username={row.username} 
+                          size="sm" 
+                        />
                         <span className="font-bold text-white uppercase italic tracking-tight truncate max-w-[80px] sm:max-w-none">
-                          {getPublicIdentity(row.profiles)}
+                          {row.username}
                         </span>
                       </div>
                     </div>

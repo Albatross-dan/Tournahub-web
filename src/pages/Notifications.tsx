@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Shell from '../components/layout/Shell';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Bell, Trophy, MessageSquare, Calendar, Info, Clock, CheckCircle2 } from 'lucide-react';
+import { Bell, Trophy, MessageSquare, Calendar, Info, Clock, CheckCircle2, Shield } from 'lucide-react';
 import { formatDate, cn } from '../lib/utils';
 import { Notification } from '../types/database';
 import LoadingState from '../components/ui/LoadingState';
 
 export default function Notifications() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -57,6 +59,7 @@ export default function Notifications() {
       case 'match': return <Trophy className="w-5 h-5 text-primary" />;
       case 'message': return <MessageSquare className="w-5 h-5 text-blue-500" />;
       case 'tournament': return <Calendar className="w-5 h-5 text-emerald-500" />;
+      case 'badge_required': return <Shield className="w-5 h-5 text-amber-500" />;
       default: return <Info className="w-5 h-5 text-zinc-400" />;
     }
   };
@@ -100,7 +103,7 @@ export default function Notifications() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
                     <p className={cn(
-                      "font-black italic uppercase tracking-tight text-lg",
+                      "font-black italic uppercase tracking-tight text-lg leading-tight",
                       notif.read ? "text-slate-400" : "text-white"
                     )}>
                       {notif.title}
@@ -112,6 +115,16 @@ export default function Notifications() {
                   <p className="text-slate-400 text-sm leading-relaxed mt-1 font-medium italic">
                     {notif.body}
                   </p>
+                  
+                  {notif.type === 'badge_required' && notif.data?.tournament_id && (
+                    <button 
+                      onClick={() => navigate(`/tournaments/${notif.data.tournament_id}`)}
+                      className="mt-3 px-4 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 text-[10px] font-black uppercase tracking-widest rounded-lg border border-amber-500/20 transition-all"
+                    >
+                      Select Badge Now
+                    </button>
+                  )}
+
                   <div className="flex items-center gap-4 mt-3">
                     <div className="flex items-center text-[10px] font-black text-slate-500 uppercase tracking-widest">
                        <Clock size={12} className="mr-1.5" />

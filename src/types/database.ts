@@ -104,7 +104,9 @@ export interface Database {
           score1: number | null
           score2: number | null
           winner: string | null
-          status: 'pending' | 'ongoing' | 'completed' | null
+          status: 'pending' | 'ongoing' | 'completed' | 'awaiting_result' | 'match_in_progress' | 'lobby_open' | 'under_review' | null
+          result_verification_status: 'none' | 'single_submission' | 'matched' | 'disputed' | 'verified' | null
+          locked: boolean | null
           created_at: string | null
           stage: string | null
           bracket_slot: number | null
@@ -122,7 +124,9 @@ export interface Database {
           score1?: number | null
           score2?: number | null
           winner?: string | null
-          status?: 'pending' | 'ongoing' | 'completed' | null
+          status?: 'pending' | 'ongoing' | 'completed' | 'awaiting_result' | 'match_in_progress' | 'lobby_open' | 'under_review' | null
+          result_verification_status?: 'none' | 'single_submission' | 'matched' | 'disputed' | 'verified' | null
+          locked?: boolean | null
           created_at?: string | null
           stage?: string | null
           bracket_slot?: number | null
@@ -140,7 +144,9 @@ export interface Database {
           score1?: number | null
           score2?: number | null
           winner?: string | null
-          status?: 'pending' | 'ongoing' | 'completed' | null
+          status?: 'pending' | 'ongoing' | 'completed' | 'awaiting_result' | 'match_in_progress' | 'lobby_open' | 'under_review' | null
+          result_verification_status?: 'none' | 'single_submission' | 'matched' | 'disputed' | 'verified' | null
+          locked?: boolean | null
           created_at?: string | null
           stage?: string | null
           bracket_slot?: number | null

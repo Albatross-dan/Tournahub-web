@@ -36,22 +36,32 @@ export const storageService = {
     throw new Error('Avatar uploads are currently disabled due to storage limitations.');
   },
 
-  async uploadScreenshot(file: File) {
-    const path = `results/${Date.now()}-${file.name}`;
-    // result-screenshots is a private bucket
+  async uploadScreenshot(file: File, matchId: string, userId: string) {
+    const extension = file.name.split('.').pop();
+    const path = `results/${matchId}_${userId}_${Date.now()}.${extension}`;
+    
     const { data, error } = await supabase.storage
       .from('result-screenshots')
       .upload(path, file, { cacheControl: '3600', upsert: false });
     
     if (error) {
       console.error('Upload error for result-screenshots:', error);
-      if (error.message.includes('row-level security policy')) {
-        throw new Error('RLS Policy Violation: STORAGE. You do not have permission to upload to the "result-screenshots" bucket. Please check your storage bucket policies in Supabase.');
-      }
       throw error;
     }
     
-    // Return the path for private files so it can be used with createSignedUrl if needed
     return data.path;
+  },
+
+  async getScreenshotUrl(path: string) {
+    const { data, error } = await supabase.storage
+      .from('result-screenshots')
+      .createSignedUrl(path, 60);
+
+    if (error) {
+      console.error('Error creating signed URL:', error);
+      return null;
+    }
+
+    return data.signedUrl;
   }
 };

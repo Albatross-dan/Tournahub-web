@@ -19,19 +19,34 @@ export default function ManageTournaments() {
   const { tournaments, loading } = useRealtimeTournaments();
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = async (id: string) => {
+    console.log(`[Admin] Initiating purge for tournament: ${id}`);
+    setIsDeleting(true);
     try {
       await tournamentService.delete(id);
+      console.log(`[Admin] Purge successful for tournament: ${id}`);
       setConfirmDeleteId(null);
     } catch (err: any) {
-      alert(err.message || 'Delete failed: Have players already registered?');
+      console.error('[Admin] Purge failure:', err);
+      let errorMsg = err.message || 'The purge operation encountered tactical resistance.';
+      
+      if (err.message?.includes('financial') || err.message?.includes('wallet')) {
+        errorMsg = 'This tournament contains protected financial history and cannot be permanently deleted.';
+      } else if (err.message === 'Failed to fetch') {
+        errorMsg = 'Network Breach: Connection to the main server was interrupted. Please check your signal and try again.';
+      }
+      
+      alert(errorMsg);
       setConfirmDeleteId(null);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
-  const filtered = tournaments.filter(t => 
-    t.name.toLowerCase().includes(search.toLowerCase())
+  const filtered = (tournaments || []).filter(t => 
+    (t.name || '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -94,7 +109,7 @@ export default function ManageTournaments() {
                     <td className="px-6 py-6">
                       <div className="flex items-center space-x-5">
                         <div className="w-14 h-14 rounded-2xl border border-slate-800 overflow-hidden bg-slate-900 flex-shrink-0 relative group-hover:border-primary/30 transition-colors">
-                          {t.banner_url ? (
+                          {t?.banner_url ? (
                             <img 
                               src={getStorageUrl('tournament-banners', t.banner_url)} 
                               className="w-full h-full object-cover opacity-50 group-hover:opacity-80 transition-opacity" 
@@ -110,8 +125,8 @@ export default function ManageTournaments() {
                           )}
                         </div>
                         <div className="flex flex-col">
-                          <span className="font-black text-white uppercase tracking-tight group-hover:text-primary transition-colors leading-tight mb-1">{t.name}</span>
-                          <span className="text-[10px] text-slate-600 font-mono italic">#{t.id}</span>
+                          <span className="font-black text-white uppercase tracking-tight group-hover:text-primary transition-colors leading-tight mb-1">{t?.name || 'Untitled'}</span>
+                          <span className="text-[10px] text-slate-600 font-mono italic">#{t?.id || 'N/A'}</span>
                         </div>
                       </div>
                     </td>
@@ -119,55 +134,36 @@ export default function ManageTournaments() {
                       <div className="space-y-1.5">
                         <div className="flex items-center text-xs font-black text-slate-300 uppercase tracking-tight">
                           <Layers className="w-3.5 h-3.5 mr-2 text-primary" />
-                          {t.type.split('_').join(' ')}
+                          {(t?.type || 'unknown').split('_').join(' ')}
                         </div>
                         <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-                          {t.max_players} Available Slots
+                          {t?.max_players || 0} Available Slots
                         </p>
                       </div>
                     </td>
                     <td className="px-6 py-6 font-mono">
                       <p className="text-sm font-black text-emerald-400 italic tracking-tighter">
-                        {formatCurrency(t.prize_pool || 0)}
+                        {formatCurrency(t?.prize_pool || 0)}
                       </p>
                     </td>
                     <td className="px-6 py-6">
-                      <StatusBadge status={t.status} />
+                      <StatusBadge status={t?.status || 'unknown'} />
                     </td>
                     <td className="px-6 py-6 text-right">
                       <div className="flex items-center justify-end space-x-2">
-                         {confirmDeleteId === t.id ? (
-                           <div className="flex items-center space-x-2 animate-in fade-in slide-in-from-right-2 duration-300">
-                             <button 
-                               onClick={() => handleDelete(t.id)}
-                               className="px-4 py-2 bg-red-600 text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-red-700 transition-colors shadow-lg shadow-red-600/30"
-                             >
-                               Confirm
-                             </button>
-                             <button 
-                               onClick={() => setConfirmDeleteId(null)}
-                               className="p-2 bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors border border-slate-700"
-                             >
-                               <X className="w-4 h-4" />
-                             </button>
-                           </div>
-                         ) : (
-                           <>
-                             <Link to={`/admin/tournaments/${t.id}/manage`} className="p-3 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-all border border-primary/10" title="Manage Matches">
-                               <Gamepad2 className="w-4 h-4 stroke-[2.5px]" />
-                             </Link>
-                             <Link to={`/admin/tournaments/${t.id}`} className="p-3 bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl transition-all border border-slate-700/50" title="Edit">
-                               <Edit3 className="w-4 h-4" />
-                             </Link>
-                             <button 
-                               onClick={() => setConfirmDeleteId(t.id)} 
-                               className="p-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl transition-all border border-red-500/10" 
-                               title="Delete"
-                             >
-                               <Trash2 className="w-4 h-4" />
-                             </button>
-                           </>
-                         )}
+                        <Link to={`/admin/tournaments/${t?.id}/manage`} className="p-3 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-all border border-primary/10" title="Manage Matches">
+                          <Gamepad2 className="w-4 h-4 stroke-[2.5px]" />
+                        </Link>
+                        <Link to={`/admin/tournaments/${t?.id}`} className="p-3 bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl transition-all border border-slate-700/50" title="Edit">
+                          <Edit3 className="w-4 h-4" />
+                        </Link>
+                        <button 
+                          onClick={() => t?.id && setConfirmDeleteId(t.id)} 
+                          className="p-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl transition-all border border-red-500/10" 
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -177,6 +173,53 @@ export default function ManageTournaments() {
           </div>
         </div>
       </div>
+
+      {/* Confirmation Overlay */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="w-full max-w-md bg-slate-900 border border-red-500/30 rounded-3xl p-8 shadow-2xl shadow-red-500/10 ring-1 ring-white/5">
+            <div className="w-20 h-20 bg-red-500/10 rounded-3xl flex items-center justify-center mb-8 mx-auto border border-red-500/20">
+              <Trash2 className="w-10 h-10 text-red-500" />
+            </div>
+            
+            <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter text-center mb-4 leading-none">
+              Strategic <span className="text-red-500">Purge</span>
+            </h3>
+            
+            <p className="text-slate-400 text-center font-bold tracking-tight leading-relaxed mb-8 text-sm">
+              This permanently deletes the tournament and all related <span className="text-white">matches, standings, registrations, fixtures, and groups</span>. 
+              <span className="block mt-4 p-3 bg-red-500/5 border border-red-500/10 rounded-xl text-red-400 text-[10px] font-black uppercase tracking-[0.1em]">
+                Critical: Financially linked tournaments cannot be deleted.
+              </span>
+            </p>
+            
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={() => handleDelete(confirmDeleteId)}
+                disabled={isDeleting}
+                className="w-full py-5 bg-red-600 hover:bg-red-700 text-white font-black uppercase italic tracking-widest rounded-2xl transition-all shadow-xl shadow-red-600/20 flex items-center justify-center disabled:opacity-50 active:scale-95"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="w-5 h-5 border-[3px] border-white/20 border-t-white rounded-full animate-spin mr-3" />
+                    Executing Deletion...
+                  </>
+                ) : (
+                  'Confirm Termination'
+                )}
+              </button>
+              
+              <button 
+                onClick={() => setConfirmDeleteId(null)}
+                disabled={isDeleting}
+                className="w-full py-5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-black uppercase italic tracking-widest rounded-2xl transition-all border border-slate-700 disabled:opacity-50 active:scale-95"
+              >
+                Abort Protocol
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminShell>
   );
 }

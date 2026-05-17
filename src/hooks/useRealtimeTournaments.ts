@@ -13,6 +13,13 @@ export function useRealtimeTournaments(status?: string | string[], limit?: numbe
     const fetchInitial = async (isBackground = false) => {
       if (!isBackground) setLoading(true);
       
+      const timeoutId = setTimeout(() => {
+        if (!isBackground) {
+          setLoading(false);
+          console.warn(`[useRealtimeTournaments] Initial fetch timed out for ${statusKey}`);
+        }
+      }, 10000);
+      
       try {
         console.log(`[useRealtimeTournaments] Fetching initial for ${statusKey}, limit: ${limit}`);
         const data = await tournamentService.getAll(status, limit, columns);
@@ -21,6 +28,7 @@ export function useRealtimeTournaments(status?: string | string[], limit?: numbe
       } catch (err) {
         console.error(`[useRealtimeTournaments] Error for ${statusKey}:`, err);
       } finally {
+        clearTimeout(timeoutId);
         if (!isBackground) setLoading(false);
       }
     };
@@ -126,6 +134,11 @@ export function useRealtimeTournament(id: string | undefined) {
 
     const fetchInitial = async () => {
       setLoading(true);
+      const timeoutId = setTimeout(() => {
+        setLoading(false);
+        console.warn(`[useRealtimeTournament] Fetch details timed out for ${id}`);
+      }, 10000);
+      
       try {
         console.log('Fetching tournament details for id:', id);
         const data = await tournamentService.getById(id);
@@ -133,6 +146,7 @@ export function useRealtimeTournament(id: string | undefined) {
       } catch (err: any) {
         console.error('Error fetching tournament in hook:', err);
       } finally {
+        clearTimeout(timeoutId);
         setLoading(false);
       }
     };

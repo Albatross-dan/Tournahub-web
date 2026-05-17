@@ -10,7 +10,7 @@ import {
   ArrowLeft, Users, Trophy, 
   Plus, Calendar, ShieldCheck, UserX,
   Play, CheckCircle, MoreVertical, Loader2,
-  Gamepad2, Zap, Settings, RefreshCcw
+  Gamepad2, Zap, Settings, RefreshCcw, Activity, Radio
 } from 'lucide-react';
 import { formatCurrency, cn, getPublicIdentity, getStorageUrl } from '../../lib/utils';
 import LoadingState from '../../components/ui/LoadingState';
@@ -81,7 +81,7 @@ export default function ManageTournamentDetails() {
     if (!id) return;
     try {
       const rData = await tournamentService.getRegistrations(id);
-      setRegistrations(rData);
+      setRegistrations(rData || []);
     } catch (err) {
       console.error('Error loading registrations:', err);
     }
@@ -91,7 +91,7 @@ export default function ManageTournamentDetails() {
     if (!id) return;
     try {
       const mData = await matchService.getByTournament(id);
-      setMatches(mData);
+      setMatches(mData || []);
     } catch (err) {
       console.error('Error loading matches:', err);
     }
@@ -178,7 +178,7 @@ export default function ManageTournamentDetails() {
                 <StatusBadge status={tournament.status} />
               </div>
               <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] flex items-center">
-                <span className="text-primary italic mr-2">{tournament.type}</span> • {registrations.filter(r => ['registered', 'approved', 'checked_in'].includes(r.status)).length}/{tournament.max_players} Contenders Joined
+                <span className="text-primary italic mr-2">{tournament.type}</span> • {(registrations || []).filter(r => ['registered', 'approved', 'checked_in'].includes(r.status)).length}/{tournament.max_players} Contenders Joined
               </p>
             </div>
           </div>
@@ -229,6 +229,18 @@ export default function ManageTournamentDetails() {
                </button>
              )}
              
+              {matches.length > 0 && (
+                <button 
+                  onClick={() => navigate(`/admin/tournaments/${id}/schedule`)}
+                  className="px-6 py-4 bg-primary text-slate-900 rounded-2xl font-black uppercase italic tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-xl shadow-primary/20"
+                >
+                  <div className="flex items-center">
+                    <Activity className="w-5 h-5 mr-3 stroke-[3px]" />
+                    Command Center
+                  </div>
+                </button>
+              )}
+              
              <button className="p-4 bg-slate-900 border border-slate-800 rounded-2xl text-slate-400 hover:text-white transition-all shadow-xl">
                <Settings className="w-5 h-5" />
              </button>
@@ -357,6 +369,7 @@ function PlayersList({ registrations, maxPlayers, badges }: { registrations: any
 }
 
 function MatchesManagement({ matches, tournamentId, onUpdate }: { matches: Match[], tournamentId: string, onUpdate: () => void }) {
+  const navigate = useNavigate();
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   return (
@@ -366,13 +379,29 @@ function MatchesManagement({ matches, tournamentId, onUpdate }: { matches: Match
           <div className="w-1.5 h-6 bg-primary rounded-full" />
           <h3 className="text-xl font-black text-white italic uppercase tracking-tight">Deployment Schedule</h3>
         </div>
-        <button 
-          onClick={() => setShowCreateModal(true)}
-          className="px-6 py-3 bg-slate-900 border border-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:text-primary hover:border-primary/30 transition-all flex items-center"
-        >
-          <Plus className="w-4 h-4 mr-2 stroke-[3px]" />
-          Create Match
-        </button>
+        <div className="flex items-center space-x-3">
+          <button 
+            onClick={() => navigate(`/admin/tournaments/${tournamentId}/live`)}
+            className="px-6 py-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-emerald-500/20 transition-all flex items-center"
+          >
+            <Radio className="w-4 h-4 mr-2" />
+            Live Feed
+          </button>
+          <button 
+            onClick={() => navigate(`/admin/tournaments/${tournamentId}/schedule`)}
+            className="px-6 py-3 bg-primary text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-lg shadow-primary/20 transition-all flex items-center"
+          >
+            <Calendar className="w-4 h-4 mr-2" />
+            Full Scheduler
+          </button>
+          <button 
+            onClick={() => setShowCreateModal(true)}
+            className="px-6 py-3 bg-slate-900 border border-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:text-primary hover:border-primary/30 transition-all flex items-center"
+          >
+            <Plus className="w-4 h-4 mr-2 stroke-[3px]" />
+            Manual Create
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -448,7 +477,7 @@ function CreateMatchModal({ tournamentId, onClose, onSuccess }: { tournamentId: 
   async function loadPlayers() {
     try {
       const data = await tournamentService.getRegistrations(tournamentId);
-      setPlayers(data.filter((r: any) => ['registered', 'approved', 'checked_in'].includes(r.status)));
+      setPlayers((data || []).filter((r: any) => ['registered', 'approved', 'checked_in'].includes(r.status)));
     } catch (err) {
       console.error('Error loading players for match creation:', err);
     }
