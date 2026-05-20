@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { matchResultService } from '../services/matchResultService';
 import { MatchVerificationState, ResultSubmission } from '../types/verification.types';
 
-export function useMatchVerification(matchId: string, currentUserId: string) {
+export function useMatchVerification(matchId: string, currentUserId: string, currentUsername?: string) {
   const [verificationState, setVerificationState] = useState<MatchVerificationState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -79,7 +79,7 @@ export function useMatchVerification(matchId: string, currentUserId: string) {
   };
 
   const currentUserSubmission = verificationState?.submissions.find(
-    (s: ResultSubmission) => s.submitted_by === currentUserId
+    (s: ResultSubmission) => s.username === currentUsername
   );
 
   return {

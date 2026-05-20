@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-black flex flex-col relative overflow-hidden font-sans">
+    <div className="min-h-screen bg-background flex flex-col relative overflow-hidden font-sans">
       {/* Background Decorative Gradient */}
       <div className="absolute top-0 left-0 w-full h-[600px] bg-[radial-gradient(circle_at_top,rgba(0,209,255,0.03)_0%,transparent_100%)] pointer-events-none" />
       

@@ -4,6 +4,7 @@ import { matchService } from '../../services/matchService';
 import { useAuth } from '../../contexts/AuthContext';
 import { getSignedUrl } from '../../lib/utils';
 import LoadingState from '../ui/LoadingState';
+import StorageImage from '../common/StorageImage';
 
 interface ResultReviewPanelProps {
   match: any;
@@ -18,7 +19,6 @@ export const ResultReviewPanel: React.FC<ResultReviewPanelProps> = ({ match, onC
   const [busy, setBusy] = useState(false);
   const [adminNotes, setAdminNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchResult();
@@ -28,10 +28,6 @@ export const ResultReviewPanel: React.FC<ResultReviewPanelProps> = ({ match, onC
     try {
       const data = await matchService.getMatchResult(match.id);
       setResult(data);
-      if (data?.screenshot_url) {
-        const url = await getSignedUrl('result-screenshots', data.screenshot_url);
-        setScreenshotUrl(url);
-      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -150,22 +146,14 @@ export const ResultReviewPanel: React.FC<ResultReviewPanelProps> = ({ match, onC
           {/* Screenshot */}
           <div className="space-y-4">
              <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic ml-2">Visual Evidence</h4>
-             {screenshotUrl ? (
+             {result.screenshot_url ? (
                 <div className="relative group overflow-hidden rounded-2xl border border-slate-800 bg-black aspect-video flex items-center justify-center">
-                   <img 
-                      src={screenshotUrl} 
+                   <StorageImage 
+                      bucket="result-screenshots" 
+                      path={result.screenshot_url} 
                       alt="Proof" 
                       className="max-h-full object-contain group-hover:scale-105 transition-transform duration-500"
                    />
-                   <a 
-                      href={screenshotUrl} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center space-x-2 text-white font-black uppercase text-xs tracking-widest italic"
-                   >
-                      <ExternalLink className="w-5 h-5" />
-                      <span>Maximize Image</span>
-                   </a>
                 </div>
              ) : (
                 <div className="p-10 border-2 border-dashed border-slate-800 rounded-2xl flex flex-col items-center justify-center text-slate-600 space-y-2">

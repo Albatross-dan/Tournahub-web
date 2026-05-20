@@ -3,10 +3,11 @@ import { DisputedMatch, ResultSubmission } from '../../types/verification.types'
 import { Gavel, ImageOff, ExternalLink, ThumbsUp, AlertCircle, Loader2, Image as ImageIcon, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatDistanceToNow } from 'date-fns';
-import { cn, getStorageUrl } from '../../lib/utils';
+import { cn, getPublicIdentity, getSignedUrl } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
 import FullScreenImageViewer from '../common/FullScreenImageViewer';
 import ApproveConfirmDialog from './ApproveConfirmDialog';
+import StorageImage from '../common/StorageImage';
 
 interface DisputeMatchCardProps {
   dispute: DisputedMatch;
@@ -30,6 +31,9 @@ export default function DisputeMatchCard({
   const [viewerImage, setViewerImage] = useState<string | null>(null);
   const [overrideScore1, setOverrideScore1] = useState(0);
   const [overrideScore2, setOverrideScore2] = useState(0);
+
+  const p1Name = getPublicIdentity(dispute.player1_username);
+  const p2Name = getPublicIdentity(dispute.player2_username);
 
   const handleApproveSubmission = async (notes: string) => {
     if (!selectedSub) return;
@@ -93,12 +97,12 @@ export default function DisputeMatchCard({
 
         <div className="flex items-center justify-center space-x-12 mb-12 py-4 border-y border-white/5 bg-white/[0.02]">
           <div className="text-center">
-            <p className="text-lg font-black text-white italic uppercase tracking-tighter">{dispute.player1_username}</p>
+            <p className="text-lg font-black text-white italic uppercase tracking-tighter">{p1Name}</p>
             <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Contender Alpha</p>
           </div>
           <div className="text-3xl font-black text-slate-800 italic">VS</div>
           <div className="text-center">
-            <p className="text-lg font-black text-white italic uppercase tracking-tighter">{dispute.player2_username}</p>
+            <p className="text-lg font-black text-white italic uppercase tracking-tighter">{p2Name}</p>
             <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Contender Beta</p>
           </div>
         </div>
@@ -109,7 +113,7 @@ export default function DisputeMatchCard({
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center space-x-3">
                   <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/20" />
-                  <span className="text-xs font-black text-white uppercase tracking-widest">{sub.username}</span>
+                  <span className="text-xs font-black text-white uppercase tracking-widest">{getPublicIdentity(sub)}</span>
                 </div>
                 <span className="text-[10px] font-medium text-slate-500">{formatDistanceToNow(new Date(sub.created_at))} ago</span>
               </div>
@@ -125,10 +129,18 @@ export default function DisputeMatchCard({
                 <div className="relative">
                   {sub.screenshot_url ? (
                     <div 
-                      onClick={() => setViewerImage(getStorageUrl('result-screenshots', sub.screenshot_url))}
+                      onClick={async () => {
+                        const url = await getSignedUrl('result-screenshots', sub.screenshot_url);
+                        setViewerImage(url);
+                      }}
                       className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-white/10 group-hover:border-primary transition-all cursor-zoom-in relative"
                     >
-                      <img src={getStorageUrl('result-screenshots', sub.screenshot_url) || ''} alt="Evidence" className="w-full h-full object-cover" />
+                      <StorageImage 
+                        bucket="result-screenshots" 
+                        path={sub.screenshot_url} 
+                        alt="Evidence" 
+                        className="w-full h-full object-cover" 
+                      />
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                         <ExternalLink className="w-6 h-6 text-white" />
                       </div>
@@ -189,7 +201,7 @@ export default function DisputeMatchCard({
                 <div className="p-6 bg-white/[0.02] border border-white/5 rounded-3xl space-y-6">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase">{dispute.player1_username} Goals</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase">{p1Name} Goals</label>
                       <input 
                         type="number" 
                         value={overrideScore1}
@@ -198,7 +210,7 @@ export default function DisputeMatchCard({
                       />
                     </div>
                     <div className="space-y-2">
-                       <label className="text-[10px] font-bold text-slate-400 uppercase">{dispute.player2_username} Goals</label>
+                       <label className="text-[10px] font-bold text-slate-400 uppercase">{p2Name} Goals</label>
                        <input 
                         type="number" 
                         value={overrideScore2}
@@ -241,7 +253,7 @@ export default function DisputeMatchCard({
         isOpen={!!selectedSub}
         onClose={() => setSelectedSub(null)}
         onConfirm={handleApproveSubmission}
-        playerUsername={selectedSub?.username || ''}
+        playerUsername={getPublicIdentity(selectedSub)}
         score1={(selectedSub?.player1_score ?? selectedSub?.score1) ?? 0}
         score2={(selectedSub?.player2_score ?? selectedSub?.score2) ?? 0}
         isLoading={isResolving}

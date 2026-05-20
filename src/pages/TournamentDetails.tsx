@@ -21,6 +21,7 @@ import BadgeSelector from '../components/badges/BadgeSelector';
 import { PlayerBadge } from '../components/ui/PlayerBadge';
 import { useWallet } from '../hooks/useWallet';
 import toast from 'react-hot-toast';
+import StorageImage from '../components/common/StorageImage';
 
 export default function TournamentDetails() {
   const { id } = useParams<{ id: string }>();
@@ -31,14 +32,12 @@ export default function TournamentDetails() {
   const { tournament, loading: tournamentLoading } = useRealtimeTournament(id);
   const [regStatus, setRegStatus] = useState<{
     registered: boolean;
-    waitlisted: boolean;
     user_status: string | null;
     registration_id: string | null;
     players_registered: number;
     max_players: number;
     spots_left: number;
     tournament_status: string;
-    waitlist_position: number | null;
   } | null>(null);
 
   const [isRegStatusLoading, setIsRegStatusLoading] = useState(true);
@@ -168,9 +167,7 @@ export default function TournamentDetails() {
         setShowRegFlow(false);
         const successMsg = (result as any).already_registered 
           ? 'You are already registered for this tournament!'
-          : result.status === 'waitlisted' 
-            ? 'Added to waitlist.' 
-            : `Registered! ${tournament.entry_fee > 0 ? `$${tournament.entry_fee} entry fee deducted.` : ''}`;
+          : `Registered! ${tournament.entry_fee > 0 ? `$${tournament.entry_fee} entry fee deducted.` : ''}`;
         
         setMessage({ type: 'success', text: successMsg });
         
@@ -199,6 +196,10 @@ export default function TournamentDetails() {
         case 'BADGE_REQUIRED':
           setMessage({ type: 'error', text: 'Please select a badge before registering.' });
           setRegStep('picker');
+          break;
+        case 'TOURNAMENT_FULL':
+          setMessage({ type: 'error', text: 'This tournament is full. Registration is closed.' });
+          setShowRegFlow(false);
           break;
         case 'insufficient_balance':
           setMessage({ type: 'error', text: 'Insufficient wallet balance for this entry fee.' });
@@ -232,7 +233,6 @@ export default function TournamentDetails() {
       if (result.success) {
         let msg = 'Registration cancelled successfully.';
         if (result.refund_issued) msg += ' Refund has been issued to your wallet.';
-        if (result.slot_filled) msg += ' A waitlisted player has been promoted.';
         
         setMessage({ type: 'success', text: msg });
         setTimeout(() => setMessage(null), 5000);
@@ -267,18 +267,28 @@ export default function TournamentDetails() {
 
   const isRegistered = !!(
     (regStatus && regStatus.registered) || 
-    (registrations || []).some(r => (r.user_id === user?.id || r.id === user?.id) && ['registered', 'approved', 'checked_in', 'waitlisted'].includes(r.status || ''))
+    (registrations || []).some(r => (r.user_id === user?.id || r.id === user?.id) && ['registered', 'approved', 'checked_in'].includes(r.status || ''))
   );
-  const userStatus = regStatus ? regStatus.user_status : (registrations || []).find(r => (r.user_id === user?.id || r.id === user?.id))?.status;
-  const isWaitlisted = !!(regStatus ? regStatus.waitlisted : userStatus === 'waitlisted');
-  const playersCount = regStatus ? regStatus.players_registered : (registrations?.length || 0);
-  const spotsLeft = regStatus ? (regStatus.max_players - regStatus.players_registered) : (tournament.max_players || 0) - ((registrations || []).filter(r => ['registered', 'approved', 'checked_in'].includes(r.status || '')).length || 0);
+  
+  const activeRegistrations = (registrations || []).filter(r => 
+    !['cancelled', 'withdrawn', 'rejected', 'refunded'].includes(r.status || '')
+  );
+
+  const playersCount = Math.max(
+    regStatus ? regStatus.players_registered : 0,
+    activeRegistrations.length
+  );
+
+  const spotsLeft = Math.min(
+    regStatus ? regStatus.spots_left : tournament.max_players,
+    Math.max(0, (tournament.max_players || 0) - activeRegistrations.length)
+  );
+
   const currentStatus = regStatus?.tournament_status || tournament.status;
   const isClosed = currentStatus !== TournamentStatus.REGISTRATION_OPEN;
   
-  const canRegister = !isRegistered && !isWaitlisted && currentStatus === TournamentStatus.REGISTRATION_OPEN;
-  const isWaitlist = spotsLeft <= 0 && canRegister;
-  const isActuallyFull = spotsLeft <= 0 && !canRegister && !isRegistered && !isWaitlisted;
+  const canRegister = !isRegistered && currentStatus === TournamentStatus.REGISTRATION_OPEN && spotsLeft > 0;
+  const isActuallyFull = spotsLeft <= 0 && !isRegistered;
   const isActionDisabled = registering || isRegStatusLoading || !user || isRegistered;
 
   return (
@@ -286,7 +296,7 @@ export default function TournamentDetails() {
       <div className="space-y-8">
         <button 
           onClick={() => navigate('/tournaments')}
-          className="flex items-center text-slate-400 hover:text-white transition-colors group"
+          className="flex items-center text-text-muted hover:text-text-main transition-colors group"
         >
           <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
           Back to Tournaments
@@ -306,7 +316,7 @@ export default function TournamentDetails() {
             </motion.div>
           )}
 
-          {isRegistered && !isWaitlisted && regStatus && !(regStatus as any).has_badge && (
+          {isRegistered && regStatus && !(regStatus as any).has_badge && (
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -335,17 +345,14 @@ export default function TournamentDetails() {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative h-64 sm:h-80 md:h-96 rounded-2xl md:rounded-[2.5rem] overflow-hidden border border-zinc-800 shadow-2xl"
+          className="relative h-64 sm:h-80 md:h-96 rounded-2xl md:rounded-[2.5rem] overflow-hidden border border-border-main shadow-2xl"
         >
-          <img 
-            src={getStorageUrl('tournament-banners', tournament.banner_url) || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=1200'} 
+          <StorageImage 
+            bucket="tournament-banners" 
+            path={tournament.banner_url} 
             className="w-full h-full object-cover" 
             alt={tournament.name}
-            referrerPolicy="no-referrer"
-            onError={(e) => {
-              const img = e.target as HTMLImageElement;
-              img.src = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=1200';
-            }}
+            fallbackUrl="https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=1200"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
           <div className="absolute bottom-6 left-6 right-6 sm:bottom-10 sm:left-10 sm:right-10 flex flex-col md:flex-row md:items-end justify-between gap-6 sm:gap-8">
@@ -356,31 +363,37 @@ export default function TournamentDetails() {
                 </span>
                 <StatusBadge status={regStatus?.tournament_status || tournament.status} />
               </div>
-              <h1 className="text-3xl sm:text-5xl md:text-7xl font-black text-white italic tracking-tighter uppercase leading-none drop-shadow-2xl">
+              <h1 className="text-3xl sm:text-5xl md:text-7xl font-black text-yellow-400 italic tracking-tighter uppercase leading-none drop-shadow-2xl">
                 {tournament.name}
               </h1>
             </div>
 
             <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
-              <div className="bg-slate-900/80 backdrop-blur-md border border-slate-700 px-6 sm:px-8 py-3 rounded-xl flex flex-col items-center justify-center min-w-[120px]">
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Contenders</span>
-                <span className="text-xl font-black text-white italic">
+            <div className="bg-background/80 backdrop-blur-md border border-border-main px-6 sm:px-8 py-3 rounded-xl flex flex-col items-center justify-center min-w-[120px]">
+                <span className="text-[10px] font-black text-text-muted uppercase tracking-widest">Contenders</span>
+                <span className="text-xl font-black text-text-main italic">
                   {String(playersCount)} / {tournament.max_players}
                 </span>
+                {currentStatus === TournamentStatus.REGISTRATION_OPEN && (
+                  <span className={cn(
+                    "text-[8px] font-black uppercase tracking-tighter mt-1",
+                    spotsLeft > 0 ? "text-primary" : "text-red-500"
+                  )}>
+                    {spotsLeft > 0 ? `${spotsLeft} spots left` : 'Full'}
+                  </span>
+                )}
               </div>
               
-              {isRegistered || isWaitlisted ? (
+              {isRegistered ? (
                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
                   <button 
                     disabled
                     className="w-full md:w-auto px-10 sm:px-14 py-3 sm:py-5 bg-emerald-500/10 border-2 border-emerald-500/30 text-emerald-500 rounded-xl sm:rounded-[1.5rem] font-black italic uppercase tracking-tighter text-lg sm:text-xl flex items-center justify-center shadow-xl shadow-emerald-500/5 cursor-not-allowed opacity-90"
                   >
                     <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
-                    {isWaitlisted 
-                      ? (regStatus?.waitlist_position ? `Waitlist #${regStatus.waitlist_position}` : 'On Waitlist') 
-                      : 'Registered'}
+                    Registered
                   </button>
-                  {(regStatus?.user_status === 'registered' || regStatus?.user_status === 'approved' || regStatus?.user_status === 'checked_in' || isWaitlisted) && (
+                  {(regStatus?.user_status === 'registered' || regStatus?.user_status === 'approved' || regStatus?.user_status === 'checked_in') && (
                     <button 
                       onClick={handleCancel}
                       disabled={registering}
@@ -394,14 +407,6 @@ export default function TournamentDetails() {
                 <div className="bg-slate-800 border-2 border-slate-700 text-slate-400 px-10 sm:px-14 py-3 sm:py-5 rounded-xl sm:rounded-[1.5rem] font-black italic uppercase tracking-tighter text-lg sm:text-xl flex items-center justify-center w-full md:w-auto opacity-75">
                   Tournament Full
                 </div>
-              ) : isWaitlist ? (
-                <button 
-                  onClick={handleRegisterClick}
-                  disabled={isActionDisabled || isRegistered || isWaitlisted}
-                  className="btn-secondary w-full md:w-auto px-10 sm:px-14 py-3 sm:py-5 shadow-2xl text-lg sm:text-xl font-black uppercase italic tracking-tighter rounded-xl sm:rounded-[1.5rem] transition-all hover:scale-105 active:scale-95 border-amber-500/50 text-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {registering ? <Loader2 className="animate-spin mx-auto w-6 h-6" /> : 'Join Waitlist'}
-                </button>
               ) : isClosed ? (
                 <div className="bg-slate-800 border-2 border-slate-700 text-slate-400 px-10 sm:px-14 py-3 sm:py-5 rounded-xl sm:rounded-[1.5rem] font-black italic uppercase tracking-tighter text-lg sm:text-xl flex items-center justify-center w-full md:w-auto opacity-75">
                   Registration Closed
@@ -409,7 +414,7 @@ export default function TournamentDetails() {
               ) : (
                 <button 
                   onClick={handleRegisterClick}
-                  disabled={isActionDisabled || !canRegister || isRegistered || isWaitlisted}
+                  disabled={isActionDisabled || !canRegister || isRegistered}
                   className="btn-primary w-full md:w-auto px-10 sm:px-14 py-3 sm:py-5 shadow-2xl shadow-primary/30 text-lg sm:text-xl font-black uppercase italic tracking-tighter rounded-xl sm:rounded-[1.5rem] transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:grayscale"
                 >
                   {registering ? <Loader2 className="animate-spin mx-auto w-6 h-6" /> : 'Claim Spot'}
@@ -439,10 +444,10 @@ export default function TournamentDetails() {
                   <div className="p-8">
                     <div className="flex items-center justify-between mb-8">
                       <div>
-                        <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Choose Your <span className="text-primary">Identity</span></h2>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Select a unique badge for this arena</p>
+                        <h2 className="text-2xl font-black text-text-main uppercase italic tracking-tighter">Choose Your <span className="text-primary">Identity</span></h2>
+                        <p className="text-xs font-bold text-text-muted uppercase tracking-widest mt-1">Select a unique badge for this arena</p>
                       </div>
-                      <button onClick={() => setShowRegFlow(false)} className="text-slate-500 hover:text-white uppercase text-[10px] font-black tracking-widest">Cancel</button>
+                      <button onClick={() => setShowRegFlow(false)} className="text-text-muted hover:text-text-main uppercase text-[10px] font-black tracking-widest">Cancel</button>
                     </div>
                     <div className="max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
                       <BadgeSelector 
@@ -459,18 +464,18 @@ export default function TournamentDetails() {
                 ) : (
                   <div className="p-10 space-y-8">
                     <div className="text-center space-y-2">
-                        <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">Confirm <span className="text-primary">Engagement</span></h2>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Final review before deployment</p>
+                        <h2 className="text-3xl font-black text-text-main uppercase italic tracking-tighter">Confirm <span className="text-primary">Engagement</span></h2>
+                        <p className="text-xs font-bold text-text-muted uppercase tracking-widest">Final review before deployment</p>
                     </div>
 
-                    <div className="flex flex-col items-center py-8 bg-white/5 rounded-3xl border border-white/10 space-y-6">
+                    <div className="flex flex-col items-center py-8 bg-surface rounded-3xl border border-border-main space-y-6">
                       <div className="w-32 h-32 relative">
                         <PlayerBadge badgeId={selectedBadge} username="You" size="xl" />
-                        <div className="absolute -top-2 -right-2 bg-emerald-500 text-black px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border-2 border-black">Selected</div>
+                        <div className="absolute -top-2 -right-2 bg-emerald-500 text-slate-900 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border-2 border-background">Selected</div>
                       </div>
                       <div className="text-center">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-1">Entry Ticket</p>
-                        <p className="text-2xl font-black text-white italic">{tournament.entry_fee > 0 ? formatCurrency(tournament.entry_fee) : 'FREE ENTRY'}</p>
+                        <p className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em] mb-1">Entry Ticket</p>
+                        <p className="text-2xl font-black text-text-main italic">{tournament.entry_fee > 0 ? formatCurrency(tournament.entry_fee) : 'FREE ENTRY'}</p>
                       </div>
                     </div>
 
@@ -497,7 +502,7 @@ export default function TournamentDetails() {
         </AnimatePresence>
 
         <AnimatePresence>
-          {id && isRegistered && !isWaitlisted && (
+          {id && isRegistered && (
             <motion.div
               layout
               initial={{ opacity: 0, scale: 0.95 }}
@@ -570,14 +575,14 @@ export default function TournamentDetails() {
           </div>
 
           <div className="lg:col-span-3 space-y-6">
-            <div className="flex items-center space-x-1 border-b border-zinc-800 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div className="flex items-center space-x-1 border-b border-border-main overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
               {(['info', 'fixtures', 'standings', 'players'] as const).map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={cn(
                     "px-6 sm:px-8 py-4 text-xs font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] transition-all relative whitespace-nowrap",
-                    activeTab === tab ? "text-primary bg-primary/5" : "text-zinc-500 hover:text-white"
+                    activeTab === tab ? "text-primary bg-primary/5" : "text-text-muted hover:text-text-main"
                   )}
                 >
                   {tab === 'players' ? 'contenders' : tab}
@@ -593,9 +598,9 @@ export default function TournamentDetails() {
                    animate={{ opacity: 1 }}
                    className="space-y-12"
                 >
-                  <div className="prose prose-invert max-w-none">
-                    <h2 className="text-2xl sm:text-3xl font-black text-white italic uppercase tracking-tighter mb-6">Mission Briefing</h2>
-                    <p className="text-zinc-400 leading-relaxed text-lg sm:text-xl font-medium">
+                   <div className="max-w-none">
+                    <h2 className="text-2xl sm:text-3xl font-black text-text-main italic uppercase tracking-tighter mb-6">Mission Briefing</h2>
+                    <p className="text-text-muted leading-relaxed text-lg sm:text-xl font-medium">
                       {tournament.description || 'Secure your spot in the bracket and fight for glory and a share of the massive prize pool.'}
                     </p>
                   </div>
@@ -612,7 +617,7 @@ export default function TournamentDetails() {
               {activeTab === 'players' && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                    {registrations.length > 0 ? registrations.map((player, idx) => (
-                     <div key={`player-${player.user_id || player.id || idx}`} className="card p-4 flex items-center space-x-3 bg-slate-900/50 hover:border-slate-700 transition-all">
+                     <div key={`player-${player.user_id || player.id || idx}`} className="card p-4 flex items-center space-x-3 bg-surface hover:border-primary-light transition-all shadow-sm">
                        <PlayerBadge 
                          badgeId={player.badge_id} 
                          username={player.username || player.profiles?.username || 'Anonymous'} 
@@ -620,7 +625,7 @@ export default function TournamentDetails() {
                        />
                        <div className="flex-1 min-w-0">
                          <div className="flex items-center gap-2">
-                           <p className="font-bold text-white uppercase italic tracking-tight truncate">{player.username || player.profiles?.username || 'Anonymous'}</p>
+                            <p className="font-bold text-text-main uppercase italic tracking-tight truncate">{player.username || player.profiles?.username || 'Anonymous'}</p>
                          </div>
                          <div className="flex items-center gap-2">
                            <p className="text-[10px] text-primary font-bold uppercase tracking-widest">{player.registration_status || player.status || 'Registered'}</p>
@@ -631,7 +636,7 @@ export default function TournamentDetails() {
                        </div>
                      </div>
                    )) : (
-                     <div className="col-span-full py-12 text-center text-slate-500 italic">
+                     <div className="col-span-full py-12 text-center text-text-muted italic">
                        No contenders have registered for this tournament yet.
                      </div>
                    )}
@@ -649,8 +654,8 @@ function PrizeRow({ pos, percent, pool }: { pos: string; percent: number; pool: 
   const amount = (pool * percent) / 100;
   return (
     <div className="flex items-center justify-between text-sm">
-      <span className="text-slate-400 font-medium">{pos} Place ({percent}%)</span>
-      <span className="text-white font-bold">{formatCurrency(amount)}</span>
+      <span className="text-text-muted font-medium">{pos} Place ({percent}%)</span>
+      <span className="text-text-main font-bold">{formatCurrency(amount)}</span>
     </div>
   );
 }
@@ -660,9 +665,9 @@ function InfoItem({ icon, label, value }: { icon: React.ReactNode; label: string
     <div className="space-y-1">
       <div className="flex items-center space-x-2">
         {icon}
-        <p className="text-[10px] font-bold text-slate-500 uppercase">{label}</p>
+        <p className="text-[10px] font-bold text-text-muted uppercase">{label}</p>
       </div>
-      <p className="text-sm font-bold text-white">{value}</p>
+      <p className="text-sm font-bold text-text-main">{value}</p>
     </div>
   );
 }

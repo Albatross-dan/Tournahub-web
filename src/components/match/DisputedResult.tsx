@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertTriangle, ShieldAlert, Users, Info } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import StorageImage from '../common/StorageImage';
 
 interface DisputedResultProps {
   submissions: any[];
@@ -8,11 +9,6 @@ interface DisputedResultProps {
 }
 
 export function DisputedResult({ submissions, matchId }: DisputedResultProps) {
-  const getSubUrl = (sub: any) => {
-    if (!sub?.screenshot_url) return null;
-    return supabase.storage.from('result-screenshots').getPublicUrl(sub.screenshot_url).data.publicUrl;
-  };
-
   return (
     <div className="bg-slate-900 border border-red-500/30 rounded-3xl overflow-hidden shadow-2xl animate-in fade-in duration-500">
       <div className="bg-red-600 p-8 flex flex-col items-center justify-center text-center space-y-3">
@@ -67,8 +63,9 @@ export function DisputedResult({ submissions, matchId }: DisputedResultProps) {
               <div className="space-y-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 block">Intel Evidence</span>
                 <div className="aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-950 relative group-hover:border-primary/30 transition-all">
-                  <img 
-                    src={getSubUrl(sub) || undefined} 
+                  <StorageImage 
+                    bucket="result-screenshots" 
+                    path={sub.screenshot_url} 
                     alt="Proof" 
                     className="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500" 
                   />

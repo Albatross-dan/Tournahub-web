@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
+import StorageImage from '../common/StorageImage';
 
 interface VerificationStatusWidgetProps {
   matchId: string;
@@ -27,6 +28,8 @@ export default function VerificationStatusWidget({
   player2Username,
   onSubmitSuccess
 }: VerificationStatusWidgetProps) {
+  const currentUsername = currentUserId === player1Id ? player1Username : player2Username;
+
   const {
     verificationState,
     isLoading,
@@ -37,7 +40,7 @@ export default function VerificationStatusWidget({
     currentUserSubmission,
     hasCurrentUserSubmitted,
     submitResult
-  } = useMatchVerification(matchId, currentUserId);
+  } = useMatchVerification(matchId, currentUserId, currentUsername);
 
   useEffect(() => {
     if (submitSuccess && onSubmitSuccess && verificationState) {
@@ -59,11 +62,7 @@ export default function VerificationStatusWidget({
 
   if (!verificationState) return null;
 
-  const { ui_state, submissions, final_score1, final_score2, winner } = verificationState;
-
-  const getStorageUrl = (path: string) => {
-    return supabase.storage.from('result-screenshots').getPublicUrl(path).data.publicUrl;
-  };
+  const { ui_state, submissions, final_score1, final_score2, winner_username } = verificationState;
 
   return (
     <div className="w-full max-w-2xl mx-auto">
@@ -125,7 +124,12 @@ export default function VerificationStatusWidget({
                     </div>
                     {currentUserSubmission.screenshot_url && (
                       <div className="w-full aspect-video rounded-2xl overflow-hidden mb-4 border border-white/5">
-                        <img src={getStorageUrl(currentUserSubmission.screenshot_url)} alt="Evidence" className="w-full h-full object-cover" />
+                        <StorageImage 
+                          bucket="result-screenshots" 
+                          path={currentUserSubmission.screenshot_url} 
+                          alt="Evidence" 
+                          className="w-full h-full object-cover" 
+                        />
                       </div>
                     )}
                     <p className="text-[10px] text-slate-600 uppercase font-bold">
@@ -208,10 +212,10 @@ export default function VerificationStatusWidget({
             </motion.div>
 
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
-              {winner ? (
+              {winner_username ? (
                 <div className="inline-flex items-center space-x-3 px-6 py-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20">
                   <Trophy className="w-5 h-5 text-emerald-500" />
-                  <span className="text-emerald-500 font-black uppercase italic tracking-tighter">{winner} wins!</span>
+                  <span className="text-emerald-500 font-black uppercase italic tracking-tighter">{winner_username} wins!</span>
                 </div>
               ) : (
                 <div className="inline-flex items-center space-x-3 px-6 py-3 bg-slate-500/10 rounded-2xl border border-slate-500/20">
@@ -277,7 +281,12 @@ export default function VerificationStatusWidget({
                     </div>
                     {sub.screenshot_url && (
                       <div className="w-16 h-16 rounded-xl overflow-hidden border border-white/10 group-hover:border-primary transition-colors cursor-pointer">
-                        <img src={getStorageUrl(sub.screenshot_url)} alt="Evidence" className="w-full h-full object-cover" />
+                        <StorageImage 
+                          bucket="result-screenshots" 
+                          path={sub.screenshot_url} 
+                          alt="Evidence" 
+                          className="w-full h-full object-cover" 
+                        />
                       </div>
                     )}
                   </div>

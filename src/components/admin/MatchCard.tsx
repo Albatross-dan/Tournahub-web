@@ -1,7 +1,7 @@
 import React from 'react';
 import { Calendar, Clock, Eye, RotateCcw, Search, Timer } from 'lucide-react';
 import { MatchStatusBadge } from './MatchStatusBadge';
-import { cn } from '../../lib/utils';
+import { cn, getPublicIdentity } from '../../lib/utils';
 
 interface MatchCardProps {
   match: any;
@@ -36,9 +36,9 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match, onAction }) => {
         <div className="flex items-center justify-between">
            <div className="flex items-center space-x-3 flex-1 overflow-hidden">
               <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
-                 <span className="text-xs font-black text-slate-400">{(match.player1_profile?.username || 'T')[0].toUpperCase()}</span>
+                 <span className="text-xs font-black text-slate-400">{(getPublicIdentity(match.player1) || 'T')[0].toUpperCase()}</span>
               </div>
-              <span className="text-sm font-black text-white italic uppercase truncate tracking-tight">{match.player1_profile?.username || 'TBD'}</span>
+              <span className="text-sm font-black text-white italic uppercase truncate tracking-tight">{getPublicIdentity(match.player1)}</span>
            </div>
            
            {match.status === 'completed' && (
@@ -55,9 +55,9 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match, onAction }) => {
         <div className="flex items-center justify-between">
            <div className="flex items-center space-x-3 flex-1 overflow-hidden">
               <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
-                 <span className="text-xs font-black text-slate-400">{(match.player2_profile?.username || 'T')[0].toUpperCase()}</span>
+                 <span className="text-xs font-black text-slate-400">{(getPublicIdentity(match.player2) || 'T')[0].toUpperCase()}</span>
               </div>
-              <span className="text-sm font-black text-white italic uppercase truncate tracking-tight">{match.player2_profile?.username || 'TBD'}</span>
+              <span className="text-sm font-black text-white italic uppercase truncate tracking-tight">{getPublicIdentity(match.player2)}</span>
            </div>
 
            {match.status === 'completed' && (

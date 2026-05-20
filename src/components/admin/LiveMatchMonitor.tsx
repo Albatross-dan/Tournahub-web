@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Timer, Radio, AlertCircle, CheckCircle2, Gavel } from 'lucide-react';
 import { MatchStatusBadge } from './MatchStatusBadge';
-import { cn } from '../../lib/utils';
+import { cn, getPublicIdentity } from '../../lib/utils';
 
 interface LiveMatchMonitorProps {
   tournamentId: string;
@@ -127,13 +127,13 @@ function LiveMatchCard({ match }: LiveMatchCardProps) {
 
        <div className="flex items-center justify-between px-2">
           <div className="text-center flex-1 overflow-hidden">
-             <p className="text-sm font-black text-white italic uppercase truncate">{match.player1_profile?.username || 'TBD'}</p>
+             <p className="text-sm font-black text-white italic uppercase truncate">{getPublicIdentity(match.player1_profile)}</p>
           </div>
           <div className="px-3 shrink-0">
              <span className="text-[10px] font-black text-slate-700 italic">VS</span>
           </div>
           <div className="text-center flex-1 overflow-hidden">
-             <p className="text-sm font-black text-white italic uppercase truncate">{match.player2_profile?.username || 'TBD'}</p>
+             <p className="text-sm font-black text-white italic uppercase truncate">{getPublicIdentity(match.player2_profile)}</p>
           </div>
        </div>
 

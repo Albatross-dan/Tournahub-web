@@ -92,7 +92,7 @@ export default function AdminStandings() {
         ) : (
           <div className="card overflow-hidden border-white/5 bg-surface/20">
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="w-full text-left min-w-[700px]">
                 <thead className="bg-slate-900/50 border-b border-slate-800">
                   <tr>
                     <th className="px-6 py-6 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] leading-none text-center w-20">Rank</th>

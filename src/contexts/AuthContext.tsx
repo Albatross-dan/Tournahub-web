@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { ensureAuthenticated, supabase } from '../lib/supabase';
 import { Profile } from '../types/database';
 
 interface AuthContextType {
@@ -20,93 +20,71 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('AuthProvider initialized');
+    console.log('[AuthContext] Initializing auth provider...');
     
     // Check initial session
     const initAuth = async () => {
       try {
-        // Add a small randomized delay to prevent initial lock collisions across components
-        await new Promise(r => setTimeout(r, Math.random() * 100));
-        
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          if (error.message.includes('Lock') || error.message.includes('stole it')) {
-            console.warn('Auth lock conflict, retrying getSession...');
-            await new Promise(r => setTimeout(r, 500));
-            const retry = await supabase.auth.getSession();
-            if (retry.data.session?.user) {
-              setUser(retry.data.session.user);
-              return;
-            }
-          }
-          
-          console.error('Session check error:', error);
-          if (error.message.includes('Refresh Token Not Found') || error.message.includes('refresh_token_not_found')) {
-            console.warn('Invalid refresh token detected, clearing session...');
-            await supabase.auth.signOut().catch(() => {});
-            localStorage.clear();
-            sessionStorage.clear();
-          }
-          // Don't throw here, just log
-        }
+        // Force session retrieval to ensure supabase client headers are hydrated
+        const session = await ensureAuthenticated();
         
         if (session?.user) {
+          console.log('[AuthContext] Session found for:', session.user.id);
           setUser(session.user);
-          // Try to fetch profile directly first
-          const profileData = await fetchProfile(session.user.id);
           
-          // Only provision if profile is missing
-          if (!profileData) {
+          const profileData = await fetchProfile(session.user.id);
+          const isDevAdmin = session.user.email === 'danieloguda11221@gmail.com';
+
+          if (!profileData || (isDevAdmin && profileData.role !== 'admin')) {
             await ensureProfile(session.user);
             await fetchProfile(session.user.id);
           }
+        } else {
+          console.log('[AuthContext] No initial session found.');
+          setUser(null);
+          setProfile(null);
         }
       } catch (err) {
-        console.error('Initial auth setup failed:', err);
+        console.error('[AuthContext] initialization failed:', err);
       } finally {
+        // Mark as loaded ONLY after initial check completes
         setLoading(false);
       }
     };
 
-    initAuth();
-
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state change event:', event);
+      console.log(`[AuthContext] Auth event: ${event}`);
       
       if (session?.user) {
         setUser(session.user);
-        if (event === 'SIGNED_IN') {
+        
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED') {
+          // IMPORTANT: If we got a new session, ensure headers are updated by getting it again
+          await supabase.auth.getSession();
+          
+          const isDevAdmin = session.user.email === 'danieloguda11221@gmail.com';
           const profileData = await fetchProfile(session.user.id);
-          if (!profileData) {
+          
+          if (!profileData || (isDevAdmin && profileData.role !== 'admin')) {
             await ensureProfile(session.user);
             await fetchProfile(session.user.id);
           }
-        } else if (event === 'TOKEN_REFRESHED') {
-          // Do nothing, session updated
-        } else if (event === 'INITIAL_SESSION') {
-           // handled by initAuth
-        } else {
-          fetchProfile(session.user.id);
         }
-      } else {
+        setLoading(false);
+      } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setProfile(null);
         setLoading(false);
       }
     });
 
-    // Safety timeout to clear loading if session check hangs
+    initAuth();
+
+    // Safety timeout
     const timer = setTimeout(() => {
-      setLoading((prev) => {
-        if (prev) {
-          console.warn('Loading was stuck for 5s, clearing it manually');
-          return false;
-        }
-        return prev;
-      });
-    }, 5000);
+      setLoading(false);
+    }, 6000);
 
     return () => {
       subscription.unsubscribe();
@@ -123,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       const { data: existingProfile } = await (supabase as any)
         .from('profiles')
-        .select('id, username')
+        .select('id, username, role')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -138,8 +116,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           username: finalUsername,
           role: isDevAdmin ? 'admin' : 'user'
         });
-      } else if (isDevAdmin && existingProfile.role !== 'admin') {
-        await (supabase as any).from('profiles').update({ role: 'admin' }).eq('id', user.id);
+      } else {
+        // Migration: If profile exists but username is still a default/missing, try to sync from metadata
+        const metadataUsername = user.user_metadata?.username;
+        if (metadataUsername && (!existingProfile.username || existingProfile.username.includes('_'))) {
+           // Only update if it looks like a generated name or is null
+           await (supabase as any).from('profiles').update({ username: metadataUsername }).eq('id', user.id);
+        }
+        
+        if (isDevAdmin && existingProfile.role !== 'admin') {
+          await (supabase as any).from('profiles').update({ role: 'admin' }).eq('id', user.id);
+        }
       }
 
       const { data: existingWallet } = await (supabase as any)
@@ -222,7 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     profile,
     loading,
-    isAdmin: profile?.role === 'admin',
+    isAdmin: profile?.role === 'admin' || user?.email === 'danieloguda11221@gmail.com',
     signOut,
   };
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { tournamentService } from '../../services/tournamentService';
 import { motion } from 'motion/react';
-import { cn, formatDate } from '../../lib/utils';
+import { cn, formatDate, getPublicIdentity } from '../../lib/utils';
 import LoadingState from '../ui/LoadingState';
 import { PlayerBadge } from '../ui/PlayerBadge';
 import { useMatchCompletionSync } from '../../hooks/useMatchCompletionSync';
@@ -54,7 +54,7 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
 
   if (loading) {
     return (
-      <div className="card p-12 bg-zinc-900/50 border-zinc-800 text-center">
+      <div className="card p-12 bg-surface border-border-main text-center shadow-sm">
         <LoadingState message="Mapping Brackets..." />
       </div>
     );
@@ -72,7 +72,7 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
 
   // Get all unique stages from the data to ensure we show everything
   const dataStages = Object.keys(groupedMatches);
-  const stagesInOrderPredefined = ['league', 'knockout', 'main', 'quarterfinal', 'semifinal', 'final'];
+  const stagesInOrderPredefined = ['group', 'group_stage', 'league', 'knockout', 'main', 'quarterfinal', 'semifinal', 'final'];
   
   // Combine predefined order with any other stages found in data
   const stagesInOrder = [
@@ -86,13 +86,13 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
         if (!groupedMatches[stage]) return null;
         return (
           <div key={stage} className="space-y-6">
-            <h3 className="text-xl font-black text-white italic uppercase tracking-tighter border-l-4 border-primary pl-4">
+            <h3 className="text-xl font-black text-text-main italic uppercase tracking-tighter border-l-4 border-primary pl-4">
               {stage.replace('_', ' ')} Stage
             </h3>
             
             {Object.entries(groupedMatches[stage]).map(([roundLabel, roundMatches]: [string, any]) => (
               <div key={roundLabel} className="space-y-4">
-                <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest pl-5 mb-2">
+                <h4 className="text-xs font-bold text-text-muted uppercase tracking-widest pl-5 mb-2">
                   {roundLabel}
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -102,7 +102,7 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: idx * 0.05 }}
-                      className="card p-5 bg-zinc-900 border-zinc-800 hover:border-primary/30 transition-all group"
+                      className="card p-5 bg-surface border-border-main hover:border-primary/30 transition-all group shadow-sm"
                     >
                       <div className="flex items-center justify-between mb-4">
                         <span className={cn(
@@ -111,7 +111,7 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
                         )}>
                           {match.status}
                         </span>
-                        <div className="flex items-center text-zinc-500 space-x-2">
+                        <div className="flex items-center text-text-muted space-x-2">
                           <Calendar className="w-3 h-3" />
                           <span className="text-[10px] font-bold uppercase tracking-tight">
                             {match.scheduled_at ? formatDate(match.scheduled_at) : 'TBD'}
@@ -128,7 +128,7 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
                           isWinner={match.status === 'completed' && match.score1 > match.score2}
                         />
                         <div className="shrink-0 flex flex-col items-center justify-center px-1">
-                          <div className="text-[8px] md:text-[10px] font-black text-zinc-600 bg-zinc-800/50 px-2 py-0.5 md:py-1 rounded-full italic">VS</div>
+                          <div className="text-[8px] md:text-[10px] font-black text-text-muted opacity-40 bg-background px-2 py-0.5 md:py-1 rounded-full italic">VS</div>
                         </div>
                         <PlayerCard 
                           username={match.player2_username} 
@@ -148,7 +148,7 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
       })}
 
       {matches.length === 0 && (
-        <div className="py-20 text-center text-zinc-600 italic border-2 border-dashed border-zinc-800 rounded-3xl">
+        <div className="py-20 text-center text-text-muted italic border-2 border-dashed border-border-main rounded-3xl">
           No fixtures scheduled yet for this tournament.
         </div>
       )}
@@ -182,18 +182,18 @@ function PlayerCard({
         size="md"
         className={cn(
           "w-10 h-10 md:w-14 md:h-14 rounded-xl border-2 transition-all",
-          isWinner ? "border-primary shadow-lg shadow-primary/20" : "border-zinc-800"
+          isWinner ? "border-primary shadow-lg shadow-primary/20" : "border-border-main"
         )}
       />
       <div className="min-w-0 flex-1">
         <p className={cn(
           "font-black text-[9px] md:text-xs uppercase italic tracking-tighter truncate leading-tight",
-          isWinner ? "text-primary" : "text-zinc-400"
+          isWinner ? "text-primary" : "text-text-muted"
         )}>
-          {username || 'TBD'}
+          {getPublicIdentity(username) || 'TBD'}
         </p>
         {(score !== null && score !== undefined) ? (
-          <p className="text-xl md:text-3xl font-black text-white italic tracking-tighter leading-none mt-1">
+          <p className="text-xl md:text-3xl font-black text-text-main italic tracking-tighter leading-none mt-1">
             {score}
           </p>
         ) : (

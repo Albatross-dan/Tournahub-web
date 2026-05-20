@@ -107,44 +107,64 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
           table: 'messages',
           filter: `conversation_id=eq.${conversationId}`
         },
-        (payload: any) => {
-          const incomingMsg = payload.new;
-          console.log('[MatchChat] Realtime DB insert received:', incomingMsg.id);
+        async (payload: any) => {
+          const newMsgId = payload.new.id;
+          console.log('[MatchChat] Realtime DB insert received:', newMsgId);
+          
+          // Requirement Section 4: Fetch full enriched record from view
+          const { data: enrichedMsg, error } = await (supabase as any)
+            .from('v_messages_with_sender')
+            .select('*')
+            .eq('id', newMsgId)
+            .single();
+
+          if (error || !enrichedMsg) {
+            console.error('[MatchChat] Failed to fetch enriched message after realtime insert:', error);
+            return;
+          }
           
           setMessages(prev => {
-            if (prev.some(m => m.id === incomingMsg.id)) return prev;
+            if (prev.some(m => m.id === enrichedMsg.id)) return prev;
             
             // Mark as read if it's from the opponent
-            if (incomingMsg.sender_id !== currentUserId) {
+            if (enrichedMsg.sender_id !== currentUserId) {
               matchService.markAsRead(conversationId as string, currentUserId);
             }
 
             const optimisticIndex = prev.findIndex(m => 
               m.isOptimistic && 
-              m.sender_id === incomingMsg.sender_id && 
-              m.content === incomingMsg.content
+              m.sender_id === enrichedMsg.sender_id && 
+              m.content === enrichedMsg.content
             );
 
             if (optimisticIndex !== -1) {
               const newMsgs = [...prev];
               newMsgs[optimisticIndex] = {
-                ...incomingMsg,
+                ...enrichedMsg,
                 isDelivered: true,
                 status: 'delivered',
-                sender: prev[optimisticIndex].sender
+                sender: {
+                  id: enrichedMsg.sender_id,
+                  username: enrichedMsg.sender_username,
+                  avatar_url: enrichedMsg.sender_avatar_url
+                }
               };
               return newMsgs;
             }
 
-            const enrichedMessage = {
-              ...incomingMsg,
+            const messageToUse = {
+              ...enrichedMsg,
               isDelivered: true,
               status: 'delivered',
-              sender: incomingMsg.sender_id === opponent?.id ? opponent : 
-                     (incomingMsg.sender_id === currentUserId ? { ...profile, isMe: true } : null)
+              sender: {
+                id: enrichedMsg.sender_id,
+                username: enrichedMsg.sender_username,
+                avatar_url: enrichedMsg.sender_avatar_url
+              }
             };
-            return [...prev, enrichedMessage];
+            return [...prev, messageToUse];
           });
+          scrollToBottom();
         }
       )
       .subscribe((status) => {

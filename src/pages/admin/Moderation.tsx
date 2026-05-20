@@ -19,37 +19,154 @@ export default function Moderation() {
       if (isInitial) setLoading(true);
       else setRefreshing(true);
 
-      const [disputeRes, completedRes] = await Promise.all([
-        matchService.getDisputedMatches(user.id),
-        supabase.from('matches')
+      // 1. Fetch disputes with graceful fallback
+      let disputeData: any[] = [];
+      try {
+        const { data, error } = await supabase.from('matches')
           .select(`
             *,
             player1:profiles!matches_player1_fkey(id, username, avatar_url),
             player2:profiles!matches_player2_fkey(id, username, avatar_url),
-            tournaments(name)
+            tournaments:tournament_id(name)
+          `)
+          .neq('status', 'completed')
+          .neq('status', 'verified')
+          .in('result_verification_status', ['disputed', 'single_submission']);
+        
+        if (error) {
+          console.warn('[Moderation] Direct disputes query had joins error, trying RPC fallback:', error);
+          const rpcRes = await matchService.getDisputedMatches(user.id);
+          const rpcList = rpcRes.matches || rpcRes.disputes || (Array.isArray(rpcRes) ? rpcRes : []);
+          disputeData = rpcList;
+        } else {
+          disputeData = data || [];
+        }
+      } catch (e) {
+        console.error('[Moderation] Disputes query exception, trying RPC fallback...', e);
+        try {
+          const rpcRes = await matchService.getDisputedMatches(user.id);
+          const rpcList = rpcRes.matches || rpcRes.disputes || (Array.isArray(rpcRes) ? rpcRes : []);
+          disputeData = rpcList;
+        } catch (rpcErr) {
+          console.error('[Moderation] RPC fallback failed as well:', rpcErr);
+        }
+      }
+
+      // 2. Fetch completed matches history with fallback
+      let completedData: any[] = [];
+      try {
+        const { data, error } = await supabase.from('matches')
+          .select(`
+            *,
+            player1:profiles!matches_player1_fkey(id, username, avatar_url),
+            player2:profiles!matches_player2_fkey(id, username, avatar_url),
+            tournaments:tournament_id(name)
           `)
           .eq('status', 'completed')
           .order('updated_at', { ascending: false })
-          .limit(20)
-      ]);
-
-      let allMatches = [];
-      if (disputeRes && disputeRes.matches) {
-        allMatches = [...disputeRes.matches];
+          .limit(20);
+        
+        if (error) {
+          console.warn('[Moderation] Completed query had joins error, trying fallback without relations:', error);
+          const fallback = await supabase.from('matches')
+            .select('*')
+            .eq('status', 'completed')
+            .order('updated_at', { ascending: false })
+            .limit(20);
+          completedData = fallback.data || [];
+        } else {
+          completedData = data || [];
+        }
+      } catch (e) {
+        console.error('[Moderation] Completed matches query exception:', e);
       }
 
-      if (completedRes.data) {
-        const historyMatches = (completedRes.data as any[]).map((m: any) => ({
+      // 3. Fetch expired/abandoned matches with fallback
+      let expiredData: any[] = [];
+      try {
+        const { data, error } = await supabase.from('matches')
+          .select(`
+            *,
+            player1:profiles!matches_player1_fkey(id, username, avatar_url),
+            player2:profiles!matches_player2_fkey(id, username, avatar_url),
+            tournaments:tournament_id(name)
+          `)
+          .neq('status', 'completed')
+          .neq('status', 'verified')
+          .lt('scheduled_at', new Date().toISOString());
+        
+        if (error) {
+          console.warn('[Moderation] Expired query had joins error, trying fallback without relations:', error);
+          const fallback = await supabase.from('matches')
+            .select('*')
+            .neq('status', 'completed')
+            .neq('status', 'verified')
+            .lt('scheduled_at', new Date().toISOString());
+          expiredData = fallback.data || [];
+        } else {
+          expiredData = data || [];
+        }
+      } catch (e) {
+        console.error('[Moderation] Expired matches query exception:', e);
+      }
+
+      // 4. Map and standardize matches
+      let allMatches: any[] = [];
+      
+      if (disputeData && disputeData.length > 0) {
+        const disputeList = disputeData.map((m: any) => {
+          const isRpc = 'match_id' in m;
+          const mId = isRpc ? m.match_id : m.id;
+          const statusVal = isRpc ? m.verification_status : m.result_verification_status;
+          const player1Obj = isRpc ? { id: m.player1, username: m.player1_username } : m.player1;
+          const player2Obj = isRpc ? { id: m.player2, username: m.player2_username } : m.player2;
+
+          return {
+            ...m,
+            id: mId,
+            match_id: mId,
+            tournament_name: isRpc ? m.tournament_name : m.tournaments?.name,
+            player1_username: isRpc ? m.player1_username : m.player1?.username,
+            player2_username: isRpc ? m.player2_username : m.player2?.username,
+            player1: player1Obj,
+            player2: player2Obj,
+            verification_status: statusVal,
+            required_action: statusVal === 'disputed' 
+              ? 'pick_winner_or_override' 
+              : 'approve_or_reject_single_submission'
+          };
+        });
+        allMatches = [...disputeList];
+      }
+
+      if (expiredData && expiredData.length > 0) {
+        const existingIds = new Set(allMatches.map(m => m.match_id || m.id));
+        const expiredNoSubMatches = expiredData
+          .filter((m: any) => !existingIds.has(m.id))
+          .map((m: any) => ({
+            ...m,
+            match_id: m.id,
+            tournament_name: m.tournaments?.name,
+            player1_username: m.player1?.username,
+            player2_username: m.player2?.username,
+            verification_status: 'abandoned',
+            required_action: 'pick_winner_or_override'
+          }));
+        allMatches = [...allMatches, ...expiredNoSubMatches];
+      }
+
+      if (completedData && completedData.length > 0) {
+        const historyMatches = completedData.map((m: any) => ({
           ...m,
-          match_id: m.id, // Align with RPC format
-          verification_status: 'completed' // Virtual status for filtering
+          match_id: m.id,
+          verification_status: 'completed'
         }));
         allMatches = [...allMatches, ...historyMatches];
       }
 
       setMatches(allMatches);
     } catch (err) {
-      console.error('[Moderation] Signal fetch failure:', err);
+      console.error('[Moderation] General Signal fetch failure:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -76,13 +193,18 @@ export default function Moderation() {
 
   const filteredMatches = matches.filter(m => {
     if (activeTab === 'disputed') return m.verification_status === 'disputed';
-    if (activeTab === 'awaiting') return m.verification_status === 'awaiting_admin_review';
+    if (activeTab === 'awaiting') return m.verification_status === 'awaiting_admin_review' || m.verification_status === 'single_submission';
     if (activeTab === 'abandoned') return m.verification_status === 'abandoned';
     if (activeTab === 'history') return m.verification_status === 'completed';
     return false;
   });
 
-  const getCount = (status: string) => matches.filter(m => m.verification_status === status).length;
+  const getCount = (status: string) => {
+    if (status === 'awaiting_admin_review') {
+      return matches.filter(m => m.verification_status === 'awaiting_admin_review' || m.verification_status === 'single_submission').length;
+    }
+    return matches.filter(m => m.verification_status === status).length;
+  };
 
   return (
     <AdminShell>

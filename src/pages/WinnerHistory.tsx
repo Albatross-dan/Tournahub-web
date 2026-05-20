@@ -10,6 +10,7 @@ import { Link } from 'react-router-dom';
 
 export default function WinnerHistory() {
   const [wins, setWins] = useState<WinRecord[]>([]);
+  const [username, setUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,6 +21,7 @@ export default function WinnerHistory() {
     try {
       const data = await walletService.getWinnerHistory();
       setWins(data.wins);
+      setUsername(data.username);
     } catch (err) {
       console.error('Win history load error:', err);
     } finally {
@@ -38,7 +40,9 @@ export default function WinnerHistory() {
       <div className="space-y-8 max-w-5xl mx-auto pb-20">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-black text-white uppercase italic tracking-tighter">Winner History</h1>
+            <h1 className="text-3xl font-black text-white uppercase italic tracking-tighter">
+              {username ? `${username}'s Winner History` : 'Winner History'}
+            </h1>
             <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mt-1">Your tournament glory and rewards</p>
           </div>
           <div className="bg-primary/20 border border-primary/30 px-4 py-2 rounded-xl flex items-center space-x-3">

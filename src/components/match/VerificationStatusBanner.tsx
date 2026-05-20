@@ -27,7 +27,7 @@ export default function VerificationStatusBanner({
     matched: {
       bg: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
       icon: CheckCircle2,
-      text: `Auto-verified: ${score1} – ${score2}`
+      text: `Auto-verified: ${score1 ?? '-'} – ${score2 ?? '-'}`
     },
     disputed: {
       bg: 'bg-red-500/10 text-red-500 border-red-500/20',
@@ -37,7 +37,7 @@ export default function VerificationStatusBanner({
     verified: {
       bg: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
       icon: CheckCircle2,
-      text: `Verified: ${score1} – ${score2}`
+      text: `Verified: ${score1 ?? '-'} – ${score2 ?? '-'}`
     }
   };
 

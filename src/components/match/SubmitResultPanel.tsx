@@ -10,6 +10,7 @@ import { DisputedResult } from './DisputedResult';
 import { AdminReviewBanner } from './AdminReviewBanner';
 import { cn } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
+import StorageImage from '../common/StorageImage';
 
 interface SubmitResultPanelProps {
   matchId: string;
@@ -24,7 +25,6 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName }: Submit
   const [score1, setScore1] = useState<string>('');
   const [score2, setScore2] = useState<string>('');
   const [screenshotPath, setScreenshotPath] = useState<string | null>(null);
-  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -58,8 +58,8 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName }: Submit
 
   // Render appropriate state view
   if (ui_state === 'waiting_for_opponent') {
-    const mySub = submissions?.find((s: any) => s.submitted_by === currentUserId);
-    const opponent = submissions?.find((s: any) => s.submitted_by !== currentUserId);
+    const mySub = submissions?.find((s: any) => s.username === playerName);
+    const opponent = submissions?.find((s: any) => s.username !== playerName);
 
     if (mySub) {
       return (
@@ -74,13 +74,13 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName }: Submit
   }
 
   if (ui_state === 'auto_verified' || ui_state === 'completed' || ui_state === 'admin_verified') {
-    const winner = state.winner; // This would come from full State or we can infer it
+    const winner_username = state.winner_username;
     return (
       <AutoVerifiedResult 
         finalScore1={state.final_score1 || 0}
         finalScore2={state.final_score2 || 0}
         submissions={submissions}
-        winner={winner}
+        winner={winner_username}
         matchId={matchId}
       />
     );
@@ -108,9 +108,6 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName }: Submit
     try {
       const path = await storageService.uploadScreenshot(file, matchId, currentUserId);
       setScreenshotPath(path);
-      
-      const { data } = supabase.storage.from('result-screenshots').getPublicUrl(path);
-      setScreenshotUrl(data.publicUrl);
     } catch (err: any) {
       setUploadError(err.message || 'Transmission failed. Signal lost during upload.');
     } finally {
@@ -178,11 +175,16 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName }: Submit
         <div className="space-y-3">
           <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block">Screenshot Evidence</label>
           
-          {screenshotUrl ? (
+          {screenshotPath ? (
             <div className="relative group rounded-2xl overflow-hidden border-2 border-primary/20 aspect-video bg-slate-950">
-              <img src={screenshotUrl} alt="Match proof" className="w-full h-full object-cover" />
+              <StorageImage 
+                bucket="result-screenshots" 
+                path={screenshotPath} 
+                alt="Match proof" 
+                className="w-full h-full object-cover" 
+              />
               <button 
-                onClick={() => { setScreenshotPath(null); setScreenshotUrl(null); }}
+                onClick={() => { setScreenshotPath(null); }}
                 className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
               >
                 <div className="bg-red-600 p-2 rounded-lg text-white text-[10px] font-black uppercase tracking-widest">Remove</div>

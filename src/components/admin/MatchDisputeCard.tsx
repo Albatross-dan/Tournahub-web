@@ -15,9 +15,10 @@ import {
   AlertCircle,
   Loader2
 } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn, getPublicIdentity } from '../../lib/utils';
 import { matchService } from '../../services/matchService';
 import { supabase } from '../../lib/supabase';
+import StorageImage from '../common/StorageImage';
 
 interface MatchDisputeCardProps {
   match: any;
@@ -29,12 +30,58 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
   const [isExpanded, setIsExpanded] = useState(false);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [showOverrideModal, setShowOverrideModal] = useState(false);
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [rescheduleTime, setRescheduleTime] = useState('');
   const [adminNotes, setAdminNotes] = useState('');
   const [overrideScore1, setOverrideScore1] = useState<string>('');
   const [overrideScore2, setOverrideScore2] = useState<string>('');
 
-  const submissions = match.submissions || [];
+  const [internalSubmissions, setInternalSubmissions] = useState<any[]>([]);
+  const [isFetchingSubmissions, setIsFetchingSubmissions] = useState(false);
+
+  const submissions = match.submissions && match.submissions.length > 0 ? match.submissions : internalSubmissions;
   const requiredAction = match.required_action;
+
+  React.useEffect(() => {
+    // If we have submissions in match object or match is already completed, don't fetch
+    if ((match.submissions && match.submissions.length > 0) || match.verification_status === 'completed') {
+      return;
+    }
+
+    const fetchSubmissions = async () => {
+      setIsFetchingSubmissions(true);
+      try {
+        const { data, error } = await supabase
+          .from('match_results')
+          .select(`
+            *,
+            submitter:profiles!submitted_by(id, username, avatar_url)
+          `)
+          .eq('match_id', match.match_id || match.id)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        
+        if (data) {
+          const mapped = (data as any[]).map(sub => ({
+            ...sub,
+            username: (sub as any).submitter?.username || 'Unknown',
+            avatar_url: (sub as any).submitter?.avatar_url,
+            // Ensure compatibility with the UI score names
+            score1: sub.player1_score !== undefined ? sub.player1_score : sub.score1,
+            score2: sub.player2_score !== undefined ? sub.player2_score : sub.score2
+          }));
+          setInternalSubmissions(mapped);
+        }
+      } catch (err) {
+        console.error('[MatchDisputeCard] Submissions fetch error:', err);
+      } finally {
+        setIsFetchingSubmissions(false);
+      }
+    };
+
+    fetchSubmissions();
+  }, [match.match_id, match.id, match.submissions, match.verification_status]);
 
   const handleAction = async (action: string, resultId?: string) => {
     setLoadingAction(action);
@@ -93,9 +140,9 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
           adminNotes: adminNotes || 'Protocol: Match nullified by administrative authority',
         });
       } else if (action === 'reschedule') {
-        // If we have a reschedule flow, call it here. For now at least try to call resolveDispute if suitable
-        // but resolveDispute with no scores/winningSub might fail depending on SQL constraints.
-        throw new Error('Rescheduling requires setting a new timeline. Please use the Match Edit interface.');
+        setShowRescheduleModal(true);
+        setLoadingAction(null);
+        return;
       }
       
       console.log('[MatchDisputeCard] Action success');
@@ -127,9 +174,39 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
     }
   };
 
-  const getSubUrl = (sub: any) => {
-    if (!sub?.screenshot_url) return null;
-    return supabase.storage.from('result-screenshots').getPublicUrl(sub.screenshot_url).data.publicUrl;
+  const handleRescheduleSubmit = async () => {
+    setLoadingAction('reschedule_action');
+    try {
+      if (!rescheduleTime) {
+        throw new Error('Please select a valid scheduled timestamp.');
+      }
+      const date = new Date(rescheduleTime);
+
+      const { error: matchError } = await (supabase.from('matches') as any)
+        .update({
+          scheduled_at: date.toISOString(),
+          status: 'scheduled',
+          result_verification_status: 'none',
+          score1: null,
+          score2: null,
+          winner: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', match.match_id);
+
+      if (matchError) throw matchError;
+
+      const { error: resultError } = await (supabase.from('match_results') as any)
+        .delete()
+        .eq('match_id', match.match_id);
+
+      setShowRescheduleModal(false);
+      onResolved();
+    } catch (err: any) {
+      alert(err.message || 'Reschedule failed');
+    } finally {
+      setLoadingAction(null);
+    }
   };
 
   console.log(`[MatchDisputeCard:${match.match_id}] Render State:`, { 
@@ -161,7 +238,7 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
               </span>
               {match.verification_status !== 'completed' && (
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">
-                  {match.submission_count || 0} Submissions
+                  {submissions.length || match.submission_count || 0} Submissions
                 </span>
               )}
             </div>
@@ -187,14 +264,14 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
               <Users className="w-8 h-8 text-slate-500" />
             </div>
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Player 1</span>
-            <span className="text-sm font-black text-white uppercase tracking-tight">{match.player1_username || match.player1?.username || 'Operator A'}</span>
+            <span className="text-sm font-black text-white uppercase tracking-tight">{getPublicIdentity(match.player1_username || match.player1)}</span>
           </div>
 
           <div className="flex flex-col items-center">
             <div className="text-2xl font-black italic text-slate-700">VS</div>
-            {match.verification_status === 'completed' && (
+            {(match.verification_status === 'completed' || match.score1 !== null) && (
               <div className="mt-2 text-2xl font-black text-primary italic tracking-tight">
-                {match.score1} – {match.score2}
+                {match.score1 ?? 0} – {match.score2 ?? 0}
               </div>
             )}
           </div>
@@ -204,7 +281,7 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
               <Users className="w-8 h-8 text-slate-500" />
             </div>
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Player 2</span>
-            <span className="text-sm font-black text-white uppercase tracking-tight">{match.player2_username || match.player2?.username || 'Operator B'}</span>
+            <span className="text-sm font-black text-white uppercase tracking-tight">{getPublicIdentity(match.player2_username || match.player2)}</span>
           </div>
         </div>
 
@@ -216,15 +293,22 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
                 <div key={sub.id} className="bg-slate-950 border border-slate-800 rounded-2xl p-6 space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Intel #{idx + 1}</span>
-                    <span className="text-[10px] font-bold text-primary uppercase">{sub.username}</span>
+                    <span className="text-[10px] font-bold text-primary uppercase">{getPublicIdentity(sub.profiles || sub.submitter || sub)}</span>
                   </div>
                   <div className="flex items-center justify-center py-6 bg-slate-900/50 rounded-xl border border-slate-800/50">
-                    <span className="text-4xl font-black italic text-white">{sub.player1_score} – {sub.player2_score}</span>
+                    <span className="text-4xl font-black italic text-white">
+                      {(sub.player1_score ?? sub.score1) ?? 0} – {(sub.player2_score ?? sub.score2) ?? 0}
+                    </span>
                   </div>
                   <div className="space-y-2">
                     <span className="text-[10px] font-black uppercase text-slate-600">Verification Image</span>
                     <div className="aspect-video bg-slate-900 rounded-xl overflow-hidden border border-slate-800 group relative">
-                      <img src={getSubUrl(sub) || undefined} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" alt={`Match result screenshot submitted by ${sub.username}`} />
+                      <StorageImage 
+                        bucket="result-screenshots" 
+                        path={sub.screenshot_url} 
+                        className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" 
+                        alt={`Match result screenshot submitted by ${sub.username}`} 
+                      />
                       <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/60">
                         <button 
                           className="p-3 bg-white text-black rounded-full shadow-xl"
@@ -249,7 +333,12 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
                     </button>
                   )}
                 </div>
-              )) : match.verification_status !== 'completed' ? (
+              )) : isFetchingSubmissions ? (
+                <div className="col-span-2 p-12 text-center bg-slate-950 border border-slate-800 rounded-3xl">
+                  <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mb-4" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">Searching signal archives...</span>
+                </div>
+              ) : match.verification_status !== 'completed' ? (
                 <div className="col-span-2 p-12 text-center bg-slate-950 border-2 border-dashed border-slate-800 rounded-3xl">
                   <AlertCircle className="w-10 h-10 text-slate-700 mx-auto mb-4" />
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">No active signal transmissions found</span>
@@ -290,13 +379,13 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
 
       {/* Global Actions */}
       {match.verification_status !== 'completed' && (
-          <div className="pt-6 border-t border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {requiredAction === 'pick_winner_or_override' || match.verification_status === 'disputed' ? (
+          <div className="pt-6 border-t border-slate-800 flex flex-wrap gap-3">
+          {requiredAction === 'pick_winner_or_override' || match.verification_status === 'disputed' || match.verification_status === 'abandoned' ? (
             <>
               <button 
                 onClick={() => setShowOverrideModal(true)}
                 disabled={!!loadingAction}
-                className="py-4 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-slate-700 flex items-center justify-center space-x-2"
+                className="flex-1 min-w-[110px] py-4 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-slate-700 flex items-center justify-center space-x-2"
               >
                 <Edit3 className="w-4 h-4" />
                 <span>Override</span>
@@ -304,13 +393,37 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
               <button 
                 onClick={() => handleAction('reschedule')}
                 disabled={!!loadingAction}
-                className="py-4 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-slate-700 flex items-center justify-center space-x-2"
+                className="flex-1 min-w-[110px] py-4 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-slate-700 flex items-center justify-center space-x-2"
               >
                 <RefreshCw className="w-4 h-4" />
                 <span>Reschedule</span>
               </button>
+              <button 
+                onClick={() => handleAction('no_show_p1')}
+                disabled={!!loadingAction}
+                className="flex-1 min-w-[110px] py-4 bg-red-600/10 hover:bg-red-600/20 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-red-500/10 flex items-center justify-center space-x-2 disabled:opacity-50"
+              >
+                {loadingAction === 'no_show_p1' ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                <span>Forfeit P1</span>
+              </button>
+              <button 
+                onClick={() => handleAction('no_show_p2')}
+                disabled={!!loadingAction}
+                className="flex-1 min-w-[110px] py-4 bg-red-600/10 hover:bg-red-600/20 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-red-500/10 flex items-center justify-center space-x-2 disabled:opacity-50"
+              >
+                {loadingAction === 'no_show_p2' ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                <span>Forfeit P2</span>
+              </button>
+              <button 
+                onClick={() => handleAction('cancel')}
+                disabled={!!loadingAction}
+                className="flex-1 min-w-[110px] py-4 bg-red-600/10 hover:bg-red-600/20 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-red-500/10 flex items-center justify-center space-x-2 disabled:opacity-50"
+              >
+                {loadingAction === 'cancel' ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                <span>Cancel</span>
+              </button>
             </>
-          ) : (requiredAction === 'approve_or_reject_single_submission' || match.verification_status === 'awaiting_admin_review' || (submissions.length === 1 && match.verification_status === 'disputed')) ? (
+          ) : (requiredAction === 'approve_or_reject_single_submission' || match.verification_status === 'awaiting_admin_review' || match.verification_status === 'single_submission' || (submissions.length === 1 && match.verification_status === 'disputed')) ? (
             <>
               <button 
                 onClick={() => {
@@ -386,6 +499,44 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
               </button>
               <button 
                 onClick={() => setShowOverrideModal(false)}
+                className="w-full py-5 bg-slate-800 text-slate-400 font-black uppercase italic tracking-widest rounded-2xl hover:bg-slate-700 transition-all border border-slate-700"
+              >
+                Abort Protocol
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reschedule Modal */}
+      {showRescheduleModal && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl relative animate-in zoom-in-95 duration-200">
+            <h5 className="text-xl font-black text-white italic uppercase tracking-tighter mb-6">Tactical <span className="text-primary">Match Reschedule</span></h5>
+            
+            <div className="space-y-4 mb-8">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">New Scheduled Time</label>
+                <input 
+                  type="datetime-local"
+                  required
+                  value={rescheduleTime}
+                  onChange={(e) => setRescheduleTime(e.target.value)}
+                  className="w-full bg-slate-100 dark:bg-slate-950 border-2 border-slate-200 dark:border-slate-800 rounded-2xl py-4 px-5 text-slate-900 dark:text-white font-bold tracking-tight focus:border-primary focus:ring-0 outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={handleRescheduleSubmit}
+                disabled={!rescheduleTime || loadingAction === 'reschedule_action'}
+                className="w-full py-5 bg-primary text-black font-black uppercase italic tracking-widest rounded-2xl hover:bg-white transition-all shadow-xl shadow-primary/20 flex items-center justify-center disabled:opacity-50"
+              >
+                {loadingAction === 'reschedule_action' ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : 'Confirm New Time'}
+              </button>
+              <button 
+                onClick={() => setShowRescheduleModal(false)}
                 className="w-full py-5 bg-slate-800 text-slate-400 font-black uppercase italic tracking-widest rounded-2xl hover:bg-slate-700 transition-all border border-slate-700"
               >
                 Abort Protocol

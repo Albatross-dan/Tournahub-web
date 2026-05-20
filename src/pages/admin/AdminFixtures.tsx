@@ -8,8 +8,9 @@ import {
   Zap, Save, RefreshCcw, User as UserIcon,
   Eye, Image as ImageIcon, ExternalLink
 } from 'lucide-react';
-import { formatCurrency, cn, getSignedUrl } from '../../lib/utils';
+import { formatCurrency, cn, getSignedUrl, getPublicIdentity } from '../../lib/utils';
 import LoadingState from '../../components/ui/LoadingState';
+import StorageImage from '../../components/common/StorageImage';
 
 export default function AdminFixtures() {
   const [tournaments, setTournaments] = useState<any[]>([]);
@@ -33,7 +34,7 @@ export default function AdminFixtures() {
   async function fetchTournaments() {
     try {
       const { data, error } = await supabase
-        .from('tournaments')
+        .from('v_tournaments_with_creator')
         .select('*')
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -172,27 +173,25 @@ function FixtureCard({ match, onUpdate }: { match: any; onUpdate: (id: string, s
   const [s2, setS2] = useState(match.score2 || 0);
   const [editing, setEditing] = useState(false);
   const [result, setResult] = useState<any>(null);
-  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchResult();
   }, [match.id]);
 
-  async function fetchResult() {
+  const fetchResult = async () => {
     const { data } = await (supabase as any)
       .from('match_results')
-      .select('*')
+      .select('*, profiles:submitted_by(username)')
       .eq('match_id', match.id)
       .maybeSingle();
     
     if (data) {
-      setResult(data);
-      if ((data as any).screenshot_url) {
-        const url = await getSignedUrl('result-screenshots', (data as any).screenshot_url);
-        setScreenshotUrl(url);
-      }
+      setResult({
+        ...data,
+        submitter_username: data.profiles?.username
+      });
     }
-  }
+  };
 
   return (
     <div className={cn(
@@ -218,8 +217,8 @@ function FixtureCard({ match, onUpdate }: { match: any; onUpdate: (id: string, s
 
       <div className="space-y-4">
         {[
-          { id: match.player1?.id, username: match.player1?.username, score: s1, setScore: setS1, isWinner: match.winner === match.player1?.id },
-          { id: match.player2?.id, username: match.player2?.username, score: s2, setScore: setS2, isWinner: match.winner === match.player2?.id }
+          { id: match.player1?.id, profile: match.player1, score: s1, setScore: setS1, isWinner: match.winner === match.player1?.id },
+          { id: match.player2?.id, profile: match.player2, score: s2, setScore: setS2, isWinner: match.winner === match.player2?.id }
         ].map((p, i) => (
           <div key={i} className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -227,13 +226,13 @@ function FixtureCard({ match, onUpdate }: { match: any; onUpdate: (id: string, s
                 "w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs border transition-all",
                 p.isWinner ? "bg-primary/20 text-primary border-primary/30" : "bg-slate-900 text-slate-500 border-slate-800"
               )}>
-                {(p.username || 'U')[0].toUpperCase()}
+                {(getPublicIdentity(p.profile) || 'U')[0].toUpperCase()}
               </div>
               <span className={cn(
                 "text-sm font-black uppercase tracking-tight truncate max-w-[120px]",
                 p.isWinner ? "text-primary" : "text-white"
               )}>
-                {p.username || 'Anonymous'}
+                {getPublicIdentity(p.profile)}
               </span>
             </div>
             
@@ -252,21 +251,20 @@ function FixtureCard({ match, onUpdate }: { match: any; onUpdate: (id: string, s
       </div>
 
       {result && (
-        <div className="mt-4 p-3 bg-black/40 rounded-xl border border-white/5 space-y-2">
-          <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Submitted Scores: {result.player1_score} - {result.player2_score}</p>
-          {screenshotUrl ? (
-            <a 
-              href={screenshotUrl} 
-              target="_blank" 
-              rel="noreferrer"
-              className="flex items-center space-x-2 text-[10px] font-black text-primary uppercase tracking-widest hover:underline"
-            >
-              <ImageIcon className="w-3 h-3" />
-              <span>View Proof</span>
-              <ExternalLink className="w-2 h-2" />
-            </a>
-          ) : result.screenshot_url && (
-            <p className="text-[8px] font-black text-amber-500 uppercase">Screenshot missing or private</p>
+        <div className="mt-4 p-3 bg-black/40 rounded-xl border border-white/5 space-y-2 text-center">
+          <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-2">Submitted Scores: {result.player1_score} - {result.player2_score}</p>
+          {result.screenshot_url && (
+            <div className="relative group">
+              <StorageImage 
+                bucket="result-screenshots" 
+                path={result.screenshot_url} 
+                className="w-full aspect-video rounded-lg border border-white/5 object-cover grayscale group-hover:grayscale-0 transition-all" 
+                alt="Proof" 
+              />
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 rounded-lg">
+                <span className="text-[10px] font-black text-white uppercase italic">Click to zoom in admin tools</span>
+              </div>
+            </div>
           )}
         </div>
       )}

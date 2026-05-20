@@ -24,6 +24,7 @@ export interface WalletLimits {
   balance_usd: number;
   is_locked: boolean;
   locked_reason: string | null;
+  locked_by_username?: string | null;
   risk_level: WalletRiskLevel;
   daily_deposit_limit_usd: number;
   daily_withdrawal_limit_usd: number;
@@ -89,7 +90,7 @@ export interface WinRecord {
 }
 
 export interface WinnerHistory {
-  user_id: string;
+  username: string;
   win_count: number;
   wins: WinRecord[];
 }

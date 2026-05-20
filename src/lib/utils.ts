@@ -9,11 +9,31 @@ import { supabase } from "./supabase";
 export function getPublicIdentity(profile: any) {
   if (!profile) return 'TBD';
   
-  // If profile is a UUID string (unfetched), it's still 'TBD' or 'User'
-  // but strictly NOT the ID itself.
-  if (typeof profile === 'string') return 'User';
+  // Handle literal fallback codes from backend views
+  const username = profile.username || profile.sender_username || profile.actor_username || profile.created_by_username || profile.username;
   
-  return profile.username || profile.email?.split('@')[0] || 'Anonymous';
+  if (username === '[deleted]') return 'Deleted User';
+  if (username === '[system]') return 'System';
+  if (username === '[none]') return '—';
+  
+  if (typeof profile === 'string') {
+    // If it's a UUID, try to provide a truncated version if we really have no profile object
+    if (profile.length > 20) return `USER_${profile.substring(0, 5).toUpperCase()}`;
+    return profile;
+  }
+  
+  // Resolve recursive profile join if exists (Supabase often nests under 'profiles')
+  const target = profile.profiles || profile.profile || profile;
+  
+  // Try to find any flavor of identity
+  const identity = target.username || target.display_name || profile.username || profile.display_name || profile.email?.split('@')[0];
+  
+  if (!identity && (profile.id || profile.user_id || target.id)) {
+    const id = profile.id || profile.user_id || target.id;
+    return `USER_${String(id).substring(0, 5).toUpperCase()}`;
+  }
+
+  return identity || 'Anonymous';
 }
 
 export function cn(...inputs: ClassValue[]) {
@@ -61,19 +81,49 @@ export function getStorageUrl(bucket: string, path: string | null | undefined) {
   if (!path) return null;
   if (path.startsWith('http')) return path;
   
-  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+  const cleanPath = cleanStoragePath(bucket, path);
+  const { data } = supabase.storage.from(bucket).getPublicUrl(cleanPath || '');
   return data.publicUrl;
+}
+
+/**
+ * Cleans a storage path by removing the bucket prefix if it exists.
+ * Some Supabase versions return data.path with the bucket name prepended.
+ */
+export function cleanStoragePath(bucket: string, path: string | null | undefined) {
+  if (!path) return path;
+  
+  // Remove bucket name and a following slash if it exists at the start
+  const prefix = `${bucket}/`;
+  if (path.startsWith(prefix)) {
+    return path.substring(prefix.length);
+  }
+  
+  return path;
 }
 
 /**
  * Creates a signed URL for a private file in a storage bucket.
  */
-export function getSignedUrl(bucket: string, path: string | null | undefined, expiresIn = 3600) {
+export async function getSignedUrl(bucket: string, path: string | null | undefined, expiresIn = 3600) {
   if (!path) return null;
   if (path.startsWith('http')) return path;
 
-  return supabase.storage
-    .from(bucket)
-    .createSignedUrl(path, expiresIn)
-    .then(({ data }) => data?.signedUrl || null);
+  const cleanPath = cleanStoragePath(bucket, path);
+
+  try {
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(cleanPath || '', expiresIn);
+    
+    if (error) {
+      console.error(`Error creating signed URL for ${bucket}/${cleanPath}:`, error);
+      return null;
+    }
+    
+    return data?.signedUrl || null;
+  } catch (err) {
+    console.error(`Unexpected error creating signed URL for ${bucket}/${cleanPath}:`, err);
+    return null;
+  }
 }

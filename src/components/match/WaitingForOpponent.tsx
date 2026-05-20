@@ -3,6 +3,7 @@ import { Loader2, Clock, MapPin } from 'lucide-react';
 import { useCountdown } from '../../hooks/useCountdown';
 import { cn } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
+import StorageImage from '../common/StorageImage';
 
 interface WaitingForOpponentProps {
   submission: any;
@@ -14,10 +15,6 @@ interface WaitingForOpponentProps {
 export function WaitingForOpponent({ submission, deadline, opponentUsername, serverTimeOffsetMs = 0 }: WaitingForOpponentProps) {
   const { seconds, formatted, isExpired } = useCountdown(deadline, serverTimeOffsetMs);
   
-  const screenshotUrl = submission?.screenshot_url ? 
-    supabase.storage.from('result-screenshots').getPublicUrl(submission.screenshot_url).data.publicUrl : 
-    null;
-
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
       <div className="p-8 space-y-10">
@@ -65,13 +62,14 @@ export function WaitingForOpponent({ submission, deadline, opponentUsername, ser
           </div>
         </div>
 
-        {screenshotUrl && (
+        {submission?.screenshot_url && (
           <div className="space-y-3">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 block">Submitted Evidence</span>
-            <img 
-              src={screenshotUrl} 
+            <StorageImage 
+              bucket="result-screenshots" 
+              path={submission.screenshot_url} 
               alt="Proof" 
-              className="w-full aspect-video object-cover rounded-2xl border border-slate-800 grayscale hover:grayscale-0 transition-all duration-500" 
+              className="w-full aspect-video rounded-2xl border border-slate-800 grayscale hover:grayscale-0 transition-all duration-500" 
             />
           </div>
         )}

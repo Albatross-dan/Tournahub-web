@@ -190,7 +190,7 @@ export default function Matches() {
                       
                       <div className="space-y-1 min-w-0 flex-1">
                         <div className="flex items-center space-x-2">
-                          <span className="text-[10px] font-black text-primary uppercase tracking-widest truncate">
+                          <span className="text-xs md:text-sm font-black text-primary uppercase tracking-widest truncate">
                             {match.tournaments?.name || 'Tournament'}
                           </span>
                           <span className="w-1 h-1 bg-slate-700 rounded-full shrink-0" />
@@ -295,7 +295,7 @@ function MatchCard({ match }: { match: any; key?: string }) {
             <div className="h-12 w-px bg-slate-800" />
             <div className="space-y-1 min-w-0">
                <div className="flex items-center space-x-2">
-                 <span className="text-[10px] font-black text-primary uppercase tracking-widest truncate">
+                 <span className="text-xs md:text-sm font-black text-primary uppercase tracking-widest truncate max-w-[150px] sm:max-w-none">
                    {match.tournaments?.name || 'Tournament'}
                  </span>
                  <span className="w-1 h-1 bg-slate-700 rounded-full shrink-0" />
@@ -374,7 +374,11 @@ function MatchCard({ match }: { match: any; key?: string }) {
             exit={{ opacity: 0, y: -10 }}
             className="mt-2"
           >
-            <VerificationStatusBanner status={verification} />
+            <VerificationStatusBanner 
+              status={verification} 
+              score1={match.score1} 
+              score2={match.score2} 
+            />
           </motion.div>
         )}
       </AnimatePresence>

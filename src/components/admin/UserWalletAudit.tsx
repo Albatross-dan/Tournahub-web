@@ -138,7 +138,15 @@ export default function UserWalletAudit() {
                       {wallet.limits.is_locked ? 'Wallet Restricted' : 'Account in Good Standing'}
                     </h4>
                     {wallet.limits.is_locked && (
-                      <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest mt-1">Reason: {wallet.limits.locked_reason || 'Manual Review'}</p>
+                      <div className="space-y-0.5">
+                        <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest mt-1">Reason: {wallet.limits.locked_reason || 'Manual Review'}</p>
+                        {wallet.limits.locked_by_username && (
+                          <p className="text-[9px] text-red-400/60 font-black uppercase tracking-widest italic flex items-center">
+                            <Shield className="w-2.5 h-2.5 mr-1" />
+                            Locked by @{wallet.limits.locked_by_username}
+                          </p>
+                        )}
+                      </div>
                     )}
                  </div>
               </div>

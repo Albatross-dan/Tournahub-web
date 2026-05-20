@@ -41,9 +41,9 @@ export default function Tournaments() {
     <Shell>
       <div className="space-y-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <h1 className="text-3xl font-black text-white uppercase italic tracking-tighter">Tournaments</h1>
+          <h1 className="text-3xl font-black text-text-main uppercase italic tracking-tighter">Tournaments</h1>
           
-          <div className="flex items-center space-x-2 bg-slate-900/50 p-1 rounded-xl border border-white/5">
+          <div className="flex items-center space-x-2 bg-surface p-1 rounded-xl border border-border-main">
             {[
               { id: 'all', label: 'All' },
               { id: 'registration_open', label: 'Open' },
@@ -55,7 +55,7 @@ export default function Tournaments() {
                 onClick={() => setFilter(f.id as any)}
                 className={cn(
                   "px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
-                  filter === f.id ? "bg-primary text-black" : "text-slate-500 hover:text-slate-300"
+                  filter === f.id ? "bg-primary text-slate-900" : "text-text-muted hover:text-text-main"
                 )}
               >
                 {f.label}
@@ -71,7 +71,7 @@ export default function Tournaments() {
           <input
             type="text"
             placeholder="Search tournaments, game typ..."
-            className="w-full bg-[#121421] border border-slate-800 rounded-3xl py-6 pl-20 pr-6 text-white font-bold placeholder:text-slate-500 focus:border-primary/50 outline-none transition-all"
+            className="w-full bg-surface border border-border-main rounded-3xl py-6 pl-20 pr-6 text-text-main font-bold placeholder:text-text-muted focus:border-primary/50 outline-none transition-all"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -86,8 +86,8 @@ export default function Tournaments() {
            </div>
 
            <div className="flex items-center space-x-2">
-             <span className="text-[12px] font-bold text-slate-500 uppercase tracking-widest">{filteredTournaments.length} Tournaments</span>
-             <div className="flex items-center text-[10px] text-slate-600 font-bold uppercase tracking-widest ml-4">
+             <span className="text-[12px] font-bold text-text-muted uppercase tracking-widest">{filteredTournaments.length} Tournaments</span>
+             <div className="flex items-center text-[10px] text-text-muted opacity-60 font-bold uppercase tracking-widest ml-4">
                 <RefreshCw className="w-3 h-3 mr-2 animate-spin-slow" />
                 Last updated just now
              </div>
@@ -114,83 +114,86 @@ export default function Tournaments() {
 
 function TournamentCard({ tournament, isJoined }: { tournament: Tournament; isJoined?: boolean; key?: string }) {
   const bannerUrl = tournament.banner_url ? getStorageUrl('tournament-banners', tournament.banner_url) : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=800';
+  const regCount = typeof (tournament as any).registrations_count === 'object' 
+    ? (tournament as any).registrations_count?.count ?? 0 
+    : (tournament as any).registrations_count ?? 0;
 
   return (
-    <Link to={`/tournaments/${tournament.id}`} className="block card bg-[#121421] border-slate-800 hover:border-primary/30 transition-all duration-300 group overflow-hidden">
-      <div className="relative h-48 overflow-hidden bg-gradient-to-br from-indigo-500/20 to-purple-500/20">
+    <Link to={`/tournaments/${tournament.id}`} className="block card bg-surface border-border-main hover:border-primary/30 transition-all duration-300 group overflow-hidden shadow-sm">
+      <div className="relative h-48 overflow-hidden bg-gradient-to-br from-indigo-500/10 to-purple-500/10">
         <img 
           src={bannerUrl} 
           alt="" 
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-60"
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-80"
           onError={(e) => {
             const img = e.target as HTMLImageElement;
             img.src = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=800';
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#121421] via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent" />
         
         <div className="absolute top-6 left-6 flex items-center space-x-2">
-          <span className="px-4 py-1.5 bg-[#d4e157] text-black text-[10px] font-black rounded-full uppercase tracking-widest">
+          <span className="px-4 py-1.5 bg-[#d4e157] text-slate-900 text-[10px] font-black rounded-full uppercase tracking-widest shadow-md">
             {tournament.type.toUpperCase()}
           </span>
           <StatusBadge status={tournament.status} />
         </div>
 
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-           <div className="w-16 h-16 bg-slate-900/50 backdrop-blur-md rounded-2xl border border-white/10 flex items-center justify-center">
-              <ImageIcon className="w-8 h-8 text-slate-500" />
+           <div className="w-16 h-16 bg-surface/50 backdrop-blur-md rounded-2xl border border-border-main flex items-center justify-center shadow-lg">
+              <ImageIcon className="w-8 h-8 text-text-muted opacity-50" />
            </div>
         </div>
       </div>
 
       <div className="p-8 space-y-6">
         <div className="flex items-center justify-between">
-           <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter leading-none group-hover:text-primary transition-colors">
+           <h3 className="text-3xl font-black text-text-main italic uppercase tracking-tighter leading-none group-hover:text-primary transition-colors">
               {tournament.name}
            </h3>
            {isJoined && (
-             <div className="bg-[#d4e157]/20 border border-[#d4e157]/30 px-5 py-2 rounded-xl text-[#d4e157] text-xs font-black uppercase tracking-widest italic animate-in fade-in zoom-in duration-300">
+             <div className="bg-[#d4e157]/20 border border-[#d4e157]/30 px-5 py-2 rounded-xl text-text-main text-xs font-black uppercase tracking-widest italic animate-in fade-in zoom-in duration-300">
                 Joined
              </div>
            )}
         </div>
 
-        <div className="grid grid-cols-3 gap-8 py-4 border-y border-white/5">
+        <div className="grid grid-cols-3 gap-8 py-4 border-y border-border-main">
            <div className="space-y-1">
-              <div className="flex items-center text-sky-400 space-x-2">
+              <div className="flex items-center text-primary space-x-2">
                  <Trophy className="w-4 h-4" />
                  <span className="text-[10px] font-bold uppercase tracking-widest">Prize Pool</span>
               </div>
-              <p className="text-lg font-black text-white italic tracking-tighter uppercase leading-none mt-1">
+              <p className="text-lg font-black text-text-main italic tracking-tighter uppercase leading-none mt-1">
                 {tournament.prize_pool ? formatCurrency(tournament.prize_pool) : 'N/A'}
               </p>
            </div>
            <div className="space-y-1">
-              <div className="flex items-center text-sky-400 space-x-2">
-                 <div className="w-4 h-4 bg-sky-400/20 text-sky-400 rounded-full flex items-center justify-center text-[10px] font-black">$</div>
+              <div className="flex items-center text-primary space-x-2">
+                 <div className="w-4 h-4 bg-primary/20 text-primary rounded-full flex items-center justify-center text-[10px] font-black">$</div>
                  <span className="text-[10px] font-bold uppercase tracking-widest">Entry Fee</span>
               </div>
-              <p className="text-lg font-black text-white italic tracking-tighter uppercase leading-none mt-1">
+              <p className="text-lg font-black text-text-main italic tracking-tighter uppercase leading-none mt-1">
                 {tournament.entry_fee ? formatCurrency(tournament.entry_fee) : 'Free'}
               </p>
            </div>
            <div className="space-y-1">
-              <div className="flex items-center text-sky-400 space-x-2">
+              <div className="flex items-center text-primary space-x-2">
                  <Users className="w-4 h-4" />
                  <span className="text-[10px] font-bold uppercase tracking-widest">Contenders</span>
               </div>
-              <p className="text-lg font-black text-white italic tracking-tighter uppercase leading-none mt-1">
-                {String((tournament as any).registrations_count ?? 0)}/{tournament.max_players}
+              <p className="text-lg font-black text-text-main italic tracking-tighter uppercase leading-none mt-1">
+                {String(regCount)}/{tournament.max_players}
               </p>
            </div>
         </div>
 
         <div className="flex items-center justify-between pt-2">
-           <p className="text-[11px] font-black text-slate-600 uppercase tracking-[0.2em] italic">
-             {String((tournament as any).registrations_count ?? 0)} of {tournament.max_players} contenders joined
+           <p className="text-[11px] font-black text-text-muted uppercase tracking-[0.2em] italic">
+             {String(regCount)} of {tournament.max_players} contenders joined
            </p>
-           <div className="text-sky-400 text-xs font-black uppercase tracking-widest italic">
-             {(tournament.max_players || 0) - Number((tournament as any).registrations_count ?? 0)} available
+           <div className="text-primary text-xs font-black uppercase tracking-widest italic">
+             {(tournament.max_players || 0) - Number(regCount)} available
            </div>
         </div>
       </div>
@@ -201,8 +204,8 @@ function TournamentCard({ tournament, isJoined }: { tournament: Tournament; isJo
 function StatMini({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{label}</p>
-      <div className="flex items-center text-sm font-black text-white italic truncate">
+      <p className="text-[9px] font-black text-text-muted uppercase tracking-widest">{label}</p>
+      <div className="flex items-center text-sm font-black text-text-main italic truncate">
         <div className="w-4 flex justify-center mr-2 opacity-80">{icon}</div>
         {value}
       </div>

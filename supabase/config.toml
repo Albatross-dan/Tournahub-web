@@ -1,0 +1,8 @@
+# Supabase Edge Functions Configuration
+project_id = "kmxuibzhjyrmxvqtisrl"
+
+[functions.pesapal-ipn]
+verify_jwt = false
+
+[functions.pesapal-register-ipn]
+verify_jwt = false

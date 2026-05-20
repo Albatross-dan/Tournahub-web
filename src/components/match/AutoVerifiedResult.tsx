@@ -3,6 +3,7 @@ import { CheckCircle2, Trophy, ArrowRight, Layout, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
+import StorageImage from '../common/StorageImage';
 
 interface AutoVerifiedResultProps {
   finalScore1: number;
@@ -13,11 +14,6 @@ interface AutoVerifiedResultProps {
 }
 
 export function AutoVerifiedResult({ finalScore1, finalScore2, submissions = [], winner, matchId }: AutoVerifiedResultProps) {
-  const getSubUrl = (sub: any) => {
-    if (!sub?.screenshot_url) return null;
-    return supabase.storage.from('result-screenshots').getPublicUrl(sub.screenshot_url).data.publicUrl;
-  };
-
   return (
     <div className="bg-slate-900 border border-emerald-500/30 rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500">
       <div className="bg-emerald-500 p-8 flex flex-col items-center justify-center text-center space-y-3">
@@ -52,10 +48,11 @@ export function AutoVerifiedResult({ finalScore1, finalScore2, submissions = [],
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Log #{idx + 1}</span>
                 <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase tracking-widest rounded-full border border-emerald-500/20">Matching</span>
               </div>
-              <img 
-                src={getSubUrl(sub) || undefined} 
+              <StorageImage 
+                bucket="result-screenshots" 
+                path={sub.screenshot_url} 
                 alt={`Proof ${idx + 1}`} 
-                className="w-full aspect-video object-cover rounded-xl border border-slate-800 hover:scale-[1.02] transition-transform duration-300 cursor-zoom-in" 
+                className="w-full aspect-video rounded-xl border border-slate-800 hover:scale-[1.02] transition-transform duration-300 cursor-zoom-in" 
               />
             </div>
           ))}

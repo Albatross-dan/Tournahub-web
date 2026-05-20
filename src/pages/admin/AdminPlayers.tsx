@@ -22,7 +22,7 @@ export default function AdminPlayers() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('*, wallets(balance)')
+        .select('*, wallets:v_wallets_admin(balance)')
         .order('created_at', { ascending: false });
       
       if (error) throw error;

@@ -7,6 +7,7 @@ import { MessageSquare, ChevronRight, User } from 'lucide-react';
 import { matchService } from '../services/matchService';
 import LoadingState from '../components/ui/LoadingState';
 import { formatDistanceToNow } from 'date-fns';
+import { getPublicIdentity } from '../lib/utils';
 
 export default function Chat() {
   const { user } = useAuth();
@@ -74,7 +75,7 @@ export default function Chat() {
                 ? (typeof match.player2 === 'object' ? match.player2 : { id: p2Id }) 
                 : (typeof match.player1 === 'object' ? match.player1 : { id: p1Id });
               
-              const opponentName = (opponent as any)?.username || 'Opponent';
+              const opponentName = getPublicIdentity(opponent);
               const lastMessage = conv.lastMessage;
               const unreadCount = conv.unreadCount;
 

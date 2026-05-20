@@ -9,7 +9,7 @@ interface PlayerBadgeProps {
   className?: string;
 }
 
-const SUPABASE_URL = (import.meta as any).env.VITE_SUPABASE_URL || 'https://kmxuibzhjyrmxvqtisrl.supabase.co';
+const SUPABASE_URL = (import.meta as any).env.VITE_SUPABASE_URL || '';
 
 export function getBadgeUrl(badgeId: string | null | undefined): string | null {
   if (!badgeId) return null;

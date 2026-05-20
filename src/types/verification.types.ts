@@ -14,7 +14,6 @@ export type UiState =
 
 export interface ResultSubmission {
   id: string
-  submitted_by: string
   username: string
   avatar_url: string | null
   score1: number
@@ -35,7 +34,7 @@ export interface MatchVerificationState {
   approved_result_id: string | null
   final_score1: number | null
   final_score2: number | null
-  winner: string | null
+  winner_username: string | null
   locked: boolean
   submission_count: number
   submissions: ResultSubmission[]
@@ -50,10 +49,9 @@ export interface DisputedMatch {
   stage: string
   verification_status: VerificationStatus
   match_status: string
-  player1_id: string
-  player2_id: string
   player1_username: string
   player2_username: string
+  winner_username: string | null
   submissions: ResultSubmission[]
 }
 

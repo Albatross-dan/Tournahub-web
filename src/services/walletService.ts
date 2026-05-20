@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { ensureAuthenticated, supabase } from '../lib/supabase';
 import { 
   WalletSummary, WalletLimits, TransactionHistory, FinancialActivity, 
   WinnerHistory, PaymentProvider, PaymentRequestStatusResponse, 
@@ -12,6 +12,7 @@ export const walletService = {
    */
 
   async getWalletSummary(displayCurrency: SupportedCurrency = 'USD'): Promise<WalletSummary> {
+    await ensureAuthenticated();
     const { data, error } = await (supabase as any).rpc('get_wallet_summary', {
       p_display_currency: displayCurrency
     });
@@ -33,6 +34,7 @@ export const walletService = {
     type?: string | null;
     displayCurrency?: SupportedCurrency;
   }): Promise<TransactionHistory> {
+    await ensureAuthenticated();
     const { data, error } = await (supabase as any).rpc('get_transaction_history', {
       p_limit: params.limit || 20,
       p_offset: params.offset || 0,
@@ -83,6 +85,7 @@ export const walletService = {
     provider: string;
     idempotencyKey: string;
   }): Promise<RequestDepositResponse> {
+    await ensureAuthenticated();
     const { data, error } = await (supabase as any).rpc('request_deposit', {
       p_original_amount: params.amount,
       p_original_currency: params.currency,
@@ -106,6 +109,16 @@ export const walletService = {
       p_provider_name: params.provider,
       p_destination: params.destination,
       p_idempotency_key: params.idempotencyKey
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  async confirmPaymentRequest(requestId: string, providerResponse: any) {
+    await ensureAuthenticated();
+    const { data, error } = await (supabase as any).rpc('confirm_payment_request', {
+      p_request_id: requestId,
+      p_provider_response: providerResponse
     });
     if (error) throw error;
     return data;

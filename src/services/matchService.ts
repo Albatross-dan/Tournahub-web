@@ -1,69 +1,30 @@
-import { supabase } from '../lib/supabase';
+import { ensureAuthenticated, supabase } from '../lib/supabase';
 import { Match } from '../types/database';
 
 export const matchService = {
   async getByTournament(tournamentId: string) {
     try {
+      await ensureAuthenticated();
+      // Ensure we explicitly fetch group_name and stage for group-based tournaments
       const { data, error } = await (supabase as any)
         .from('matches')
         .select(`
           *,
-          tournaments(*) as tournament,
+          group_name,
+          stage,
+          tournaments:tournament_id(name, status, type),
           player1:profiles!matches_player1_fkey(id, username, avatar_url),
           player2:profiles!matches_player2_fkey(id, username, avatar_url)
         `)
         .eq('tournament_id', tournamentId)
+        .order('stage', { ascending: false }) // 'playoffs' vs 'main'
+        .order('group_name', { ascending: true, nullsFirst: false })
         .order('round', { ascending: true })
-        .order('bracket_slot', { ascending: true })
         .order('match_order', { ascending: true });
       
       if (error) {
-        const { data: simpleData, error: simpleError } = await (supabase as any)
-          .from('matches')
-          .select(`
-            *,
-            tournaments(*) as tournament,
-            player1:profiles!matches_player1_fkey(id, username, avatar_url),
-            player2:profiles!matches_player2_fkey(id, username, avatar_url)
-          `)
-          .eq('tournament_id', tournamentId)
-          .order('round', { ascending: true });
-        
-        if (simpleError) {
-          const { data: noProfilesData, error: noProfilesError } = await (supabase as any)
-            .from('matches')
-            .select('*, tournaments(*) as tournament')
-            .eq('tournament_id', tournamentId)
-            .order('round', { ascending: true });
-          
-          if (noProfilesError) throw noProfilesError;
-          
-          if (noProfilesData && (noProfilesData as any[]).length > 0) {
-            const playerIds = Array.from(new Set(
-              (noProfilesData as any[]).flatMap(m => [m.player1, m.player2]).filter(Boolean)
-            ));
-            
-            if (playerIds.length > 0) {
-              const { data: profileData } = await (supabase as any)
-                .from('profiles')
-                .select('id, username, avatar_url')
-                .in('id', playerIds);
-              
-              const profileMap = (profileData || []).reduce((acc: any, p: any) => {
-                acc[p.id] = p;
-                return acc;
-              }, {});
-
-              return (noProfilesData as any[]).map(m => ({
-                ...m,
-                player1: profileMap[m.player1] || m.player1,
-                player2: profileMap[m.player2] || m.player2
-              }));
-            }
-          }
-          return noProfilesData as any[];
-        }
-        return simpleData as any[];
+        console.error('[matchService] Error in getByTournament:', error);
+        return [];
       }
       return data as any[];
     } catch (err: any) {
@@ -74,64 +35,20 @@ export const matchService = {
 
   async getById(id: string) {
     try {
-      // 1. Try most descriptive join
+      await ensureAuthenticated();
       const { data, error } = await (supabase as any)
         .from('matches')
         .select(`
           *, 
-          tournaments(*) as tournament, 
+          tournaments:tournament_id(*), 
           player1:profiles!matches_player1_fkey(*), 
           player2:profiles!matches_player2_fkey(*)
         `)
         .eq('id', id)
         .maybeSingle();
       
-      if (!error && data) return data as any;
-
-      // 2. Try simpler joins if fallback 1 failed
-      const { data: simpleData, error: simpleError } = await (supabase as any)
-        .from('matches')
-        .select(`
-          *, 
-          tournaments(*) as tournament, 
-          player1:profiles(id, username, avatar_url), 
-          player2:profiles(id, username, avatar_url)
-        `)
-        .eq('id', id)
-        .maybeSingle();
-      
-      if (!simpleError && simpleData) return simpleData as any;
-
-      // 3. Absolute fallback: No joins for profiles, link manually
-      const { data: rawData, error: rawError } = await (supabase as any)
-        .from('matches')
-        .select('*, tournaments(*) as tournament')
-        .eq('id', id)
-        .maybeSingle();
-
-      if (rawError) throw rawError;
-      if (!rawData) return null;
-
-      const playerIds = [rawData.player1, rawData.player2].filter(Boolean);
-      if (playerIds.length > 0) {
-        const { data: profileData } = await (supabase as any)
-          .from('profiles')
-          .select('id, username, avatar_url')
-          .in('id', playerIds);
-        
-        const profileMap = (profileData || []).reduce((acc: any, p: any) => {
-          acc[p.id] = p;
-          return acc;
-        }, {});
-
-        return {
-          ...rawData,
-          player1: profileMap[rawData.player1] || { id: rawData.player1 },
-          player2: profileMap[rawData.player2] || { id: rawData.player2 }
-        };
-      }
-
-      return rawData;
+      if (error) throw error;
+      return data as any;
     } catch (err) {
       console.error('[matchService] Critical failure in getById:', err);
       throw err;
@@ -140,65 +57,22 @@ export const matchService = {
 
   async getUserMatches(userId: string) {
     try {
-      // 1. Try primary join with hinted foreign keys
+      // Ensure session is hydrated for RLS propagation
+      await supabase.auth.getSession();
+      
       const { data, error } = await (supabase as any)
         .from('matches')
         .select(`
           *, 
-          tournaments(*) as tournament, 
+          tournaments:tournament_id(*), 
           player1:profiles!matches_player1_fkey(id, username, avatar_url), 
           player2:profiles!matches_player2_fkey(id, username, avatar_url)
         `)
         .or(`player1.eq.${userId},player2.eq.${userId}`)
         .order('scheduled_at', { ascending: true, nullsFirst: false });
       
-      if (!error && data) return data as any[];
-
-      // 2. Try simpler join if hint fails
-      const { data: secondTry, error: secondError } = await (supabase as any)
-        .from('matches')
-        .select(`
-          *, 
-          tournaments(*) as tournament, 
-          player1:profiles(id, username, avatar_url), 
-          player2:profiles(id, username, avatar_url)
-        `)
-        .or(`player1.eq.${userId},player2.eq.${userId}`)
-        .order('scheduled_at', { ascending: true, nullsFirst: false });
-
-      if (!secondError && secondTry) return secondTry as any[];
-
-      // 3. Manual join (slow but robust)
-      const { data: rawMatches, error: rawError } = await (supabase as any)
-        .from('matches')
-        .select('*, tournaments(*) as tournament')
-        .or(`player1.eq.${userId},player2.eq.${userId}`)
-        .order('scheduled_at', { ascending: true, nullsFirst: false });
-      
-      if (rawError) throw rawError;
-      if (!rawMatches || rawMatches.length === 0) return [];
-
-      const playerIds = Array.from(new Set(
-        rawMatches.flatMap((m: any) => [m.player1, m.player2]).filter(Boolean)
-      ));
-
-      if (playerIds.length === 0) return rawMatches;
-
-      const { data: profiles } = await (supabase as any)
-        .from('profiles')
-        .select('id, username, avatar_url')
-        .in('id', playerIds);
-
-      const profileMap = (profiles || []).reduce((acc: any, p: any) => {
-        acc[p.id] = p;
-        return acc;
-      }, {});
-
-      return rawMatches.map((m: any) => ({
-        ...m,
-        player1: profileMap[m.player1] || { id: m.player1 },
-        player2: profileMap[m.player2] || { id: m.player2 }
-      }));
+      if (error) throw error;
+      return data as any[];
     } catch (err: any) {
       console.error('[matchService] Critical failure in getUserMatches:', err);
       return [];
@@ -207,8 +81,17 @@ export const matchService = {
 
   async getConversations(userId: string) {
     try {
-      console.log(`[matchService] Starting conversation fetch for user: ${userId}`);
-      // 1. Fetch conversations with match info
+      // Query conversation participants table first to respect RLS
+      const { data: participants, error: partError } = await (supabase as any)
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('user_id', userId);
+      
+      if (partError) throw partError;
+      if (!participants || participants.length === 0) return [];
+
+      const convIds = participants.map((p: any) => p.conversation_id);
+
       const { data: conversations, error } = await (supabase as any)
         .from('match_conversations')
         .select(`
@@ -221,34 +104,18 @@ export const matchService = {
             tournaments (name)
           )
         `)
+        .in('id', convIds)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('[matchService] Conversation fetch error:', error);
-        // Fallback for missing join or relationship
-        const { data: simpleData, error: simpleError } = await (supabase as any)
-          .from('match_conversations')
-          .select('*, matches:match_id(*)')
-          .order('created_at', { ascending: false });
-        
-        if (simpleError) throw simpleError;
-        return simpleData || [];
-      }
+      if (error) throw error;
 
-      if (!conversations || conversations.length === 0) {
-        console.warn('[matchService] Query returned zero conversations for user. Checking match activity...');
-        return [];
-      }
-
-      console.log(`[matchService] Processing ${conversations.length} conversations...`);
-
-      // 2. Fetch last message and unread count for each
+      // 2. Fetch last message and unread count for each using v_messages_with_sender (Security Invoker)
       const conversationsWithDetails = await Promise.all(
-        conversations.map(async (conv: any) => {
-          // Last message
+        (conversations || []).map(async (conv: any) => {
+          // Last message from view
           const { data: lastMessage } = await (supabase as any)
-            .from('messages')
-            .select('content, created_at, sender_id')
+            .from('v_messages_with_sender')
+            .select('content, created_at, sender_id, sender_username')
             .eq('conversation_id', conv.id)
             .order('created_at', { ascending: false })
             .limit(1)
@@ -270,7 +137,6 @@ export const matchService = {
         })
       );
 
-      console.log('[matchService] Conversation list prepared success');
       return conversationsWithDetails;
     } catch (err) {
       console.error('[matchService] Fatal in getConversations:', err);
@@ -279,6 +145,7 @@ export const matchService = {
   },
 
   async submitResult(matchId: string, score1: number, score2: number, screenshotUrl: string | null) {
+    await ensureAuthenticated();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Authentication required');
 
@@ -346,19 +213,19 @@ export const matchService = {
   },
 
   async getExistingSubmission(matchId: string, userId: string) {
-    const { data, error } = await supabase
-      .from('match_results')
+    const { data: existing, error: existError } = await (supabase as any)
+      .from('v_match_results')
       .select('*')
       .eq('match_id', matchId)
       .eq('submitted_by', userId)
       .not('status', 'in', '("rejected","disputed")')
       .maybeSingle();
 
-    if (error) {
-      console.error('[matchService] Error fetching existing submission:', error);
+    if (existError) {
+      console.error('[matchService] Error fetching existing submission:', existError);
       return null;
     }
-    return data;
+    return existing;
   },
 
   async getConversationId(matchId: string) {
@@ -544,59 +411,21 @@ export const matchService = {
   async loadMessages(conversationId: string) {
     try {
       const { data, error } = await (supabase as any)
-        .from('messages')
-        .select('*, sender:profiles!messages_sender_id_fkey(id, username, avatar_url)')
+        .from('v_messages_with_sender')
+        .select('*')
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true });
       
-      if (error) {
-        console.warn('[matchService] loadMessages join failed, trying simpler query:', error.message);
-        
-        // Try fallback: join without specific hint
-        const { data: secondTry, error: secondError } = await (supabase as any)
-          .from('messages')
-          .select('*, profiles(id, username, avatar_url)')
-          .eq('conversation_id', conversationId)
-          .order('created_at', { ascending: true });
-          
-        if (secondError) {
-          console.warn('[matchService] loadMessages second join failed, fetching raw and linking:', secondError.message);
-          
-          // Absolute fallback: fetch messages without join and manual link
-          const { data: rawMessages, error: rawError } = await (supabase as any)
-            .from('messages')
-            .select('*')
-            .eq('conversation_id', conversationId)
-            .order('created_at', { ascending: true });
-            
-          if (rawError) throw rawError;
-          
-          if (!rawMessages || rawMessages.length === 0) return [];
-          
-          const senderIds = Array.from(new Set(rawMessages.map((m: any) => m.sender_id)));
-          const { data: profiles } = await (supabase as any)
-            .from('profiles')
-            .select('id, username, avatar_url')
-            .in('id', senderIds);
-            
-          const profileMap = (profiles || []).reduce((acc: any, p: any) => {
-            acc[p.id] = p;
-            return acc;
-          }, {});
-          
-          return rawMessages.map((m: any) => ({
-            ...m,
-            sender: profileMap[m.sender_id] || { id: m.sender_id, username: 'User' }
-          }));
-        }
-        
-        return (secondTry as any[]).map(m => ({
-          ...m,
-          sender: m.profiles || { id: m.sender_id, username: 'User' }
-        }));
-      }
+      if (error) throw error;
       
-      return data as any[];
+      return (data || []).map((m: any) => ({
+        ...m,
+        sender: {
+          id: m.sender_id,
+          username: m.sender_username,
+          avatar_url: m.sender_avatar_url
+        }
+      }));
     } catch (err) {
       console.error('[matchService] Critical failure in loadMessages:', err);
       return [];
@@ -605,6 +434,7 @@ export const matchService = {
 
   async markAsRead(conversationId: string, userId: string) {
     try {
+      await ensureAuthenticated();
       // Get all messages from this conversation not sent by user and not yet read by user
       const { data: unreadMessages } = await (supabase as any)
         .from('messages')
@@ -639,6 +469,7 @@ export const matchService = {
       console.log('[matchService] PIPELINE START: Preparing message insert', { conversation_id, content, message_type });
       
       // Requirement 1: Retrieve authenticated user using getUser()
+      await ensureAuthenticated();
       const { data: authData, error: authError } = await supabase.auth.getUser();
       const user = authData?.user;
       
@@ -782,12 +613,8 @@ export const matchService = {
 
   async getMatchResult(matchId: string) {
     const { data, error } = await (supabase as any)
-      .from('match_results')
-      .select(`
-        id, player1_score, player2_score, screenshot_url,
-        status, admin_notes, submission_attempt, created_at,
-        submitter:profiles!submitted_by(id, username, avatar_url)
-      `)
+      .from('v_match_results')
+      .select('*')
       .eq('match_id', matchId)
       .eq('status', 'submitted')
       .maybeSingle();
@@ -796,22 +623,59 @@ export const matchService = {
     return data;
   },
 
-  async generateFixtures(tournamentId: string, _type: string) {
-    const { data, error } = await (supabase as any).rpc('generate_knockout_fixtures', {
+  async generateFixtures(tournamentId: string, type: string) {
+    let rpcName = 'generate_fixtures';
+    
+    // Exact mapping based on backend PDF capabilities
+    if (type === 'knockout') {
+      rpcName = 'generate_knockout_fixtures';
+    } else if (type === 'swiss') {
+      rpcName = 'fn_generate_swiss_round';
+    } else if (type === 'group_stage' || type === 'hybrid') {
+      // fn_generate_group_stage is the robust entry point for group + playoff setup
+      rpcName = 'fn_generate_group_stage';
+    } else if (type === 'league') {
+      rpcName = 'generate_group_fixtures';
+    }
+
+    const { data, error } = await (supabase as any).rpc(rpcName, {
       p_tournament_id: tournamentId
-    } as any);
+    });
     
     if (error) {
-      console.error('[matchService] generateFixtures RPC error:', error);
+      console.error(`[matchService] ${rpcName} RPC error:`, error);
+      
+      // Fallback for standard generate_fixtures if specialized fails (safety)
+      if (rpcName !== 'generate_fixtures') {
+        console.warn(`[matchService] Falling back to generic generate_fixtures for ${type}`);
+        const retry = await (supabase as any).rpc('generate_fixtures', {
+          p_tournament_id: tournamentId
+        });
+        if (retry.error) throw retry.error;
+        return retry.data;
+      }
+      
+      throw error;
+    }
+    return data;
+  },
+
+  async qualifyAndGeneratePlayoffs(tournamentId: string) {
+    await ensureAuthenticated();
+    const { data, error } = await (supabase as any).rpc('fn_qualify_and_generate_playoffs', {
+      p_tournament_id: tournamentId
+    });
+    if (error) {
+      console.error('[matchService] qualifyAndGeneratePlayoffs RPC error:', error);
       throw error;
     }
     return data;
   },
 
   async advanceBracket(tournamentId: string) {
-    const { data, error } = await (supabase as any).rpc('advance_bracket', {
+    const { data, error } = await (supabase as any).rpc('generate_next_round', {
       p_tournament_id: tournamentId
-    } as any);
+    });
     if (error) throw error;
     return data;
   },
@@ -842,6 +706,8 @@ export const matchService = {
       .from('v_fixtures_with_badges' as any)
       .select('*')
       .eq('tournament_id', tournamentId)
+      .order('stage', { ascending: true })
+      .order('group_name', { ascending: true, nullsFirst: false })
       .order('round', { ascending: true });
     
     if (error) throw error;

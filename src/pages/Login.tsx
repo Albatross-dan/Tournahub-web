@@ -73,7 +73,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden transition-colors duration-500">
       {/* Background Decorative Elements */}
       <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,209,255,0.05)_0%,transparent_100%)] pointer-events-none" />
       <div className="absolute -top-[20%] -left-[10%] w-[60%] h-[60%] bg-primary/5 blur-[120px] rounded-full pointer-events-none" />
@@ -92,20 +92,20 @@ export default function Login() {
             </div>
           </div>
           <div className="space-y-1">
-            <h1 className="text-4xl font-black italic text-white tracking-tight uppercase">
+            <h1 className="text-4xl font-black italic text-text-main tracking-tight uppercase">
               {isSignUp ? 'Sign Up' : 'Sign In'}
             </h1>
-            <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px]">
+            <p className="text-text-muted font-bold uppercase tracking-[0.2em] text-[10px]">
               {isSignUp ? 'Create your professional account' : 'Welcome back to the Arena'}
             </p>
           </div>
         </div>
 
-        <div className="bg-[#050505]/80 backdrop-blur-2xl border border-white/5 rounded-[2.5rem] p-8 shadow-2xl shadow-black">
+        <div className="bg-surface/80 backdrop-blur-2xl border border-border-main rounded-[2.5rem] p-8 shadow-2xl shadow-black/20">
           <form onSubmit={handleAuth} className="space-y-6">
             {isSignUp && (
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] ml-1">Username</label>
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em] ml-1">Username</label>
                 <div className="relative group">
                   <div className="absolute inset-0 bg-primary/5 rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
@@ -114,7 +114,7 @@ export default function Login() {
                   <input
                     type="text"
                     required
-                    className="w-full bg-black/40 border border-white/10 rounded-2xl pl-12 pr-4 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-white font-medium relative z-10"
+                    className="w-full bg-background/40 border border-border-main rounded-2xl pl-12 pr-4 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-text-main font-medium relative z-10"
                     placeholder="Enter your username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value.trim())}
@@ -124,14 +124,14 @@ export default function Login() {
             )}
 
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] ml-1">Email Address</label>
+              <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em] ml-1">Email Address</label>
               <div className="relative group">
                 <div className="absolute inset-0 bg-primary/5 rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within:text-primary transition-colors pointer-events-none z-20" />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-text-muted group-focus-within:text-primary transition-colors pointer-events-none z-20" />
                 <input
                   type="email"
                   required
-                  className="w-full bg-black/40 border border-white/10 rounded-2xl pl-12 pr-4 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-white font-medium relative z-10"
+                  className="w-full bg-background/40 border border-border-main rounded-2xl pl-12 pr-4 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-text-main font-medium relative z-10"
                   placeholder="Enter your email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -141,22 +141,22 @@ export default function Login() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between ml-1">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Password</label>
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em]">Password</label>
                 <button
                   type="button"
                   onClick={() => navigate('/forgot-password')}
-                  className="text-[9px] uppercase font-black tracking-widest text-slate-600 hover:text-primary transition-colors relative z-20"
+                  className="text-[9px] uppercase font-black tracking-widest text-text-muted hover:text-primary transition-colors relative z-20"
                 >
                   Forgot Password?
                 </button>
               </div>
               <div className="relative group">
                 <div className="absolute inset-0 bg-primary/5 rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within:text-primary transition-colors pointer-events-none z-20" />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-text-muted group-focus-within:text-primary transition-colors pointer-events-none z-20" />
                 <input
                   type="password"
                   required
-                  className="w-full bg-black/40 border border-white/10 rounded-2xl pl-12 pr-4 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-white font-medium relative z-10"
+                  className="w-full bg-background/40 border border-border-main rounded-2xl pl-12 pr-4 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-text-main font-medium relative z-10"
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -174,15 +174,15 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full relative group overflow-hidden"
+              className="w-full relative group overflow-hidden rounded-2xl"
             >
               <div className="absolute inset-0 bg-primary transition-transform group-hover:scale-105" />
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
               <div className="relative h-16 flex items-center justify-center space-x-3">
                 {loading ? (
-                  <Loader2 className="w-6 h-6 animate-spin text-black" />
+                  <Loader2 className="w-6 h-6 animate-spin text-slate-900" />
                 ) : (
-                  <span className="text-black text-xl font-black italic uppercase tracking-tighter">
+                  <span className="text-slate-900 text-xl font-black italic uppercase tracking-tighter">
                     {isSignUp ? 'Sign Up' : 'Sign In'}
                   </span>
                 )}
@@ -190,7 +190,7 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="mt-8 pt-8 border-t border-white/5 space-y-6">
+          <div className="mt-8 pt-8 border-t border-border-main space-y-6">
             <button 
               type="button"
               onClick={async () => {
@@ -198,7 +198,7 @@ export default function Login() {
                   provider: 'google',
                   options: {
                     redirectTo: window.location.origin,
-                    skipBrowserRedirect: true
+                    skipBrowserRedirect: false
                   }
                 });
                 
@@ -206,12 +206,8 @@ export default function Login() {
                   setError(error.message);
                   return;
                 }
-
-                if (data?.url) {
-                  window.open(data.url, '_blank', 'width=600,height=700');
-                }
               }}
-              className="w-full flex items-center justify-center space-x-4 bg-white/5 hover:bg-white/10 border border-white/5 py-4 rounded-2xl transition-all"
+              className="w-full flex items-center justify-center space-x-4 bg-surface hover:bg-surface-hover border border-border-main py-4 rounded-2xl transition-all"
             >
               <div className="bg-white p-1 rounded-md">
                 <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -221,13 +217,13 @@ export default function Login() {
                   <path fill="#FBBC05" d="M5.266 14.235L1.24 17.385C.454 15.795 0 13.978 0 12c0-1.978.454-3.795 1.24-5.385l4.026 3.115C5.084 10.556 5 11.265 5 12c0 .735.084 1.444.266 2.235z"/>
                 </svg>
               </div>
-              <span className="text-xs font-black text-white uppercase tracking-widest italic">Continue with Google</span>
+              <span className="text-xs font-black text-text-main uppercase tracking-widest italic">Continue with Google</span>
             </button>
 
             <div className="text-center">
               <button
                 onClick={() => setIsSignUp(!isSignUp)}
-                className="text-[11px] font-black uppercase tracking-widest text-slate-500 hover:text-primary transition-all underline underline-offset-8 decoration-white/5 hover:decoration-primary/30"
+                className="text-[11px] font-black uppercase tracking-widest text-text-muted hover:text-primary transition-all underline underline-offset-8 decoration-border-main hover:decoration-primary/30"
               >
                 {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
               </button>
@@ -236,9 +232,9 @@ export default function Login() {
         </div>
         
         <div className="mt-8 text-center flex items-center justify-center space-x-3 opacity-30 group cursor-help hover:opacity-100 transition-opacity">
-          <div className="h-px w-8 bg-slate-800" />
-          <span className="text-[9px] font-black uppercase tracking-[0.5em] text-slate-600">Encrypted Uplink Established</span>
-          <div className="h-px w-8 bg-slate-800" />
+          <div className="h-px w-8 bg-border-main" />
+          <span className="text-[9px] font-black uppercase tracking-[0.5em] text-text-muted">Encrypted Uplink Established</span>
+          <div className="h-px w-8 bg-border-main" />
         </div>
       </div>
     </div>

@@ -6,7 +6,7 @@ export interface MatchVerificationState {
   approved_result_id: string | null;
   final_score1: number | null;
   final_score2: number | null;
-  winner: string | null;
+  winner_username: string | null;
   locked: boolean;
   submission_count: number;
   ui_state: 'awaiting_submissions' | 'waiting_for_opponent' | 'auto_verified' | 'under_admin_review' | 'admin_verified';
@@ -39,5 +39,6 @@ export interface DisputedMatch {
   player2_id: string;
   player1_username: string;
   player2_username: string;
+  winner_username: string | null;
   submissions: ResultSubmission[];
 }

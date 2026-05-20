@@ -1,10 +1,16 @@
-import { supabase } from '../lib/supabase';
+import { ensureAuthenticated, supabase } from '../lib/supabase';
 import { Tournament } from '../types/database';
+import { getPublicIdentity } from '../lib/utils';
 
 export const tournamentService = {
   async getAll(status?: string | string[], limit?: number, columns: string = '*') {
     try {
-      let query = (supabase as any).from('tournaments').select(columns);
+      // Proactive session check to ensure client-side headers are populated
+      await ensureAuthenticated();
+
+      // Direct table query is safer under strict RLS
+      const targetTable = 'tournaments';
+      let query = (supabase as any).from(targetTable).select(columns);
       
       if (status && status !== 'all') {
         if (Array.isArray(status)) {
@@ -23,8 +29,15 @@ export const tournamentService = {
       const { data: tournaments, error } = await query;
       
       if (error) {
-        console.error('[tournamentService] Error fetching tournaments:', error);
-        return [];
+        console.warn('[tournamentService] Table query failed, falling back to view:', error);
+        // Fallback to view
+        const { data: viewData, error: viewError } = await (supabase as any)
+          .from('v_tournaments_with_creator')
+          .select(columns)
+          .order('created_at', { ascending: false });
+          
+        if (viewError) throw viewError;
+        return viewData || [];
       }
       
       if (!tournaments || (tournaments as any[]).length === 0) return [];
@@ -44,7 +57,7 @@ export const tournamentService = {
       return (tournaments as any[]).map(t => {
         const matchingRegs = (allRegs as any[])?.filter(r => r.tournament_id === t.id) || [];
         const count = matchingRegs.filter(r => 
-          ['registered', 'approved', 'checked_in', 'waitlisted'].includes(r.status || '')
+          ['registered', 'approved', 'checked_in', 'pending', 'confirmed', 'waitlisted'].includes(r.status || '')
         ).length;
         
         return {
@@ -70,13 +83,16 @@ export const tournamentService = {
         .single();
       
       if (error) {
-        const { data: simpleData, error: simpleError } = await (supabase as any)
-          .from('tournaments')
-          .select('*')
+        const { data: viewData, error: viewError } = await (supabase as any)
+          .from('v_tournaments_with_creator')
+          .select(`
+            *,
+            tournament_settings!left(*)
+          `)
           .eq('id', id)
           .single();
-        if (simpleError) throw simpleError;
-        return simpleData;
+        if (viewError) throw viewError;
+        return viewData;
       }
       return data;
     } catch (err) {
@@ -86,26 +102,39 @@ export const tournamentService = {
   },
 
   async create(tournament: any) {
+    await ensureAuthenticated();
     const { data, error } = await (supabase as any)
       .from('tournaments')
       .insert(tournament)
-      .select();
+      .select('id')
+      .single();
     
     if (error) {
       console.error('Supabase insert error details:', error);
+      // Log more context if it's a timeout
+      if (error.message?.includes('database timed out') || error.message?.includes('connection timeout')) {
+        console.error('[tournamentService] DATABASE TIMEOUT during create. This usually indicates complex RLS policies or slow triggers on the server.');
+      }
       throw error;
     }
-    return data ? data[0] : null;
+    return data;
   },
 
   async update(id: string, updates: Partial<Tournament>) {
+    await ensureAuthenticated();
     const { data, error } = await (supabase as any)
       .from('tournaments')
       .update(updates as any)
       .eq('id', id)
-      .select()
+      .select('id')
       .single();
-    if (error) throw error;
+    
+    if (error) {
+      if (error.message?.includes('database timed out') || error.message?.includes('connection timeout')) {
+        console.error('[tournamentService] DATABASE TIMEOUT during update.');
+      }
+      throw error;
+    }
     return data;
   },
 
@@ -136,12 +165,27 @@ export const tournamentService = {
   },
 
   async register(tournamentId: string, badgeId: string) {
+    await ensureAuthenticated();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) throw new Error('You must be signed in to register.');
 
     try {
       console.log(`[tournamentService] Attempting registration for tournament ${tournamentId} with badge ${badgeId}`);
       
+      // Ensure profile exists first (proactive sync)
+      const { data: ownProfile } = await (supabase as any).from('profiles').select('id, username').eq('id', user.id).maybeSingle();
+      if (!ownProfile) {
+        const metadataUsername = user.user_metadata?.username;
+        const baseUsername = user.email?.split('@')[0] || 'user';
+        const finalUsername = metadataUsername || `${baseUsername}_${user.id.slice(0, 4)}`;
+        
+        await (supabase as any).from('profiles').insert({
+          id: user.id,
+          username: finalUsername,
+          role: 'user'
+        });
+      }
+
       const { data, error } = await (supabase as any).rpc('register_for_tournament', { 
         p_tournament_id: tournamentId,
         p_user_id: user.id,
@@ -198,7 +242,7 @@ export const tournamentService = {
 
       if (error) {
         const { data: reg } = await (supabase as any)
-          .from('registrations')
+          .from('v_registrations_with_users')
           .select('*, tournament_badge_selections(badge_id)')
           .eq('tournament_id', tournamentId)
           .eq('user_id', targetUserId)
@@ -209,7 +253,6 @@ export const tournamentService = {
           const badgeId = Array.isArray(badgeSelections) ? badgeSelections[0]?.badge_id : badgeSelections?.badge_id;
           return {
             registered: true,
-            waitlisted: (reg as any).status === 'waitlisted',
             user_status: (reg as any).status,
             registration_id: (reg as any).id,
             has_badge: !!badgeId,
@@ -268,23 +311,32 @@ export const tournamentService = {
 
   async getRegistrations(tournamentId: string) {
     const { data, error } = await (supabase as any)
-      .from('registrations')
-      .select('*, profiles(*)')
+      .from('v_registrations_with_users')
+      .select('*')
       .eq('tournament_id', tournamentId)
-      .in('status', ['registered', 'approved', 'checked_in', 'waitlisted']);
+      .in('status', ['registered', 'approved', 'checked_in', 'pending', 'confirmed', 'waitlisted']);
       
     if (error) throw error;
     
     // Return only the most recent unique registration for each user
     const unique = (data || []).reduce((acc: any[], current: any) => {
       const userId = current.user_id;
-      const existing = acc.find(r => r.user_id === userId);
+      // Also consider using current.id as fallback if user_id is missing
+      const existing = acc.find(r => r.user_id === userId || (userId === null && r.id === current.id));
+      
+      // Flatten profile info (already joined in view)
+      const flattened = {
+        ...current,
+        // username and avatar_url already in v_registrations_with_users
+        username: current.username || 'User',
+      };
+
       if (!existing) {
-        acc.push(current);
+        acc.push(flattened);
       } else if (new Date(current.created_at) > new Date(existing.created_at)) {
         // Keep the newer one if somehow two exist
         const idx = acc.indexOf(existing);
-        acc[idx] = current;
+        acc[idx] = flattened;
       }
       return acc;
     }, []);
@@ -302,11 +354,11 @@ export const tournamentService = {
     const leaderboardRaw = Array.isArray(data) ? data : (data?.leaderboard || []);
     
     // Deduplicate leaderboard results just in case
-    const seenIds = new Set();
+    const seenUsernames = new Set();
     const leaderboard = leaderboardRaw.filter((p: any) => {
-      const id = p.user_id || p.id;
-      if (!id || seenIds.has(id)) return false;
-      seenIds.add(id);
+      const username = p.username;
+      if (!username || seenUsernames.has(username)) return false;
+      seenUsernames.add(username);
       return true;
     });
     
@@ -315,17 +367,36 @@ export const tournamentService = {
 
   async getRegisteredPlayers(tournamentId: string) {
     try {
+      // 1. Fetch from RPC for specialized data (badges etc)
       const { data, error } = await (supabase as any).rpc('get_tournament_registered_players', {
         p_tournament_id: tournamentId
       });
       
-      const players = data?.players || (Array.isArray(data) ? data : []);
+      const rpcPlayers = data?.players || (Array.isArray(data) ? data : []);
       
-      if (error || players.length === 0) {
-        console.warn('[tournamentService] RPC returned no players, falling back to manual fetch');
-        return this.getRegistrations(tournamentId);
-      }
-      return players;
+      // 2. Fetch all registrations manually to ensure we didn't miss anyone
+      const manualRegs = await this.getRegistrations(tournamentId);
+      
+      // 3. Merge them, preferring RPC data for duplicate entries
+      const merged = [...manualRegs];
+      rpcPlayers.forEach((rpcP: any) => {
+        const userId = rpcP.user_id || rpcP.id;
+        const idx = merged.findIndex(m => (m.user_id || m.id) === userId);
+        
+        // Ensure RPC data also has flattened fields
+        const flattenedRpc = {
+          ...rpcP,
+          username: getPublicIdentity(rpcP)
+        };
+
+        if (idx >= 0) {
+          merged[idx] = { ...merged[idx], ...flattenedRpc };
+        } else {
+          merged.push(flattenedRpc);
+        }
+      });
+      
+      return merged;
     } catch (err) {
       console.error('[tournamentService] getRegisteredPlayers failed:', err);
       return this.getRegistrations(tournamentId);

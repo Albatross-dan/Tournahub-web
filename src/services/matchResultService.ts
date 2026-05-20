@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { ensureAuthenticated, supabase } from '../lib/supabase';
 import { 
   SubmitResultPayload, 
   MatchVerificationState, 
@@ -17,6 +17,7 @@ export const matchResultService = {
     message?: string;
     error?: string;
   }> {
+    await ensureAuthenticated();
     const { data, error } = await (supabase.rpc as any)('submit_match_result', {
       p_match_id: payload.matchId,
       p_submitter_id: payload.submitterId,
@@ -57,6 +58,7 @@ export const matchResultService = {
     message?: string;
     error?: string;
   }> {
+    await ensureAuthenticated();
     const rpcParams: any = {
       p_admin_id: payload.adminId,
       p_match_id: payload.matchId,
@@ -83,6 +85,7 @@ export const matchResultService = {
     action: 'approve' | 'reject';
     adminNotes?: string;
   }): Promise<{ success: boolean; error?: string }> {
+    await ensureAuthenticated();
     const { data, error } = await (supabase.rpc as any)('verify_match_result', {
       p_verifier_id: params.verifierId,
       p_result_id: params.resultId,

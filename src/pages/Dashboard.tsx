@@ -6,7 +6,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { formatCurrency, cn } from '../lib/utils';
+import { formatCurrency, cn, getPublicIdentity } from '../lib/utils';
 import { Tournament, Match, Wallet as WalletType } from '../types/database';
 import { Link } from 'react-router-dom';
 import Shell from '../components/layout/Shell';
@@ -22,6 +22,7 @@ import { useRealtimeTournaments } from '../hooks/useRealtimeTournaments';
 import VerificationStatusBadge from '../components/match/VerificationStatusBadge';
 import VerificationStatusBanner from '../components/match/VerificationStatusBanner';
 import { VerificationStatus } from '../types/verification.types';
+import RecentChampions from '../components/home/RecentChampions';
 
 export default function Dashboard() {
   const { user, profile } = useAuth();
@@ -133,8 +134,8 @@ export default function Dashboard() {
         {/* Tournament Auto-Slider (Available Tournaments) */}
         <div className="space-y-4">
           <div>
-            <h2 className="text-xl font-black text-white uppercase italic tracking-tighter">Live Tournaments</h2>
-            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest leading-none mt-1">Tap a card to open the details view.</p>
+            <h2 className="text-xl font-black text-text-main uppercase italic tracking-tighter">Live Tournaments</h2>
+            <p className="text-xs text-text-muted font-bold uppercase tracking-widest leading-none mt-1">Tap a card to open the details view.</p>
           </div>
           
           <div className="relative overflow-hidden py-4 -mx-4 sm:mx-0">
@@ -142,7 +143,7 @@ export default function Dashboard() {
               {activeLoading ? (
                 <div className="w-full flex gap-6 overflow-hidden">
                   {[1, 2, 3].map(i => (
-                    <div key={i} className="w-[300px] sm:w-[500px] aspect-[16/9] sm:aspect-[2.5/1] rounded-3xl bg-slate-800/50 animate-pulse shrink-0" />
+                    <div key={i} className="w-[300px] sm:w-[500px] aspect-[16/9] sm:aspect-[2.5/1] rounded-3xl bg-surface border border-border-main animate-pulse shrink-0" />
                   ))}
                 </div>
               ) : (
@@ -163,13 +164,13 @@ export default function Dashboard() {
                     </div>
                   ))}
                   {activeTournaments.length === 0 && (
-                    <div className="w-[calc(100vw-2rem)] sm:w-full card p-16 text-center space-y-4 rounded-3xl border-2 border-dashed border-slate-800 bg-slate-900/20">
-                      <div className="w-16 h-16 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto">
-                        <Trophy className="w-8 h-8 text-slate-600" />
+                    <div className="w-[calc(100vw-2rem)] sm:w-full card p-16 text-center space-y-4 rounded-3xl border-2 border-dashed border-border-main bg-surface/20">
+                      <div className="w-16 h-16 bg-surface border border-border-main rounded-full flex items-center justify-center mx-auto">
+                        <Trophy className="w-8 h-8 text-text-muted" />
                       </div>
                       <div>
-                        <p className="text-xl font-black text-white italic uppercase tracking-tighter">No active arena battles</p>
-                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Start by creating a tournament in the admin panel.</p>
+                        <p className="text-xl font-black text-text-main italic uppercase tracking-tighter">No active arena battles</p>
+                        <p className="text-xs text-text-muted font-bold uppercase tracking-widest mt-1">Start by creating a tournament in the admin panel.</p>
                       </div>
                       <Link to="/admin/tournaments" className="btn-secondary inline-block px-10 py-3 text-xs uppercase italic font-black">
                         Create Tournament
@@ -183,51 +184,11 @@ export default function Dashboard() {
         </div>
 
         {/* Prize Winners Slider (Hall of Fame) */}
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-xl font-black text-white uppercase italic tracking-tighter">Recent Winners</h2>
-            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest leading-none mt-1">Latest podium finishes and prize payouts.</p>
-          </div>
-          
-          <div className="relative py-8">
-            {completedTournaments.length > 0 ? (
-              <div className="flex px-4 sm:px-0">
-                <motion.div 
-                  animate={{ 
-                    x: ["0%", "-33.33%"]
-                  }}
-                  transition={{ 
-                    duration: 25, 
-                    repeat: Infinity, 
-                    ease: "linear" 
-                  }}
-                  className="flex gap-4 w-max"
-                >
-                  {winnersSliderItems.map((tournament, idx) => (
-                    <div key={`${tournament.id}-${idx}`} className="w-[280px] shrink-0">
-                       <WinnerCard tournament={tournament} />
-                    </div>
-                  ))}
-                </motion.div>
-              </div>
-            ) : (
-              <div className="p-10 flex flex-col items-center justify-center text-center space-y-6">
-                <div className="w-20 h-20 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center shadow-inner relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent" />
-                  <Trophy className="w-10 h-10 text-slate-700 relative z-10" />
-                </div>
-                <div className="space-y-3">
-                  <p className="text-2xl font-black text-white italic uppercase tracking-tighter">Recent winners will appear here</p>
-                  <p className="text-sm text-slate-400 font-medium">Prize distributions will populate this section automatically.</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <RecentChampions />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-4">
           {/* Main Feed: Scheduled Matches */}
-          <motion.div variants={item} className="lg:col-span-2 space-y-6">
+            <motion.div variants={item} className="lg:col-span-2 space-y-6">
             <SectionHeader title="Next Scheduled Battles" link="/matches" />
             <div className="space-y-4">
               <AnimatePresence mode="popLayout">
@@ -238,7 +199,7 @@ export default function Dashboard() {
                     </motion.div>
                   ))
                 ) : (
-                  <div className="card p-12 text-center text-slate-500 italic rounded-3xl border-dashed border-2 border-slate-800">
+                  <div className="card p-12 text-center text-text-muted italic rounded-3xl border-dashed border-2 border-border-main">
                     No matches found. Go join a tournament!
                   </div>
                 )}
@@ -248,40 +209,40 @@ export default function Dashboard() {
 
           {/* Sidebar Feed */}
           <div className="space-y-8">
-            <motion.div variants={item} className="card p-6 bg-gradient-to-br from-primary/10 to-transparent border-primary/20 rounded-3xl space-y-4">
+            <motion.div variants={item} className="card p-6 bg-gradient-to-br from-primary/10 to-transparent border-primary/20 rounded-3xl space-y-4 shadow-sm">
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
                   <Gamepad2 className="text-primary w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-black text-white uppercase italic tracking-tighter">Your stats</h3>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-none">Season Performance</p>
+                  <h3 className="font-black text-text-main uppercase italic tracking-tighter">Your stats</h3>
+                  <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest leading-none">Season Performance</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-900/50 p-3 rounded-2xl border border-slate-800">
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Matches</p>
-                  <p className="text-xl font-black text-white italic tracking-tighter">{userStats.totalMatches}</p>
+                <div className="bg-surface p-3 rounded-2xl border border-border-main">
+                  <p className="text-[9px] font-black text-text-muted uppercase tracking-widest mb-1">Matches</p>
+                  <p className="text-xl font-black text-text-main italic tracking-tighter">{userStats.totalMatches}</p>
                 </div>
-                <div className="bg-slate-900/50 p-3 rounded-2xl border border-slate-800">
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Win Rate</p>
+                <div className="bg-surface p-3 rounded-2xl border border-border-main">
+                  <p className="text-[9px] font-black text-text-muted uppercase tracking-widest mb-1">Win Rate</p>
                   <p className="text-xl font-black text-emerald-500 italic tracking-tighter">{userStats.winRate}%</p>
                 </div>
               </div>
             </motion.div>
 
-            <motion.div variants={item} className="card p-6 bg-slate-900/50 border-slate-800 rounded-3xl">
-              <h3 className="text-xs font-black text-white uppercase italic tracking-widest mb-4">Quick Links</h3>
+            <motion.div variants={item} className="card p-6 bg-surface border-border-main rounded-3xl shadow-sm">
+              <h3 className="text-xs font-black text-text-main uppercase italic tracking-widest mb-4">Quick Links</h3>
               <div className="space-y-2">
-                <Link to="/tournaments" className="flex items-center justify-between p-2 hover:bg-slate-800 rounded-lg transition-colors text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <Link to="/tournaments" className="flex items-center justify-between p-2 hover:bg-surface-hover rounded-lg transition-colors text-[10px] font-bold text-text-muted uppercase tracking-wider">
                   <span>Browse Arena</span>
                   <ArrowUpRight className="w-3 h-3" />
                 </Link>
-                <Link to="/matches" className="flex items-center justify-between p-2 hover:bg-slate-800 rounded-lg transition-colors text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <Link to="/matches" className="flex items-center justify-between p-2 hover:bg-surface-hover rounded-lg transition-colors text-[10px] font-bold text-text-muted uppercase tracking-wider">
                   <span>Your matches</span>
                   <ArrowUpRight className="w-3 h-3" />
                 </Link>
-                <Link to="/wallet" className="flex items-center justify-between p-2 hover:bg-slate-800 rounded-lg transition-colors text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <Link to="/wallet" className="flex items-center justify-between p-2 hover:bg-surface-hover rounded-lg transition-colors text-[10px] font-bold text-text-muted uppercase tracking-wider">
                   <span>Financials</span>
                   <ArrowUpRight className="w-3 h-3" />
                 </Link>
@@ -298,8 +259,12 @@ export default function Dashboard() {
 function TournamentHeroCard({ tournament }: { tournament: Tournament }) {
   const isOngoing = tournament.status === TournamentStatus.ONGOING;
 
+  const regCount = typeof (tournament as any).registrations_count === 'object' 
+    ? (tournament as any).registrations_count?.count ?? 0 
+    : (tournament as any).registrations_count ?? 0;
+
   return (
-    <Link to={`/tournaments/${tournament.id}`} className="block group relative aspect-[1.4/1] rounded-[2.5rem] overflow-hidden border border-slate-800/50 hover:border-primary/50 transition-all duration-500 shadow-2xl">
+    <Link to={`/tournaments/${tournament.id}`} className="block group relative aspect-[1.4/1] rounded-[2.5rem] overflow-hidden border border-border-main hover:border-primary/50 transition-all duration-500 shadow-2xl">
       <img src={tournament.banner_url || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=800'} alt="" className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
       <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-black/40 to-transparent" />
       
@@ -327,21 +292,21 @@ function TournamentHeroCard({ tournament }: { tournament: Tournament }) {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-slate-900/60 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/10 flex flex-col justify-center relative overflow-hidden">
+          <div className="bg-black/60 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/10 flex flex-col justify-center relative overflow-hidden">
             <div className="flex items-center justify-between relative z-10">
               <div>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Contenders</p>
-                <p className="text-lg font-black text-white italic">{String((tournament as any).registrations_count ?? 0)}/{tournament.max_players}</p>
+                <p className="text-lg font-black text-white italic">{String(regCount)}/{tournament.max_players}</p>
               </div>
               <Users className="w-5 h-5 text-slate-500" />
             </div>
             <div className="absolute bottom-0 left-0 h-1 bg-primary/20 w-full" />
             <div 
               className="absolute bottom-0 left-0 h-1 bg-primary transition-all duration-1000" 
-              style={{ width: `${Math.min(100, (((tournament as any).registrations_count || 0) / (tournament.max_players || 1)) * 100)}%` }} 
+              style={{ width: `${Math.min(100, (Number(regCount) / (tournament.max_players || 1)) * 100)}%` }} 
             />
           </div>
-          <div className="bg-slate-900/60 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/10 flex flex-col justify-center">
+          <div className="bg-black/60 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/10 flex flex-col justify-center">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Start time</p>
@@ -360,7 +325,7 @@ function TournamentHeroCard({ tournament }: { tournament: Tournament }) {
 
 function WinnerCard({ tournament }: { tournament: any }) {
   return (
-    <Link to={`/tournaments/${tournament.id}`} className="card p-5 hover:border-amber-500/50 transition-all group rounded-3xl relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border-amber-500/10 block h-full">
+    <Link to={`/tournaments/${tournament.id}`} className="card p-5 hover:border-amber-500/50 transition-all group rounded-3xl relative overflow-hidden bg-gradient-to-br from-surface to-background border-amber-500/10 block h-full">
       <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-20 transition-opacity rotate-12">
         <Trophy className="w-16 h-16 text-amber-500" />
       </div>
@@ -372,27 +337,27 @@ function WinnerCard({ tournament }: { tournament: any }) {
           <div className="flex items-center space-x-2">
             <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded-lg">HALL OF FAME</span>
           </div>
-          <h4 className="text-base font-black text-white italic uppercase tracking-tighter truncate mt-2 group-hover:text-amber-500 transition-colors leading-none tracking-tight">
+          <h4 className="text-base font-black text-text-main italic uppercase tracking-tighter truncate mt-2 group-hover:text-amber-500 transition-colors leading-none tracking-tight">
             {tournament.name}
           </h4>
-          <div className="flex items-center mt-3 bg-slate-950/50 border border-slate-800/50 rounded-xl px-3 py-1.5 w-fit">
+          <div className="flex items-center mt-3 bg-background/50 border border-border-main rounded-xl px-3 py-1.5 w-fit">
              <div className="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center mr-2">
                 <Users className="w-3 h-3 text-amber-500" />
              </div>
-             <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">
+             <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">
                {tournament.type} Victory
              </p>
           </div>
         </div>
       </div>
-      <div className="mt-4 pt-4 border-t border-slate-800/50 flex items-center justify-between">
+      <div className="mt-4 pt-4 border-t border-border-main flex items-center justify-between">
         <div className="flex flex-col">
-          <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-0.5">Arena Prize Pool</span>
+          <span className="text-[8px] font-black text-text-muted uppercase tracking-widest mb-0.5">Arena Prize Pool</span>
           <span className="text-base font-black text-emerald-500 italic uppercase leading-none tracking-tighter">
             {formatCurrency(tournament.prize_pool || 0)}
           </span>
         </div>
-        <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-600 group-hover:bg-amber-500 group-hover:text-slate-950 transition-all">
+        <div className="w-8 h-8 rounded-full bg-surface border border-border-main flex items-center justify-center text-text-muted group-hover:bg-amber-500 group-hover:text-slate-950 transition-all">
           <ArrowUpRight className="w-5 h-5" />
         </div>
       </div>
@@ -403,7 +368,7 @@ function WinnerCard({ tournament }: { tournament: any }) {
 function SectionHeader({ title, link }: { title: string; link: string }) {
   return (
     <div className="flex items-center justify-between">
-      <h2 className="text-xl font-black text-white italic tracking-tighter uppercase border-l-4 border-primary pl-4">{title}</h2>
+      <h2 className="text-xl font-black text-text-main italic tracking-tighter uppercase border-l-4 border-primary pl-4">{title}</h2>
       <Link to={link} className="text-primary text-[10px] font-black uppercase italic tracking-widest hover:underline flex items-center bg-primary/5 px-3 py-1 rounded-full border border-primary/10">
         Browse All <ArrowUpRight className="w-3 h-3 ml-1" />
       </Link>
@@ -414,7 +379,7 @@ function SectionHeader({ title, link }: { title: string; link: string }) {
 function MatchCard({ match }: { match: any }) {
   const { user } = useAuth();
   const opponent = match.player1?.id === user?.id ? match.player2 : match.player1;
-  const opponentName = opponent?.username || (opponent ? opponent.email?.split('@')[0] || 'Unknown' : 'TBD');
+  const opponentName = getPublicIdentity(opponent);
   
   const verificationStatus = match.result_verification_status as VerificationStatus || 'none';
 
@@ -443,27 +408,27 @@ function MatchCard({ match }: { match: any }) {
         verificationStatus === 'disputed' && "border-red-500/50 hover:border-red-500"
       )}>
         <div className="flex items-center space-x-4 md:space-x-6 w-full sm:w-auto">
-          <div className="text-center shrink-0 min-w-[3.5rem] bg-slate-800/50 p-2 rounded-xl">
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Round</p>
+          <div className="text-center shrink-0 min-w-[3.5rem] bg-surface p-2 rounded-xl border border-border-main">
+            <p className="text-[9px] font-black text-text-muted uppercase tracking-widest">Round</p>
             <p className="text-xl font-black text-primary italic leading-none">{match.round || '1'}</p>
           </div>
-          <div className="h-10 w-px bg-slate-800 hidden sm:block" />
+          <div className="h-10 w-px bg-border-main hidden sm:block" />
           <div className="min-w-0">
             <div className="flex items-center space-x-2 mb-1">
-              <p className="text-[10px] text-primary font-black uppercase italic tracking-widest">
+              <p className="text-xs md:text-sm text-amber-500 font-black uppercase italic tracking-widest truncate max-w-[150px] sm:max-w-none">
                 {match.tournaments?.name || 'Tournament Event'}
               </p>
               <VerificationStatusBadge status={verificationStatus} size="sm" />
             </div>
-            <p className="text-base md:text-lg font-black text-white italic tracking-tighter uppercase truncate">
-              {opponentName} <span className="text-slate-600 px-2 italic font-medium tracking-normal text-sm">vs</span> YOU
+            <p className="text-base md:text-lg font-black text-text-main italic tracking-tighter uppercase truncate">
+              {opponentName} <span className="text-text-muted px-2 italic font-medium tracking-normal text-sm">vs</span> YOU
             </p>
           </div>
         </div>
-        <div className="flex items-center justify-between sm:justify-end space-x-6 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-t-0 border-slate-800">
+        <div className="flex items-center justify-between sm:justify-end space-x-6 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-t-0 border-border-main">
           <div className="text-left sm:text-right">
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 sm:text-right">Schedule</p>
-            <p className="text-xs sm:text-sm font-black text-white flex items-center sm:justify-end italic uppercase tracking-tighter">
+            <p className="text-[9px] font-black text-text-muted uppercase tracking-widest mb-1 sm:text-right">Schedule</p>
+            <p className="text-xs sm:text-sm font-black text-text-main flex items-center sm:justify-end italic uppercase tracking-tighter">
               <Timer className="w-3.5 h-3.5 mr-1.5 text-primary" />
               {match.scheduled_at ? new Date(match.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'TBD'}
             </p>
@@ -480,7 +445,11 @@ function MatchCard({ match }: { match: any }) {
             exit={{ opacity: 0, y: -10 }}
             className="mt-2"
           >
-            <VerificationStatusBanner status={verificationStatus} />
+            <VerificationStatusBanner 
+              status={verificationStatus} 
+              score1={match.score1} 
+              score2={match.score2} 
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -490,14 +459,14 @@ function MatchCard({ match }: { match: any }) {
 
 function TournamentSmallCard({ tournament }: { tournament: Tournament; key?: string }) {
   return (
-    <Link to={`/tournaments/${tournament.id}`} className="card p-3 hover:bg-slate-800 transition-all duration-300 flex items-center space-x-4 group rounded-2xl">
+    <Link to={`/tournaments/${tournament.id}`} className="card p-3 hover:bg-surface-hover transition-all duration-300 flex items-center space-x-4 group rounded-2xl border border-border-main">
       <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0">
         <img src={tournament.banner_url || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=200'} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
         <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-black text-white italic tracking-tighter uppercase truncate">{tournament.name}</p>
-        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{tournament.type}</p>
+        <p className="text-sm font-black text-text-main italic tracking-tighter uppercase truncate">{tournament.name}</p>
+        <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">{tournament.type}</p>
       </div>
       <StatusBadge status={tournament.status} />
     </Link>

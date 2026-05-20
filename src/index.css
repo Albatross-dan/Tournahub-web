@@ -1,37 +1,66 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bebas+Neue&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
 @import "tailwindcss";
+
+:root {
+  --color-primary: #00d1ff;
+  --color-primary-dark: #0099bb;
+  
+  /* Light Mode Defaults */
+  --bg-main: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #f1f5f9;
+  --text-base: #0f172a;
+  --text-muted: #64748b;
+  --border-base: #e2e8f0;
+}
+
+.dark {
+  /* Dark Mode Overrides */
+  --bg-main: #000000;
+  --bg-surface: #0a0a0a;
+  --bg-surface-hover: #121212;
+  --text-base: #f8fafc;
+  --text-muted: #94a3b8;
+  --border-base: #1e293b;
+}
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bebas Neue", sans-serif;
+  --font-mono: "Space Mono", monospace;
   
-  --color-primary: #00d1ff;
-  --color-primary-dark: #0099bb;
-  --color-background: #000000;
-  --color-surface: #0a0a0a;
-  --color-surface-hover: #121212;
+  --color-primary: var(--color-primary);
+  --color-primary-dark: var(--color-primary-dark);
+  --color-background: var(--bg-main);
+  --color-surface: var(--bg-surface);
+  --color-surface-hover: var(--bg-surface-hover);
+
+  --color-text-main: var(--text-base);
+  --color-text-muted: var(--text-muted);
+  --color-border-main: var(--border-base);
 }
 
 @layer base {
   body {
-    @apply bg-background text-slate-100 font-sans antialiased;
+    @apply bg-background text-text-main font-sans antialiased transition-colors duration-300;
   }
 }
 
 @layer components {
   .btn-primary {
-    @apply px-4 py-2 bg-primary text-slate-900 font-semibold rounded-lg hover:bg-primary-dark transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply px-4 py-2 bg-primary text-slate-900 font-semibold rounded-lg hover:bg-primary-dark transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider;
   }
   
   .btn-secondary {
-    @apply px-4 py-2 bg-surface text-slate-100 font-semibold rounded-lg hover:bg-surface-hover border border-slate-700 transition-colors duration-200;
+    @apply px-4 py-2 bg-surface text-text-main font-semibold rounded-lg hover:bg-surface-hover border border-border-main transition-colors duration-200;
   }
   
   .input-field {
-    @apply w-full bg-surface border border-slate-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all duration-200;
+    @apply w-full bg-surface border border-border-main rounded-lg px-4 py-2 text-text-main focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all duration-200;
   }
   
   .card {
-    @apply bg-surface/50 backdrop-blur-sm border border-slate-800/50 rounded-[2rem] overflow-hidden shadow-2xl;
+    @apply bg-surface/50 backdrop-blur-sm border border-border-main rounded-[2rem] overflow-hidden shadow-xl;
   }
 
   .scrollbar-hide {

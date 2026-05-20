@@ -25,8 +25,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const location = useLocation();
   const { user } = useAuth();
-  const { disputedMatches = [], singleSubmissionMatches = [] } = useAdminDisputes(user?.id || '');
-  const totalAlerts = disputedMatches.length + singleSubmissionMatches.length;
+  const { disputedMatches = [], singleSubmissionMatches = [], abandonedMatches = [] } = useAdminDisputes(user?.id || '');
+  const totalAlerts = disputedMatches.length + singleSubmissionMatches.length + abandonedMatches.length;
 
   return (
     <div className="min-h-screen bg-[#0a0b1e] text-slate-200 font-sans flex">

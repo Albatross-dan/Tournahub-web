@@ -3,6 +3,7 @@ import { CirclePlus, CircleMinus, Image as ImageIcon, XCircle, Loader2, CheckCir
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../../lib/supabase';
 import { cn } from '../../lib/utils';
+import StorageImage from '../common/StorageImage';
 
 interface SubmitResultFormProps {
   matchId: string;
@@ -63,7 +64,7 @@ export default function SubmitResultForm({
         });
 
       if (error) throw error;
-      setScreenshotUrl(data.path);
+      setScreenshotUrl(fileName);
       setUploadProgress(100);
     } catch (err: any) {
       setLocalError(err.message || 'Failed to upload screenshot');
@@ -80,10 +81,6 @@ export default function SubmitResultForm({
       return;
     }
     onSubmit(score1, score2, screenshotUrl || undefined);
-  };
-
-  const getStorageUrl = (path: string) => {
-    return supabase.storage.from('result-screenshots').getPublicUrl(path).data.publicUrl;
   };
 
   return (
@@ -152,7 +149,12 @@ export default function SubmitResultForm({
         <div className="relative">
           {screenshotUrl ? (
             <div className="relative w-full aspect-video rounded-3xl overflow-hidden border-2 border-emerald-500/50">
-              <img src={getStorageUrl(screenshotUrl)} alt="Preview" className="w-full h-full object-cover" />
+              <StorageImage 
+                bucket="result-screenshots" 
+                path={screenshotUrl} 
+                alt="Preview" 
+                className="w-full h-full object-cover" 
+              />
               <button 
                 type="button"
                 onClick={() => setScreenshotUrl(null)}

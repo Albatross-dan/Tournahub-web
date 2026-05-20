@@ -3,8 +3,9 @@ import { DisputedMatch } from '../../types/verification.types';
 import { Clock, Bell, Zap, Loader2, Image as ImageIcon } from 'lucide-react';
 import { motion } from 'motion/react';
 import { formatDistanceToNow } from 'date-fns';
-import { cn, getStorageUrl } from '../../lib/utils';
+import { cn, getStorageUrl, getPublicIdentity } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
+import { toast } from 'react-hot-toast';
 
 interface SingleSubmissionCardProps {
   dispute: DisputedMatch;
@@ -25,9 +26,20 @@ export default function SingleSubmissionCard({
   const [loading, setLoading] = useState(false);
   const [reminderCooldown, setReminderCooldown] = useState(0);
 
-  const sub = dispute.submissions[0];
-  const noSubPlayerId = sub.submitted_by === dispute.player1_id ? dispute.player2_id : dispute.player1_id;
-  const noSubUsername = sub.submitted_by === dispute.player1_id ? dispute.player2_username : dispute.player1_username;
+  const sub = dispute.submissions?.[0];
+  
+  if (!sub) {
+    return (
+      <div className="card bg-slate-900 border-l-4 border-amber-500 p-6">
+        <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Submission data missing for match {dispute.match_id}</p>
+      </div>
+    );
+  }
+
+  const p1Name = getPublicIdentity(dispute.player1_username);
+  const p2Name = getPublicIdentity(dispute.player2_username);
+  const subName = getPublicIdentity(sub);
+  const noSubUsername = sub.username === dispute.player1_username || subName === p1Name ? p2Name : p1Name;
 
   useEffect(() => {
     if (reminderCooldown > 0) {
@@ -37,18 +49,14 @@ export default function SingleSubmissionCard({
   }, [reminderCooldown]);
 
   const handleSendReminder = async () => {
-    try {
-      await onSendReminder(noSubPlayerId, dispute.match_id);
-      setReminderCooldown(30);
-    } catch (err) {
-      console.error('Failed to send reminder:', err);
-    }
+    // Disabled: player IDs are removed from backend response
+    toast.error('Direct reminders are currently restricted due to identity obfuscation.');
   };
 
   const handleForceApprove = async () => {
     const s1 = (sub.player1_score ?? sub.score1) ?? 0;
     const s2 = (sub.player2_score ?? sub.score2) ?? 0;
-    if (!confirm(`Force approve ${sub.username}'s result of ${s1}–${s2}? This will skip opponent verification.`)) {
+    if (!confirm(`Force approve ${subName}'s result of ${s1}–${s2}? This will skip opponent verification.`)) {
       return;
     }
     setLoading(true);
@@ -76,9 +84,9 @@ export default function SingleSubmissionCard({
 
         <div className="flex items-center space-x-6">
           <div className="text-center md:text-left">
-            <p className="text-xs font-black text-white italic uppercase tracking-tighter">{dispute.player1_username} vs {dispute.player2_username}</p>
+            <p className="text-xs font-black text-white italic uppercase tracking-tighter">{p1Name} vs {p2Name}</p>
             <p className="text-[10px] text-slate-400 mt-1">
-              <span className="font-bold text-amber-500">{sub.username}</span> submitted: {(sub.player1_score ?? sub.score1) ?? 0}–{(sub.player2_score ?? sub.score2) ?? 0}
+              <span className="font-bold text-amber-500">{subName}</span> submitted: {(sub.player1_score ?? sub.score1) ?? 0}–{(sub.player2_score ?? sub.score2) ?? 0}
             </p>
           </div>
           
@@ -99,15 +107,8 @@ export default function SingleSubmissionCard({
       </div>
 
       <div className="flex items-center space-x-3">
-        <button
-          onClick={handleSendReminder}
-          disabled={reminderCooldown > 0}
-          className="flex-1 md:flex-none px-6 py-3 bg-slate-800 text-white rounded-xl font-black uppercase italic tracking-tighter text-[10px] flex items-center justify-center space-x-2 hover:bg-slate-750 transition-colors disabled:opacity-50"
-        >
-          <Bell className="w-4 h-4" />
-          <span>{reminderCooldown > 0 ? `Sent (${reminderCooldown}s)` : 'Send Reminder'}</span>
-        </button>
-
+        {/* Reminder button hidden due to ID removal */}
+        
         <button
           onClick={handleForceApprove}
           disabled={loading}

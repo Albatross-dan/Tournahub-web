@@ -324,40 +324,43 @@ function PlayersList({ registrations, maxPlayers, badges }: { registrations: any
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {registrations.map((reg) => (
-          <div key={reg.id} className="card p-6 border-white/5 bg-surface/20 hover:border-primary/20 transition-all flex items-center justify-between group">
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden transition-transform group-hover:scale-105">
-                  {reg.profiles.avatar_url ? (
-                    <img src={reg.profiles.avatar_url} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
-                  ) : (
-                    <span className="font-black text-primary text-xl">{(reg.profiles.username || 'U')[0].toUpperCase()}</span>
+        {registrations.map((reg) => {
+          if (!reg) return null;
+          return (
+            <div key={reg.id} className="card p-6 border-white/5 bg-surface/20 hover:border-primary/20 transition-all flex items-center justify-between group">
+              <div className="flex items-center space-x-4">
+                <div className="relative">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden transition-transform group-hover:scale-105">
+                    {reg.avatar_url ? (
+                      <img src={reg.avatar_url} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
+                    ) : (
+                      <span className="font-black text-primary text-xl">{(reg.username || 'P')[0].toUpperCase()}</span>
+                    )}
+                  </div>
+                  {badges[reg.user_id] && (
+                    <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center p-1 shadow-2xl z-10 group-hover:scale-110 transition-transform">
+                      <img 
+                        src={getStorageUrl('team-badges', badges[reg.user_id])} 
+                        className="w-full h-full object-contain" 
+                        alt="badge"
+                      />
+                    </div>
                   )}
                 </div>
-                {badges[reg.user_id] && (
-                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center p-1 shadow-2xl z-10 group-hover:scale-110 transition-transform">
-                    <img 
-                      src={getStorageUrl('team-badges', badges[reg.user_id])} 
-                      className="w-full h-full object-contain" 
-                      alt="badge"
-                    />
+                <div>
+                  <p className="font-black text-white uppercase italic tracking-tight group-hover:text-primary transition-colors">{reg.username || 'Unknown Operator'}</p>
+                  <div className="flex items-center mt-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2 animate-pulse" />
+                    <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Clearance: {reg.status}</p>
                   </div>
-                )}
-              </div>
-              <div>
-                <p className="font-black text-white uppercase italic tracking-tight group-hover:text-primary transition-colors">{reg.profiles.username || 'Anonymous'}</p>
-                <div className="flex items-center mt-1">
-                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2 animate-pulse" />
-                   <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Clearance: {reg.status}</p>
                 </div>
               </div>
+              <button className="p-2 opacity-0 group-hover:opacity-100 bg-red-500/10 hover:bg-red-500/30 text-red-500 rounded-lg transition-all border border-red-500/10">
+                <UserX className="w-4 h-4" />
+              </button>
             </div>
-            <button className="p-2 opacity-0 group-hover:opacity-100 bg-red-500/10 hover:bg-red-500/30 text-red-500 rounded-lg transition-all border border-red-500/10">
-              <UserX className="w-4 h-4" />
-            </button>
-          </div>
-        ))}
+          );
+        })}
         {registrations.length === 0 && (
           <div className="col-span-full py-24 card border-dashed border-2 border-slate-800 flex flex-col items-center justify-center text-slate-700 italic font-black uppercase tracking-widest text-sm">
             Operational registry empty.
@@ -405,43 +408,46 @@ function MatchesManagement({ matches, tournamentId, onUpdate }: { matches: Match
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {matches.map((match: any) => (
-          <div key={match.id} className="card p-8 hover:border-primary/30 transition-all border-white/5 bg-surface/20 flex flex-col sm:flex-row items-center justify-between gap-6 group">
-            <div className="flex items-center space-x-6 w-full sm:w-auto">
-              <div className="text-center bg-slate-950 border border-slate-800 p-4 rounded-2xl w-16">
-                <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 italic">Round</p>
-                <p className="text-2xl font-black text-white italic leading-none">{match.round}</p>
-              </div>
-              
-              <div className="flex items-center space-x-4">
-                <div className="text-right">
-                  <p className="text-xs font-black text-white italic uppercase tracking-tight group-hover:text-primary transition-colors">{getPublicIdentity(match.player1)}</p>
+        {matches.map((match: any) => {
+          if (!match) return null;
+          return (
+            <div key={match.id} className="card p-8 hover:border-primary/30 transition-all border-white/5 bg-surface/20 flex flex-col sm:flex-row items-center justify-between gap-6 group">
+              <div className="flex items-center space-x-6 w-full sm:w-auto">
+                <div className="text-center bg-slate-950 border border-slate-800 p-4 rounded-2xl w-16">
+                  <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 italic">Round</p>
+                  <p className="text-2xl font-black text-white italic leading-none">{match.round}</p>
                 </div>
-                <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center border border-slate-800 font-black text-[10px] text-slate-700 uppercase italic">VS</div>
-                <div className="text-left">
-                  <p className="text-xs font-black text-white italic uppercase tracking-tight group-hover:text-primary transition-colors">{getPublicIdentity(match.player2)}</p>
+                
+                <div className="flex items-center space-x-4">
+                  <div className="text-right">
+                    <p className="text-xs font-black text-white italic uppercase tracking-tight group-hover:text-primary transition-colors">{getPublicIdentity(match.player1)}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center border border-slate-800 font-black text-[10px] text-slate-700 uppercase italic">VS</div>
+                  <div className="text-left">
+                    <p className="text-xs font-black text-white italic uppercase tracking-tight group-hover:text-primary transition-colors">{getPublicIdentity(match.player2)}</p>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="flex items-center space-x-6 w-full sm:w-auto justify-end border-t sm:border-t-0 sm:border-l border-slate-800/50 pt-6 sm:pt-0 sm:pl-8">
-              <div className="text-right">
-                <p className="text-2xl font-black text-white italic tracking-tighter leading-none mb-2">
-                  {match.score1 ?? 0} <span className="text-primary">:</span> {match.score2 ?? 0}
-                </p>
-                <span className={cn(
-                  "text-[8px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-full italic border",
-                  match.status === 'completed' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-primary/20 text-primary border-primary/30"
-                )}>
-                  {match.status}
-                </span>
+              <div className="flex items-center space-x-6 w-full sm:w-auto justify-end border-t sm:border-t-0 sm:border-l border-slate-800/50 pt-6 sm:pt-0 sm:pl-8">
+                <div className="text-right">
+                  <p className="text-2xl font-black text-white italic tracking-tighter leading-none mb-2">
+                    {match.score1 ?? 0} <span className="text-primary">:</span> {match.score2 ?? 0}
+                  </p>
+                  <span className={cn(
+                    "text-[8px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-full italic border",
+                    match.status === 'completed' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-primary/20 text-primary border-primary/30"
+                  )}>
+                    {match.status}
+                  </span>
+                </div>
+                <button className="p-3 bg-slate-900 hover:bg-slate-800 text-slate-500 hover:text-white rounded-xl border border-slate-800 transition-all opacity-0 group-hover:opacity-100">
+                  <MoreVertical className="w-5 h-5" />
+                </button>
               </div>
-              <button className="p-3 bg-slate-900 hover:bg-slate-800 text-slate-500 hover:text-white rounded-xl border border-slate-800 transition-all opacity-0 group-hover:opacity-100">
-                <MoreVertical className="w-5 h-5" />
-              </button>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {matches.length === 0 && (
           <div className="col-span-full py-24 card border-dashed border-2 border-slate-800 flex flex-col items-center justify-center text-slate-700 italic font-black uppercase tracking-widest text-sm">
             Deployment schedule pending.
@@ -528,7 +534,7 @@ function CreateMatchModal({ tournamentId, onClose, onSuccess }: { tournamentId: 
               >
                 <option value="">Select Identity</option>
                 {players.map(p => (
-                  <option key={p.user_id} value={p.user_id}>{getPublicIdentity(p.profiles)}</option>
+                  <option key={p.user_id} value={p.user_id}>{p.username || 'Unknown Identity'}</option>
                 ))}
               </select>
             </div>
@@ -542,7 +548,7 @@ function CreateMatchModal({ tournamentId, onClose, onSuccess }: { tournamentId: 
               >
                 <option value="">Select Identity</option>
                 {players.map(p => (
-                  <option key={p.user_id} value={p.user_id}>{getPublicIdentity(p.profiles)}</option>
+                  <option key={p.user_id} value={p.user_id}>{p.username || 'Unknown Identity'}</option>
                 ))}
               </select>
             </div>

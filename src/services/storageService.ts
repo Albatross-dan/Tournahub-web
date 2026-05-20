@@ -1,19 +1,37 @@
 import { supabase } from '../lib/supabase';
+import { cleanStoragePath } from '../lib/utils';
 
 export const storageService = {
   async uploadFile(bucket: string, path: string, file: File) {
+    // Force session hydration for RLS propagation in storage
+    await supabase.auth.getSession();
+    
     const { data, error } = await supabase.storage
       .from(bucket)
-      .upload(path, file, { cacheControl: '3600', upsert: false });
+      .upload(path, file, { 
+        cacheControl: '3600', 
+        upsert: false,
+        contentType: file.type 
+      });
     
     if (error) {
-      console.error(`Upload error for bucket "${bucket}":`, error);
+      console.error(`[Storage] Upload failed for bucket "${bucket}":`, error);
+      
+      // Handle "database timed out" or "connection timeout"
+      if (error.message?.includes('timed out') || error.message?.includes('connection timeout')) {
+        throw new Error(`Upload to "${bucket}" timed out. This suggests the database recording metadata for this file is stalling due to slow RLS policies or unindexed checks.`);
+      }
+
+      // Handle "invalid or incompatible" error
+      if (error.message?.includes('schema is invalid')) {
+        throw new Error(`Storage configuration error for bucket "${bucket}". Please verify bucket existence and permissions of the new security model.`);
+      }
       throw error;
     }
     
     const { data: { publicUrl } } = supabase.storage
       .from(bucket)
-      .getPublicUrl(data.path);
+      .getPublicUrl(path);
       
     return publicUrl;
   },
@@ -49,13 +67,14 @@ export const storageService = {
       throw error;
     }
     
-    return data.path;
+    return path;
   },
 
   async getScreenshotUrl(path: string) {
+    const cleanPath = cleanStoragePath('result-screenshots', path);
     const { data, error } = await supabase.storage
       .from('result-screenshots')
-      .createSignedUrl(path, 60);
+      .createSignedUrl(cleanPath || '', 60);
 
     if (error) {
       console.error('Error creating signed URL:', error);

@@ -57,10 +57,25 @@ export default function Notifications() {
   const getIcon = (type: string) => {
     switch (type) {
       case 'match': return <Trophy className="w-5 h-5 text-primary" />;
+      case 'tournament_champion_declared':
+      case 'tournament_runner_up': return <Trophy className="w-5 h-5 text-amber-500" />;
       case 'message': return <MessageSquare className="w-5 h-5 text-blue-500" />;
       case 'tournament': return <Calendar className="w-5 h-5 text-emerald-500" />;
       case 'badge_required': return <Shield className="w-5 h-5 text-amber-500" />;
       default: return <Info className="w-5 h-5 text-zinc-400" />;
+    }
+  };
+
+  const handleNotificationClick = (notif: Notification) => {
+    const data = notif.data as any;
+    if (data?.deep_link) {
+      navigate(data.deep_link);
+    } else if (notif.type === 'badge_required' && data?.tournament_id) {
+      navigate(`/tournaments/${data.tournament_id}`);
+    } else if (data?.match_id) {
+      navigate(`/matches/${data.match_id}`);
+    } else if (data?.tournament_id) {
+      navigate(`/tournaments/${data.tournament_id}`);
     }
   };
 
@@ -92,8 +107,9 @@ export default function Notifications() {
             notifications.map((notif) => (
               <div 
                 key={notif.id}
+                onClick={() => handleNotificationClick(notif)}
                 className={cn(
-                  "p-5 flex items-start gap-4 transition-all hover:bg-slate-800/30 group",
+                  "p-5 flex items-start gap-4 transition-all hover:bg-slate-800/30 group cursor-pointer",
                   !notif.read && "bg-primary/5"
                 )}
               >
@@ -116,9 +132,9 @@ export default function Notifications() {
                     {notif.body}
                   </p>
                   
-                  {notif.type === 'badge_required' && notif.data?.tournament_id && (
+                  {notif.type === 'badge_required' && (notif.data as any)?.tournament_id && (
                     <button 
-                      onClick={() => navigate(`/tournaments/${notif.data.tournament_id}`)}
+                      onClick={() => navigate(`/tournaments/${(notif.data as any).tournament_id}`)}
                       className="mt-3 px-4 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 text-[10px] font-black uppercase tracking-widest rounded-lg border border-amber-500/20 transition-all"
                     >
                       Select Badge Now
