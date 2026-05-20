@@ -17,7 +17,10 @@ export const supabase = createClient<Database>(
       autoRefreshToken: true,
       detectSessionInUrl: true,
       storage: window.localStorage,
-      flowType: 'pkce'
+      flowType: 'pkce',
+      lock: async (name, _acquireTimeout, fn) => {
+        return fn();
+      }
     },
     global: {
       headers: {

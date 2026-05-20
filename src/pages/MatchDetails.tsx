@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { Match } from '../types/database';
 import { matchService } from '../services/matchService';
 import { supabase } from '../lib/supabase';
@@ -22,6 +22,8 @@ import { PlayerBadge } from '../components/ui/PlayerBadge';
 export default function MatchDetails() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const isInitialLoad = React.useRef(true);
+  useRefetchOnFocus(loadMatchData);
   const navigate = useNavigate();
   const [match, setMatch] = useState<Match | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,6 +34,7 @@ export default function MatchDetails() {
   const isParticipant = !!(user && (activePlayer1Id === user.id || activePlayer2Id === user.id));
 
   useEffect(() => {
+    isInitialLoad.current = true;
     if (!id) return;
     
     loadMatchData();
@@ -51,7 +54,7 @@ export default function MatchDetails() {
     };
   }, [id]);
 
-  async function loadMatchData(showLoading = true) {
+  async function loadMatchData(showLoading = isInitialLoad.current) {
     if (!id) return;
     try {
       if (showLoading) setLoading(true);
@@ -59,6 +62,7 @@ export default function MatchDetails() {
       setMatch(matchData);
     } finally {
       if (showLoading) setLoading(false);
+      isInitialLoad.current = false;
     }
   }
 

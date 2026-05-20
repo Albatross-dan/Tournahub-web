@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { Tournament } from '../types/database';
 import { tournamentService } from '../services/tournamentService';
 import { useRealtimeTournament } from '../hooks/useRealtimeTournaments';
@@ -26,6 +26,16 @@ import StorageImage from '../components/common/StorageImage';
 export default function TournamentDetails() {
   const { id } = useParams<{ id: string }>();
   const { user, profile } = useAuth();
+  const isInitialLoad = React.useRef(true);
+  
+  const fetchTournamentData = () => {
+    loadRegistrations();
+    loadRegistrationStatus();
+    refreshWallet();
+  };
+
+  useRefetchOnFocus(fetchTournamentData);
+
   const navigate = useNavigate();
   const { summary, limits, refreshWallet } = useWallet('USD');
   
@@ -53,6 +63,7 @@ export default function TournamentDetails() {
   const [selectedBadge, setSelectedBadge] = useState<string | null>(null);
 
   useEffect(() => {
+    isInitialLoad.current = true;
     if (!id) return;
     
     loadRegistrations();
@@ -106,6 +117,9 @@ export default function TournamentDetails() {
       return;
     }
     try {
+      if (isInitialLoad.current) {
+        setIsRegStatusLoading(true);
+      }
       const status = await tournamentService.getRegistrationStatus(id, user.id);
       if (status) {
         setRegStatus(status);
@@ -120,12 +134,16 @@ export default function TournamentDetails() {
       }
     } finally {
       setIsRegStatusLoading(false);
+      isInitialLoad.current = false;
     }
   }
 
   async function loadRegistrations() {
     if (!id) return;
     try {
+      if (isInitialLoad.current) {
+        setLoading(true);
+      }
       const players = await tournamentService.getRegisteredPlayers(id);
       // Deduplicate to prevent double entries in standings and players list
       const uniquePlayers = Array.isArray(players) ? players.reduce((acc: any[], current: any) => {
@@ -140,6 +158,7 @@ export default function TournamentDetails() {
       console.error('Error loading players:', err);
     } finally {
       setLoading(false);
+      isInitialLoad.current = false;
     }
   }
 

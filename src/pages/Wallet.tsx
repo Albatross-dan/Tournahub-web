@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { useWallet } from '../hooks/useWallet';
 import Shell from '../components/layout/Shell';
 import { 
@@ -25,6 +25,8 @@ export default function Wallet() {
     loading, refreshing, refreshWallet,
     isLocked, environment 
   } = useWallet(currency);
+
+  useRefetchOnFocus(refreshWallet);
 
   const isSandbox = environment === 'sandbox';
 

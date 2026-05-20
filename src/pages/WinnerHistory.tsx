@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useRefetchOnFocus } from '../contexts/AuthContext';
 import { walletService } from '../services/walletService';
 import Shell from '../components/layout/Shell';
 import { Trophy, Calendar, Medal, ArrowRight, Image as ImageIcon } from 'lucide-react';
@@ -9,6 +10,8 @@ import { WinRecord } from '../types/finance';
 import { Link } from 'react-router-dom';
 
 export default function WinnerHistory() {
+  const isInitialLoad = React.useRef(true);
+  useRefetchOnFocus(loadWins);
   const [wins, setWins] = useState<WinRecord[]>([]);
   const [username, setUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -19,6 +22,9 @@ export default function WinnerHistory() {
 
   async function loadWins() {
     try {
+      if (isInitialLoad.current) {
+        setLoading(true);
+      }
       const data = await walletService.getWinnerHistory();
       setWins(data.wins);
       setUsername(data.username);
@@ -26,6 +32,7 @@ export default function WinnerHistory() {
       console.error('Win history load error:', err);
     } finally {
       setLoading(false);
+      isInitialLoad.current = false;
     }
   }
 

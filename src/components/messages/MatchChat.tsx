@@ -9,6 +9,57 @@ import { cn } from '../../lib/utils';
 import LoadingState from '../ui/LoadingState';
 import { useTournamentBadges } from '../../hooks/useTournamentBadges';
 
+const playMessageSound = (type: 'sent' | 'received') => {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    if (type === 'sent') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(800, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.08);
+      
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.08);
+    } else {
+      const now = ctx.currentTime;
+      // Note 1 (low pitch)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(523.25, now); // C5
+      gain1.gain.setValueAtTime(0.06, now);
+      gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start();
+      osc1.stop(now + 0.12);
+      
+      // Note 2 (high pitch fast)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(659.25, now + 0.06); // E5
+      gain2.gain.setValueAtTime(0.06, now + 0.06);
+      gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.22);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.06);
+      osc2.stop(now + 0.22);
+    }
+  } catch (e) {
+    console.warn('[MatchChat] Sound blocked or unsupported by browser standard policy:', e);
+  }
+};
+
 interface MatchChatProps {
   matchId: string;
   currentUserId: string;
@@ -25,6 +76,7 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [opponent, setOpponent] = useState<any>(null);
   const { badges } = useTournamentBadges(tournamentId);
+  const [isOpponentOnline, setIsOpponentOnline] = useState(false);
   const channelRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -39,9 +91,22 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
     const channel = supabase
       .channel(`match_conversation:${conversationId}:${Math.random().toString(36).substring(7)}`, {
         config: {
-          broadcast: { self: true }
+          broadcast: { self: true },
+          presence: { key: currentUserId }
         }
       })
+      .on(
+        'presence',
+        { event: 'sync' },
+        () => {
+          const presenceState = channel.presenceState();
+          const onlineUserIds = Object.values(presenceState).flatMap((presences: any) => 
+            presences.map((p: any) => p.user_id)
+          );
+          const isOnline = onlineUserIds.includes(opponent?.id);
+          setIsOpponentOnline(isOnline);
+        }
+      )
       .on(
         'broadcast',
         { event: 'message_created' },
@@ -64,6 +129,7 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
             // Mark as read if it's from the opponent
             if (incomingMsg.sender_id !== currentUserId) {
               matchService.markAsRead(conversationId, currentUserId);
+              playMessageSound('received');
             }
 
             // 2. Check if it matches an optimistic message by content and sender
@@ -129,6 +195,7 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
             // Mark as read if it's from the opponent
             if (enrichedMsg.sender_id !== currentUserId) {
               matchService.markAsRead(conversationId as string, currentUserId);
+              playMessageSound('received');
             }
 
             const optimisticIndex = prev.findIndex(m => 
@@ -167,8 +234,30 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
           scrollToBottom();
         }
       )
-      .subscribe((status) => {
+      // Listen to message updates (e.g., read_by array changes for real-time blue ticks)
+      .on(
+        'postgres_changes',
+        { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`
+        },
+        async (payload: any) => {
+          const updatedMsg = payload.new;
+          console.log('[MatchChat] Realtime DB update received (read_by):', updatedMsg.id, updatedMsg.read_by);
+          setMessages(prev => prev.map(m => 
+            m.id === updatedMsg.id 
+              ? { ...m, read_by: updatedMsg.read_by } 
+              : m
+          ));
+        }
+      )
+      .subscribe(async (status) => {
         console.log(`[MatchChat] Subscription status for channel match_conversation:${conversationId}:`, status);
+        if (status === 'SUBSCRIBED') {
+          await channel.track({ user_id: currentUserId, online_at: new Date().toISOString() });
+        }
       });
 
     channelRef.current = channel;
@@ -265,6 +354,7 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
       console.log('[MatchChat] Sending message to pipeline...', { conversationId, content });
       const sentMessage = await matchService.sendMessage(conversationId, 'text', content);
       console.log('[MatchChat] Message sent successfully:', sentMessage.id);
+      playMessageSound('sent');
       
       // Requirement 6 & 7: Explicitly broadcast the message so the opponent receives it via 'broadcast' listener
       if (channelRef.current) {
@@ -360,6 +450,8 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
               message={msg} 
               isMe={msg.sender_id === currentUserId} 
               badgeUrl={badges[msg.sender_id]}
+              opponentId={opponent?.id}
+              isOpponentOnline={isOpponentOnline}
             />
           ))}
         </AnimatePresence>
@@ -397,14 +489,19 @@ interface MessageItemProps {
   message: any;
   isMe: boolean;
   badgeUrl?: string;
+  opponentId?: string;
+  isOpponentOnline?: boolean;
   key?: any;
 }
 
 /* Message bubble colors and styles for a professional look */
-function MessageItem({ message, isMe, badgeUrl }: MessageItemProps) {
+function MessageItem({ message, isMe, badgeUrl, opponentId, isOpponentOnline }: MessageItemProps) {
   const isError = message.status === 'error';
   const isSending = message.status === 'sending';
   const delivered = message.isDelivered || message.status === 'sent' || message.status === 'delivered';
+  
+  // WhatsApp Style ticketing rules
+  const isReadByOpponent = Array.isArray(message.read_by) && opponentId && message.read_by.includes(opponentId);
 
   return (
     <motion.div 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { matchService } from '../services/matchService';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { Match } from '../types/database';
 import { supabase } from '../lib/supabase';
 import Shell from '../components/layout/Shell';
@@ -16,12 +16,25 @@ import { motion, AnimatePresence } from 'motion/react';
 
 export default function Matches() {
   const { user } = useAuth();
+  const isInitialLoad = React.useRef(true);
   const [matches, setMatches] = useState<Match[]>([]);
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'matches' | 'chat'>('matches');
 
+  const fetchData = () => {
+    if (!user) return;
+    if (activeTab === 'matches') {
+      loadMatches(false);
+    } else {
+      loadConversations(false);
+    }
+  };
+
+  useRefetchOnFocus(fetchData);
+
   useEffect(() => {
+    isInitialLoad.current = true;
     if (!user) return;
     
     if (activeTab === 'matches') {
@@ -53,7 +66,7 @@ export default function Matches() {
     };
   }, [user, activeTab]);
 
-  async function loadMatches(showLoading = true) {
+  async function loadMatches(showLoading = isInitialLoad.current) {
     try {
       if (showLoading) setLoading(true);
       
@@ -71,10 +84,11 @@ export default function Matches() {
       console.error(err);
     } finally {
       if (showLoading) setLoading(false);
+      isInitialLoad.current = false;
     }
   }
 
-  async function loadConversations(showLoading = true) {
+  async function loadConversations(showLoading = isInitialLoad.current) {
     try {
       if (showLoading) setLoading(true);
       
@@ -92,6 +106,7 @@ export default function Matches() {
       console.error(err);
     } finally {
       if (showLoading) setLoading(false);
+      isInitialLoad.current = false;
     }
   }
 

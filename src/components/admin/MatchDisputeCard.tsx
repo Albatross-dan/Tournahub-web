@@ -31,7 +31,11 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
-  const [rescheduleTime, setRescheduleTime] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState(
+    match.scheduled_at 
+      ? new Date(new Date(match.scheduled_at).getTime() - new Date(match.scheduled_at).getTimezoneOffset() * 60000).toISOString().slice(0, 16) 
+      : ''
+  );
   const [adminNotes, setAdminNotes] = useState('');
   const [overrideScore1, setOverrideScore1] = useState<string>('');
   const [overrideScore2, setOverrideScore2] = useState<string>('');
@@ -85,15 +89,16 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
 
   const handleAction = async (action: string, resultId?: string) => {
     setLoadingAction(action);
+    const targetMatchId = match.match_id || match.id;
     console.log(`[MatchDisputeCard] Action Request: ${action}`, { 
       resultId, 
-      matchId: match.match_id, 
+      matchId: targetMatchId, 
       requiredAction: match.required_action,
       submissionCount: submissions.length 
     });
     
-    if (!match.match_id) {
-      console.error('[MatchDisputeCard] Critical Error: Match object is missing match_id', match);
+    if (!targetMatchId) {
+      console.error('[MatchDisputeCard] Critical Error: Match object is missing match_id and id', match);
       alert('Internal Reference Error: This match data is malformed and missing its unique identifier. Please refresh the page.');
       setLoadingAction(null);
       return;
@@ -113,7 +118,7 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
           // Resolve dispute requires a winning submission if possible, but can also work with overrides
           await matchService.resolveDispute({
             adminId,
-            matchId: match.match_id,
+            matchId: targetMatchId,
             winningSubId: resultId,
             adminNotes: adminNotes || 'Administrative consensus resolution',
           });
@@ -125,7 +130,7 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
         console.log(`[MatchDisputeCard] Resolving as no-show for ${action === 'no_show_p1' ? 'P1' : 'P2'}`);
         await matchService.resolveDispute({
           adminId,
-          matchId: match.match_id,
+          matchId: targetMatchId,
           overrideScore1: score1,
           overrideScore2: score2,
           adminNotes: adminNotes || `System Resolution: No-show forfeit awarded to ${action === 'no_show_p2' ? 'P1' : 'P2'}`,
@@ -134,12 +139,18 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
         console.log('[MatchDisputeCard] Resolving as match cancellation');
         await matchService.resolveDispute({
           adminId,
-          matchId: match.match_id,
+          matchId: targetMatchId,
           overrideScore1: 0,
           overrideScore2: 0,
           adminNotes: adminNotes || 'Protocol: Match nullified by administrative authority',
         });
       } else if (action === 'reschedule') {
+        // Pre-fill rescheduleTime with current scheduled date or current system time
+        const initialDate = match.scheduled_at 
+          ? new Date(new Date(match.scheduled_at).getTime() - new Date(match.scheduled_at).getTimezoneOffset() * 60000)
+          : new Date();
+        const initialTime = initialDate.toISOString().slice(0, 16);
+        setRescheduleTime(initialTime);
         setShowRescheduleModal(true);
         setLoadingAction(null);
         return;
@@ -157,10 +168,11 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
 
   const handleOverrideSubmit = async () => {
     setLoadingAction('override');
+    const targetMatchId = match.match_id || match.id;
     try {
       await matchService.resolveDispute({
         adminId,
-        matchId: match.match_id,
+        matchId: targetMatchId,
         overrideScore1: parseInt(overrideScore1),
         overrideScore2: parseInt(overrideScore2),
         adminNotes,
@@ -176,6 +188,7 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
 
   const handleRescheduleSubmit = async () => {
     setLoadingAction('reschedule_action');
+    const targetMatchId = match.match_id || match.id;
     try {
       if (!rescheduleTime) {
         throw new Error('Please select a valid scheduled timestamp.');
@@ -192,13 +205,13 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
           winner: null,
           updated_at: new Date().toISOString()
         })
-        .eq('id', match.match_id);
+        .eq('id', targetMatchId);
 
       if (matchError) throw matchError;
 
       const { error: resultError } = await (supabase.from('match_results') as any)
         .delete()
-        .eq('match_id', match.match_id);
+        .eq('match_id', targetMatchId);
 
       setShowRescheduleModal(false);
       onResolved();

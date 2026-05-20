@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { profileService } from '../services/profileService';
 import { matchService } from '../services/matchService';
 import Shell from '../components/layout/Shell';
@@ -17,6 +17,7 @@ import SettingsMenu from '../components/profile/SettingsMenu';
 
 export default function Profile() {
   const { profile, user, signOut } = useAuth();
+  useRefetchOnFocus(loadStats);
   const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
   const [username, setUsername] = useState(profile?.username || '');
   const [loading, setLoading] = useState(false);

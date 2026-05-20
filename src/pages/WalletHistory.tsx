@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { walletService } from '../services/walletService';
 import Shell from '../components/layout/Shell';
 import { 
@@ -15,6 +15,8 @@ import { Link } from 'react-router-dom';
 
 export default function WalletHistory() {
   const { user } = useAuth();
+  const isInitialLoad = React.useRef(true);
+  useRefetchOnFocus(loadHistory);
   const [currency, setCurrency] = useState<SupportedCurrency>('KES');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [total, setTotal] = useState(0);
@@ -24,6 +26,7 @@ export default function WalletHistory() {
   const limit = 20;
 
   useEffect(() => {
+    isInitialLoad.current = true;
     if (user) {
       loadHistory();
     }
@@ -31,7 +34,9 @@ export default function WalletHistory() {
 
   async function loadHistory() {
     try {
-      setLoading(true);
+      if (isInitialLoad.current) {
+        setLoading(true);
+      }
       const data = await walletService.getTransactionHistory({
         limit,
         offset: page * limit,
@@ -44,6 +49,7 @@ export default function WalletHistory() {
       console.error('History load error:', err);
     } finally {
       setLoading(false);
+      isInitialLoad.current = false;
     }
   }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { 
   Trophy, Users, Wallet, 
   ArrowUpRight, Gamepad2, Timer,
@@ -25,7 +25,9 @@ import { VerificationStatus } from '../types/verification.types';
 import RecentChampions from '../components/home/RecentChampions';
 
 export default function Dashboard() {
-  const { user, profile } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
+  const isInitialLoad = React.useRef(true);
+  useRefetchOnFocus(loadDashboardData);
   
   const activeStatus = React.useMemo(() => [
     TournamentStatus.REGISTRATION_OPEN,
@@ -56,7 +58,9 @@ export default function Dashboard() {
 
   async function loadDashboardData() {
     if (!user) return;
-    setLoading(true);
+    if (isInitialLoad.current) {
+      setLoading(true);
+    }
     
     const timeoutId = setTimeout(() => {
        setLoading(false);
@@ -64,7 +68,7 @@ export default function Dashboard() {
     }, 10000);
 
     try {
-      const [matchesRes, statsRes] = await Promise.allSettled([
+       const [matchesRes, statsRes] = await Promise.allSettled([
         matchService.getUserMatches(user.id),
         matchService.getUserStats(user.id)
       ]);
@@ -88,6 +92,7 @@ export default function Dashboard() {
       clearTimeout(timeoutId);
     } finally {
       setLoading(false);
+      isInitialLoad.current = false;
     }
   }
 
@@ -168,13 +173,22 @@ export default function Dashboard() {
                       <div className="w-16 h-16 bg-surface border border-border-main rounded-full flex items-center justify-center mx-auto">
                         <Trophy className="w-8 h-8 text-text-muted" />
                       </div>
-                      <div>
-                        <p className="text-xl font-black text-text-main italic uppercase tracking-tighter">No active arena battles</p>
-                        <p className="text-xs text-text-muted font-bold uppercase tracking-widest mt-1">Start by creating a tournament in the admin panel.</p>
-                      </div>
-                      <Link to="/admin/tournaments" className="btn-secondary inline-block px-10 py-3 text-xs uppercase italic font-black">
-                        Create Tournament
-                      </Link>
+                      {isAdmin ? (
+                        <>
+                          <div>
+                            <p className="text-xl font-black text-text-main italic uppercase tracking-tighter">No active arena battles</p>
+                            <p className="text-xs text-text-muted font-bold uppercase tracking-widest mt-1">Start by creating a tournament in the admin panel.</p>
+                          </div>
+                          <Link to="/admin/tournaments" className="btn-secondary inline-block px-10 py-3 text-xs uppercase italic font-black">
+                            Create Tournament
+                          </Link>
+                        </>
+                      ) : (
+                        <div>
+                          <p className="text-xl font-black text-text-main italic uppercase tracking-tighter">No active arena battles</p>
+                          <p className="text-xs text-text-muted font-bold uppercase tracking-widest mt-1">Check back soon for upcoming tournaments and challenges.</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </motion.div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Shell from '../components/layout/Shell';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { Bell, Trophy, MessageSquare, Calendar, Info, Clock, CheckCircle2, Shield } from 'lucide-react';
 import { formatDate, cn } from '../lib/utils';
 import { Notification } from '../types/database';
@@ -10,6 +10,8 @@ import LoadingState from '../components/ui/LoadingState';
 
 export default function Notifications() {
   const { user } = useAuth();
+  const isInitialLoad = React.useRef(true);
+  useRefetchOnFocus(fetchNotifications);
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,7 +24,9 @@ export default function Notifications() {
 
   async function fetchNotifications() {
     try {
-      setLoading(true);
+      if (isInitialLoad.current) {
+        setLoading(true);
+      }
       const { data, error } = await (supabase as any)
         .from('notifications')
         .select('*')
@@ -35,6 +39,7 @@ export default function Notifications() {
       console.error('Error fetching notifications:', err);
     } finally {
       setLoading(false);
+      isInitialLoad.current = false;
     }
   }
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Shell from '../components/layout/Shell';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import { MessageSquare, ChevronRight, User } from 'lucide-react';
 import { matchService } from '../services/matchService';
@@ -11,12 +11,14 @@ import { getPublicIdentity } from '../lib/utils';
 
 export default function Chat() {
   const { user } = useAuth();
+  const isInitialLoad = React.useRef(true);
+  useRefetchOnFocus(loadConversations);
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user) {
-      loadConversations();
+      loadConversations(true);
 
       // Realtime subscription for message updates to update previews/unread counts
       const channel = supabase
@@ -37,7 +39,7 @@ export default function Chat() {
     }
   }, [user]);
 
-  async function loadConversations(showLoading = true) {
+  async function loadConversations(showLoading = isInitialLoad.current) {
     if (!user) return;
     try {
       if (showLoading) setLoading(true);
@@ -47,6 +49,7 @@ export default function Chat() {
       console.error('Error loading conversations:', err);
     } finally {
       if (showLoading) setLoading(false);
+      isInitialLoad.current = false;
     }
   }
 

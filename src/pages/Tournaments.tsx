@@ -139,11 +139,13 @@ function TournamentCard({ tournament, isJoined }: { tournament: Tournament; isJo
           <StatusBadge status={tournament.status} />
         </div>
 
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-           <div className="w-16 h-16 bg-surface/50 backdrop-blur-md rounded-2xl border border-border-main flex items-center justify-center shadow-lg">
-              <ImageIcon className="w-8 h-8 text-text-muted opacity-50" />
-           </div>
-        </div>
+        {!tournament.banner_url && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+             <div className="w-16 h-16 bg-surface/50 backdrop-blur-md rounded-2xl border border-border-main flex items-center justify-center shadow-lg">
+                <ImageIcon className="w-8 h-8 text-text-muted opacity-50" />
+             </div>
+          </div>
+        )}
       </div>
 
       <div className="p-8 space-y-6">

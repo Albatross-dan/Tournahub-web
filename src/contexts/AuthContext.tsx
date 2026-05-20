@@ -9,46 +9,78 @@ interface AuthContextType {
   loading: boolean;
   isAdmin: boolean;
   signOut: () => Promise<void>;
+  refetchSignal: number;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+interface AuthProviderProps {
+  children: React.ReactNode;
+  onNavigate?: (path: string) => void;
+}
+
+export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const provisioningRef = React.useRef<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
+  const [refetchSignal, setRefetchSignal] = useState(0);
 
   useEffect(() => {
+    let isMounted = true;
     console.log('[AuthContext] Initializing auth provider...');
     
-    // Check initial session
-    const initAuth = async () => {
+    const fetchProfile = async (userId: string) => {
       try {
-        // Force session retrieval to ensure supabase client headers are hydrated
-        const session = await ensureAuthenticated();
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
         
-        if (session?.user) {
-          console.log('[AuthContext] Session found for:', session.user.id);
-          setUser(session.user);
-          
-          const profileData = await fetchProfile(session.user.id);
-          const isDevAdmin = session.user.email === 'danieloguda11221@gmail.com';
-
-          if (!profileData || (isDevAdmin && profileData.role !== 'admin')) {
-            await ensureProfile(session.user);
-            await fetchProfile(session.user.id);
-          }
+        if (error) {
+          console.error('Error fetching profile:', error);
+          return null;
         } else {
-          console.log('[AuthContext] No initial session found.');
-          setUser(null);
-          setProfile(null);
+          if (!isMounted) return null;
+          setProfile(data);
+          return data;
         }
       } catch (err) {
-        console.error('[AuthContext] initialization failed:', err);
+        return null;
       } finally {
-        // Mark as loaded ONLY after initial check completes
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    const applySession = async (session: any) => {
+      try {
+        if (!session) {
+          if (!isMounted) return;
+          setUser(null);
+          setProfile(null);
+          return;
+        }
+
+        const user = session.user;
+        if (!isMounted) return;
+        setUser(user);
+
+        const profileData = (await fetchProfile(user.id)) as Profile | null;
+        const isDevAdmin = user.email === 'danieloguda11221@gmail.com';
+
+        if (!profileData || (isDevAdmin && (profileData as Profile).role !== 'admin')) {
+          await ensureProfile(user);
+          await fetchProfile(user.id);
+        }
+      } catch (err) {
+        console.error('[AuthContext] applySession failed:', err);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -56,41 +88,104 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log(`[AuthContext] Auth event: ${event}`);
       
-      if (session?.user) {
-        setUser(session.user);
-        
-        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED') {
-          // IMPORTANT: If we got a new session, ensure headers are updated by getting it again
-          await supabase.auth.getSession();
-          
-          const isDevAdmin = session.user.email === 'danieloguda11221@gmail.com';
-          const profileData = await fetchProfile(session.user.id);
-          
-          if (!profileData || (isDevAdmin && profileData.role !== 'admin')) {
-            await ensureProfile(session.user);
-            await fetchProfile(session.user.id);
-          }
-        }
-        setLoading(false);
-      } else if (event === 'SIGNED_OUT') {
+      if (event === 'SIGNED_OUT') {
+        if (!isMounted) return;
         setUser(null);
         setProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      await applySession(session);
+    });
+
+    // After subscribing to onAuthStateChange, check if there is no session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        if (!isMounted) return;
         setLoading(false);
       }
     });
 
-    initAuth();
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState !== 'visible') return;
+
+      // Step 1: Try to get current session
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        // No session at all — force re-login
+        await supabase.auth.signOut();
+        if (isMounted) {
+          setUser(null);
+          setProfile(null);
+        }
+        if (onNavigate) {
+          onNavigate('/login');
+        } else {
+          window.location.href = '/login';
+        }
+        return;
+      }
+
+      // Step 2: Check if the token is close to expiry or already 
+      // expired. If so, force a refresh and WAIT for it to complete
+      // before doing anything else. This is the critical fix —
+      // we do not signal page components to re-fetch until we are
+      // 100% sure the token is fresh and valid.
+      const expiresAt = session.expires_at ? session.expires_at * 1000 : 0;
+      const fiveMinutes = 1000 * 60 * 5;
+      const needsRefresh = expiresAt - Date.now() < fiveMinutes;
+
+      let freshSession = session;
+
+      if (needsRefresh) {
+        const { data: refreshed, error: refreshError } = 
+          await supabase.auth.refreshSession();
+        
+        if (refreshError || !refreshed.session) {
+          // Refresh failed — token is dead, force re-login
+          await supabase.auth.signOut();
+          if (isMounted) {
+            setUser(null);
+            setProfile(null);
+          }
+          if (onNavigate) {
+            onNavigate('/login');
+          } else {
+            window.location.href = '/login';
+          }
+          return;
+        }
+
+        freshSession = refreshed.session;
+      }
+
+      // Step 3: Only NOW that we have a guaranteed fresh token,
+      // update auth state and signal page components to re-fetch.
+      // They will fetch with a valid token and get real data.
+      await applySession(freshSession);
+      if (isMounted) {
+        setRefetchSignal(prev => prev + 1);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Safety timeout
     const timer = setTimeout(() => {
-      setLoading(false);
+      if (isMounted) {
+        setLoading(false);
+      }
     }, 6000);
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
       clearTimeout(timer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [onNavigate]);
 
   async function ensureProfile(user: User) {
     if (provisioningRef.current[user.id]) return;
@@ -148,29 +243,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  async function fetchProfile(userId: string) {
-    if (profile && profile.id === userId) return profile;
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      
-      if (error) {
-        console.error('Error fetching profile:', error);
-        return null;
-      } else {
-        setProfile(data);
-        return data;
-      }
-    } catch (err) {
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }
-
   const signOut = async () => {
     console.log('[Auth] Initiating sign out sequence...');
     
@@ -189,19 +261,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn('[Auth] Supabase signOut failed or timed out:', err);
       });
 
-      // 3. Explicitly clear all local storage
-      localStorage.clear();
-      sessionStorage.clear();
+      // 3. Explicitly clear Supabase-owned keys from localStorage
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('sb-') || key.startsWith('supabase'))) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach((key) => localStorage.removeItem(key));
       
       console.log('[Auth] State cleared, redirecting...');
       
-      // 4. Force a hard reload to the login page
-      window.location.href = '/login';
+      if (onNavigate) {
+        onNavigate('/login');
+      } else {
+        window.location.href = '/login';
+      }
     } catch (err) {
       console.error('[Auth] Critical sign out failure:', err);
       // Hard fallback
-      localStorage.clear();
-      window.location.href = '/login';
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('sb-') || key.startsWith('supabase'))) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach((key) => localStorage.removeItem(key));
+      if (onNavigate) {
+        onNavigate('/login');
+      } else {
+        window.location.href = '/login';
+      }
     }
   };
 
@@ -211,9 +303,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     isAdmin: profile?.role === 'admin' || user?.email === 'danieloguda11221@gmail.com',
     signOut,
+    refetchSignal,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useRefetchOnFocus(callback: () => void) {
+  const { refetchSignal } = useAuth();
+  const callbackRef = React.useRef(callback);
+  
+  useEffect(() => {
+    callbackRef.current = callback;
+  });
+
+  useEffect(() => {
+    if (refetchSignal === 0) return;
+    callbackRef.current();
+  }, [refetchSignal]);
 }
 
 export function useAuth() {
