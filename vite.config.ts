@@ -12,7 +12,11 @@ export default defineConfig(({mode}) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        injectRegister: 'auto',
+        injectRegister: 'inline',
+        devOptions: {
+          enabled: true,
+          type: 'classic'
+        },
         includeAssets: ['favicon.ico', 'favicon.png', 'apple-touch-icon.png', 'robots.txt', 'sitemap.xml'],
         manifest: {
           name: 'Tournahub',
