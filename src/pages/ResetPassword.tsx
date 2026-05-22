@@ -16,6 +16,11 @@ export default function ResetPassword() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const safetyTimeout = setTimeout(() => {
+      console.warn('[ResetPassword] Safety timeout triggered. Setting checkingSession to false.');
+      setCheckingSession(false);
+    }, 5000);
+
     const parseUrlAndCheckSession = async () => {
       setError(null);
       setIsLinkExpired(false);
@@ -31,6 +36,7 @@ export default function ResetPassword() {
       if (errorMsg) {
         setError(`Recovery Link Error: ${decodeURIComponent(errorMsg).replace(/\+/g, ' ')}`);
         setIsLinkExpired(true);
+        clearTimeout(safetyTimeout);
         setCheckingSession(false);
         return;
       }
@@ -39,24 +45,41 @@ export default function ResetPassword() {
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        if (sessionError) {
+        let activeSession = session;
+        const hasTokenInUrl = params.has('access_token') || params.get('type') === 'recovery';
+
+        if (!activeSession && hasTokenInUrl) {
+          console.log('[ResetPassword] Token detected in URL but session not active yet. Retrying...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          const { data: { session: retriedSession }, error: retryError } = await supabase.auth.getSession();
+          if (!retryError) {
+            activeSession = retriedSession;
+          }
+        }
+
+        if (sessionError && !activeSession) {
           setError(sessionError.message);
           setIsLinkExpired(true);
-        } else if (!session) {
+        } else if (!activeSession) {
           setError('Invalid, missing, or expired reset link. Please try requesting a new password reset.');
           setIsLinkExpired(true);
         } else {
-          console.log('[ResetPassword] Verified active session for password change:', session.user?.email);
+          console.log('[ResetPassword] Verified active session for password change:', activeSession.user?.email);
         }
       } catch (err: any) {
         setError(err.message || 'An error occurred while establishing your session.');
         setIsLinkExpired(true);
       } finally {
+        clearTimeout(safetyTimeout);
         setCheckingSession(false);
       }
     };
 
     parseUrlAndCheckSession();
+
+    return () => {
+      clearTimeout(safetyTimeout);
+    };
   }, []);
 
   const handleResetPassword = async (e: React.FormEvent) => {

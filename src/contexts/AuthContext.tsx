@@ -91,10 +91,12 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       if (event === 'PASSWORD_RECOVERY') {
         console.log('[AuthContext] PASSWORD_RECOVERY event detected, routing to /reset-password');
         await applySession(session);
-        if (onNavigate) {
-          onNavigate('/reset-password');
-        } else {
-          window.location.href = '/reset-password';
+        if (window.location.pathname !== '/reset-password') {
+          if (onNavigate) {
+            onNavigate('/reset-password');
+          } else {
+            window.location.href = '/reset-password';
+          }
         }
         return;
       }
