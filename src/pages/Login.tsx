@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Trophy, Mail, Lock, Loader2 } from 'lucide-react';
 
 export default function Login() {
@@ -182,15 +182,12 @@ export default function Login() {
                   />
                   <label htmlFor="agree-terms" className="text-[10px] font-black text-text-muted hover:text-text-main uppercase tracking-wider leading-none cursor-pointer select-none relative z-20">
                     I agree to the{" "}
-                    <span
-                      onClick={(e) => {
-                        e.preventDefault();
-                        navigate("/terms");
-                      }}
+                    <Link
+                      to="/terms"
                       className="text-primary hover:underline italic font-black cursor-pointer"
                     >
                       Terms & Conditions
-                    </span>
+                    </Link>
                   </label>
                 </div>
 
@@ -204,15 +201,12 @@ export default function Login() {
                   />
                   <label htmlFor="agree-privacy" className="text-[10px] font-black text-text-muted hover:text-text-main uppercase tracking-wider leading-none cursor-pointer select-none relative z-20">
                     I agree to the{" "}
-                    <span
-                      onClick={(e) => {
-                        e.preventDefault();
-                        navigate("/privacy-policy");
-                      }}
+                    <Link
+                      to="/privacy-policy"
                       className="text-primary hover:underline italic font-black cursor-pointer"
                     >
                       Privacy Policy
-                    </span>
+                    </Link>
                   </label>
                 </div>
               </div>
@@ -332,19 +326,19 @@ export default function Login() {
         </div>
 
         <div className="mt-6 text-center flex items-center justify-center space-x-4">
-          <button
-            onClick={() => navigate('/terms')}
+          <Link
+            to="/terms"
             className="text-[10px] font-black uppercase tracking-widest text-text-muted hover:text-primary transition-all underline underline-offset-4 decoration-border-main"
           >
             Terms & Conditions
-          </button>
+          </Link>
           <span className="text-border-main text-xs font-black">•</span>
-          <button
-            onClick={() => navigate('/privacy-policy')}
+          <Link
+            to="/privacy-policy"
             className="text-[10px] font-black uppercase tracking-widest text-text-muted hover:text-primary transition-all underline underline-offset-4 decoration-border-main"
           >
             Privacy Policy
-          </button>
+          </Link>
         </div>
       </div>
     </div>
