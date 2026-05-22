@@ -12,10 +12,10 @@ export default defineConfig(({mode}) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        injectRegister: 'inline',
+        injectRegister: 'auto',
         devOptions: {
           enabled: true,
-          type: 'classic'
+          type: 'module'
         },
         includeAssets: ['favicon.ico', 'favicon.png', 'apple-touch-icon.png', 'robots.txt', 'sitemap.xml'],
         manifest: {
