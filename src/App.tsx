@@ -48,8 +48,9 @@ function AppRoutes() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/terms" element={<Legal />} />
-            <Route path="/privacy" element={<Legal />} />
-            <Route path="/legal" element={<Legal />} />
+            <Route path="/privacy-policy" element={<Legal />} />
+            <Route path="/privacy" element={<Navigate to="/privacy-policy" replace />} />
+            <Route path="/legal" element={<Navigate to="/privacy-policy" replace />} />
             
             <Route element={<ProtectedRoute />}>
               <Route path="/dashboard" element={<Dashboard />} />

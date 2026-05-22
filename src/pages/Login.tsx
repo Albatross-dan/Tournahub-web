@@ -207,7 +207,7 @@ export default function Login() {
                     <span
                       onClick={(e) => {
                         e.preventDefault();
-                        navigate("/privacy");
+                        navigate("/privacy-policy");
                       }}
                       className="text-primary hover:underline italic font-black cursor-pointer"
                     >
@@ -340,7 +340,7 @@ export default function Login() {
           </button>
           <span className="text-border-main text-xs font-black">•</span>
           <button
-            onClick={() => navigate('/privacy')}
+            onClick={() => navigate('/privacy-policy')}
             className="text-[10px] font-black uppercase tracking-widest text-text-muted hover:text-primary transition-all underline underline-offset-4 decoration-border-main"
           >
             Privacy Policy

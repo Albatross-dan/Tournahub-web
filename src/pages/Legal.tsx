@@ -255,7 +255,7 @@ export default function Legal() {
 
   useEffect(() => {
     // Detect page route and initial active tab
-    if (location.pathname.includes("privacy")) {
+    if (location.pathname.includes("privacy") || location.pathname.includes("privacy-policy")) {
       setActiveTab("privacy");
     } else if (location.pathname.includes("terms")) {
       setActiveTab("terms");
@@ -326,7 +326,11 @@ export default function Legal() {
               <button key={tab.id}
                 onClick={() => {
                   setActiveTab(tab.id);
-                  navigate(`#${tab.id}`);
+                  if (tab.id === "privacy") {
+                    navigate("/privacy-policy");
+                  } else {
+                    navigate("/terms");
+                  }
                 }}
                 style={{
                   borderRadius: 9, fontWeight: 600, fontFamily: "inherit",
@@ -419,7 +423,7 @@ export default function Legal() {
 
           {/* Footer note */}
           <div style={{ marginTop: 40, textAlign: "center", fontSize: 13, color: "#334155" }}>
-            © {new Date().getFullYear()} Tournahub · All rights reserved · <span onClick={() => { setActiveTab("terms"); navigate("#terms"); }} style={{ color: "#475569", textDecoration: "none", cursor: "pointer" }}>Terms</span> · <span onClick={() => { setActiveTab("privacy"); navigate("#privacy"); }} style={{ color: "#475569", textDecoration: "none", cursor: "pointer" }}>Privacy</span>
+            © {new Date().getFullYear()} Tournahub · All rights reserved · <span onClick={() => { setActiveTab("terms"); navigate("/terms"); }} style={{ color: "#475569", textDecoration: "none", cursor: "pointer" }}>Terms</span> · <span onClick={() => { setActiveTab("privacy"); navigate("/privacy-policy"); }} style={{ color: "#475569", textDecoration: "none", cursor: "pointer" }}>Privacy</span>
           </div>
         </main>
       </div>

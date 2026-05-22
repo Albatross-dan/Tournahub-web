@@ -363,7 +363,7 @@ export default function Dashboard() {
               </Link>
               <span className="text-border-main text-xs font-black">•</span>
               <Link
-                to="/privacy"
+                to="/privacy-policy"
                 className="text-[10px] font-black uppercase tracking-widest text-text-muted hover:text-primary transition-all underline underline-offset-4 decoration-border-main"
               >
                 Privacy Policy
