@@ -10,6 +10,7 @@ import { walletService } from '../../services/walletService';
 import { formatCurrency, cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../../lib/supabase';
+import { usePWAInstall } from '../../hooks/usePWAInstall';
 
 export default function Navbar() {
   const { profile, user, isAdmin } = useAuth();
@@ -18,6 +19,7 @@ export default function Navbar() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { isInstallable, installApp } = usePWAInstall();
   const initial = React.useMemo(() => 
     (profile?.username || user?.email || 'U')[0].toUpperCase(), 
   [profile?.username, user?.email]);
@@ -241,6 +243,14 @@ export default function Navbar() {
             <RefreshCw className="w-2 h-2 mr-1" />
             Sync: {lastUpdated}
           </span>
+          {isInstallable && (
+            <button
+              onClick={installApp}
+              className="px-2 py-0.5 rounded-full bg-primary text-slate-900 border border-primary text-[7px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition-all flex items-center hover:bg-white"
+            >
+              🚀 Install App
+            </button>
+          )}
         </div>
         
         {balance !== null && balance < 5 && (
