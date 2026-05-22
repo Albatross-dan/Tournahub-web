@@ -1,6 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import LoadingState from './components/ui/LoadingState';
@@ -36,6 +36,20 @@ const ScheduleTournament = lazy(() => import('./pages/admin/ScheduleTournament')
 const LiveTournament = lazy(() => import('./pages/admin/LiveTournament'));
 const Moderation = lazy(() => import('./pages/admin/Moderation'));
 
+function HomeRoute() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <LoadingState fullPage />;
+  }
+
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <Login />;
+}
+
 function AppRoutes() {
   const navigate = useNavigate();
 
@@ -44,7 +58,7 @@ function AppRoutes() {
       <ThemeProvider>
         <Suspense fallback={<LoadingState fullPage />}>
           <Routes>
-            <Route path="/login" element={<Login />} />
+            <Route path="/login" element={<HomeRoute />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/terms" element={<Legal />} />
@@ -82,9 +96,7 @@ function AppRoutes() {
               <Route path="/admin/moderation" element={<Moderation />} />
             </Route>
 
-            <Route path="/" element={
-              <Navigate to="/dashboard" replace />
-            } />
+            <Route path="/" element={<HomeRoute />} />
           </Routes>
         </Suspense>
       </ThemeProvider>
