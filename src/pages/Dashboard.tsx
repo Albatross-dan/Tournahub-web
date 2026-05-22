@@ -25,7 +25,7 @@ import { VerificationStatus } from '../types/verification.types';
 import RecentChampions from '../components/home/RecentChampions';
 
 export default function Dashboard() {
-  const { user, profile, isAdmin } = useAuth();
+  const { user, profile, isAdmin, refetchSignal } = useAuth();
   const isInitialLoad = React.useRef(true);
   useRefetchOnFocus(loadDashboardData);
   
@@ -51,10 +51,10 @@ export default function Dashboard() {
   const isDashboardLoading = loading || activeLoading || completedLoading;
 
   useEffect(() => {
-    if (user) {
-      loadDashboardData();
+    if (user?.id) {
+       loadDashboardData();
     }
-  }, [user]);
+  }, [user?.id, refetchSignal]);
 
   async function loadDashboardData() {
     if (!user) return;
@@ -262,6 +262,113 @@ export default function Dashboard() {
                 </Link>
               </div>
             </motion.div>
+          </div>
+        </div>
+
+        {/* Professional Footer Section */}
+        <div className="mt-16 pt-12 pb-8 border-t border-border-main w-full flex flex-col items-center">
+          <div className="max-w-md w-full text-center space-y-6">
+            <div className="space-y-2">
+              <h4 className="text-[11px] font-black uppercase tracking-[0.25em] text-text-main">
+                Connect With Tournahub
+              </h4>
+              <p className="text-[11px] text-text-muted tracking-wide">
+                Join our active community and follow matches, brackets, & announcements.
+              </p>
+            </div>
+
+            {/* Social Icons grid/flex */}
+            <div className="flex items-center justify-center gap-4">
+              <a
+                href="https://www.facebook.com/profile.php?id=61590368578569"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Facebook"
+                className="w-10 h-10 rounded-xl bg-[#1877F2]/5 border border-[#1877F2]/30 text-[#1877F2] hover:bg-[#1877F2]/15 hover:border-[#1877F2]/60 hover:shadow-[0_0_15px_rgba(24,119,242,0.35)] flex items-center justify-center transition-all duration-300 transform hover:-translate-y-1"
+                id="social-fb"
+              >
+                <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                  <path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" />
+                </svg>
+              </a>
+
+              <a
+                href="https://tiktok.com/@tournahub"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="TikTok"
+                className="w-10 h-10 rounded-xl bg-black border border-[#fe2c55]/30 text-white hover:border-[#00f2fe]/60 hover:shadow-[0_0_15px_rgba(0,242,254,0.35)] flex items-center justify-center transition-all duration-300 transform hover:-translate-y-1"
+                id="social-tt"
+              >
+                <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                  <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.02 1.59 4.23.97 1.14 2.37 1.84 3.84 2.05v3.66c-1.89-.08-3.74-.82-5.13-2.11v6.97c-.01 2.28-1.24 4.41-3.26 5.48-2.02 1.07-4.52.88-6.38-.49-1.86-1.37-2.68-3.73-2.08-5.99.6-2.26 2.65-3.82 5.01-3.82.47 0 .94.05 1.4.15v3.83c-.87-.31-1.84-.18-2.6.35-.76.53-1.18 1.44-1.07 2.38.11.94.75 1.72 1.63 1.99.88.27 1.85-.04 2.4-.78.36-.48.55-1.06.54-1.66V0h.01a.34.34 0 0 0-.25.02z" />
+                </svg>
+              </a>
+
+              <a
+                href="https://www.instagram.com/tournahub.me?igsh=MWVpNWU3cGI2YjQzdQ=="
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Instagram"
+                className="w-10 h-10 rounded-xl bg-[#E1306C]/5 border border-[#E1306C]/30 hover:bg-[#E1306C]/15 hover:border-[#E1306C]/60 hover:shadow-[0_0_15px_rgba(225,48,108,0.35)] flex items-center justify-center transition-all duration-300 transform hover:-translate-y-1"
+                id="social-ig"
+              >
+                <svg className="w-5 h-5 fill-none stroke-current" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <defs>
+                    <linearGradient id="instagram-gradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#f9ce34" />
+                      <stop offset="50%" stopColor="#ee2a7b" />
+                      <stop offset="100%" stopColor="#6228d7" />
+                    </linearGradient>
+                  </defs>
+                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5" stroke="url(#instagram-gradient)" />
+                  <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" stroke="url(#instagram-gradient)" />
+                  <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" stroke="url(#instagram-gradient)" />
+                </svg>
+              </a>
+
+              <a
+                href="https://whatsapp.com/channel/0029Vb7nKTkK5cDClzvMYT1Z"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="WhatsApp"
+                className="w-10 h-10 rounded-xl bg-[#25D366]/5 border border-[#25D366]/30 text-[#25D366] hover:bg-[#25D366]/15 hover:border-[#25D366]/60 hover:shadow-[0_0_15px_rgba(37,211,102,0.35)] flex items-center justify-center transition-all duration-300 transform hover:-translate-y-1"
+                id="social-wa"
+              >
+                <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.263 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.713-1.455L0 24zm6.59-4.846c1.657.983 3.287 1.498 4.965 1.499 5.485 0 9.943-4.456 9.946-9.942.001-2.657-1.026-5.152-2.895-7.022C16.793 1.799 14.3 .772 11.649.771 6.161.771 1.7 5.227 1.697 10.716c-.001 1.77.464 3.498 1.348 5.024L2.016 21.9l6.324-1.66c-1.5-.916-2.583-2.316-2.593-3.086zm11.446-4.524c-.3-.15-1.773-.875-2.048-.975-.275-.1-.475-.15-.675.15-.2.3-.775.975-.95 1.175-.175.2-.35.225-.65.075-.3-.15-1.265-.467-2.41-1.485-.89-.794-1.49-1.775-1.665-2.075-.175-.3-.018-.462.13-.61.134-.133.3-.349.45-.524.15-.175.2-.3.3-.5.1-.2.05-.375-.025-.525-.075-.15-.675-1.625-.925-2.225-.244-.589-.492-.51-.675-.519-.175-.008-.375-.01-.575-.01-.2 0-.525.075-.8 1.025-.275.95-1.05 3.1-1.05 3.325s.2 1.025.775 1.825c.55.775 1.95 3.483 4.3 4.4a12.871 12.871 0 0 0 2.225.688c.85.12 1.625.08 2.238.01 1.15-.175 2.508-.95 2.733-1.85s.225-1.675.15-1.85c-.075-.175-.275-.275-.575-.425z" />
+                </svg>
+              </a>
+            </div>
+
+            {/* Support section */}
+            <div className="pt-2 border-t border-border-main/40 space-y-1">
+              <span className="text-[9px] font-black uppercase tracking-[0.2em] text-text-muted block">Support Helpdesk</span>
+              <a
+                href="mailto:support@tournahub.me"
+                className="text-xs font-bold text-text-main hover:text-primary transition-all underline underline-offset-4 decoration-border-main"
+                id="support-email"
+              >
+                support@tournahub.me
+              </a>
+            </div>
+
+            {/* Terms and Privacy links */}
+            <div className="pt-4 flex items-center justify-center space-x-4">
+              <Link
+                to="/terms"
+                className="text-[10px] font-black uppercase tracking-widest text-text-muted hover:text-primary transition-all underline underline-offset-4 decoration-border-main"
+              >
+                Terms & Conditions
+              </Link>
+              <span className="text-border-main text-xs font-black">•</span>
+              <Link
+                to="/privacy"
+                className="text-[10px] font-black uppercase tracking-widest text-text-muted hover:text-primary transition-all underline underline-offset-4 decoration-border-main"
+              >
+                Privacy Policy
+              </Link>
+            </div>
           </div>
         </div>
       </motion.div>

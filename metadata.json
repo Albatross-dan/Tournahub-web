@@ -1,6 +1,6 @@
 {
-  "name": "TournaHub",
-  "description": "A production-grade tournament management platform for players and admins with real-time match tracking, wallet management, and secure prize distribution.",
+  "name": "Tournahub",
+  "description": "Create and manage football and eFootball tournaments with fixtures, standings, knockout brackets, leagues, and competitions on Tournahub.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

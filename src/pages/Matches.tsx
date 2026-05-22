@@ -15,7 +15,7 @@ import { VerificationStatus } from '../types/verification.types';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Matches() {
-  const { user } = useAuth();
+  const { user, refetchSignal } = useAuth();
   const isInitialLoad = React.useRef(true);
   const [matches, setMatches] = useState<Match[]>([]);
   const [conversations, setConversations] = useState<any[]>([]);
@@ -35,7 +35,7 @@ export default function Matches() {
 
   useEffect(() => {
     isInitialLoad.current = true;
-    if (!user) return;
+    if (!user?.id) return;
     
     if (activeTab === 'matches') {
       loadMatches();
@@ -64,7 +64,7 @@ export default function Matches() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, activeTab]);
+  }, [user?.id, activeTab, refetchSignal]);
 
   async function loadMatches(showLoading = isInitialLoad.current) {
     try {

@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import LoadingState from '../components/ui/LoadingState';
 import StandingsTable from '../components/standings/StandingsTable';
 import FixturesList from '../components/fixtures/FixturesList';
+import GroupStageTournamentView from '../components/tournament/GroupStageTournamentView';
 import StatusBadge from '../components/ui/StatusBadge';
 import { TournamentStatus } from '../constants';
 import BadgeSelector from '../components/badges/BadgeSelector';
@@ -25,7 +26,7 @@ import StorageImage from '../components/common/StorageImage';
 
 export default function TournamentDetails() {
   const { id } = useParams<{ id: string }>();
-  const { user, profile } = useAuth();
+  const { user, profile, refetchSignal } = useAuth();
   const isInitialLoad = React.useRef(true);
   
   const fetchTournamentData = () => {
@@ -102,7 +103,7 @@ export default function TournamentDetails() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [id, user]);
+  }, [id, user?.id, refetchSignal]);
 
   useEffect(() => {
     if (tournamentLoading === false && !tournament) {
@@ -293,15 +294,9 @@ export default function TournamentDetails() {
     !['cancelled', 'withdrawn', 'rejected', 'refunded'].includes(r.status || '')
   );
 
-  const playersCount = Math.max(
-    regStatus ? regStatus.players_registered : 0,
-    activeRegistrations.length
-  );
+  const playersCount = registrations.length;
 
-  const spotsLeft = Math.min(
-    regStatus ? regStatus.spots_left : tournament.max_players,
-    Math.max(0, (tournament.max_players || 0) - activeRegistrations.length)
-  );
+  const spotsLeft = Math.max(0, (tournament.max_players || 0) - registrations.length);
 
   const currentStatus = regStatus?.tournament_status || tournament.status;
   const isClosed = currentStatus !== TournamentStatus.REGISTRATION_OPEN;
@@ -631,7 +626,11 @@ export default function TournamentDetails() {
               )}
  
               {activeTab === 'standings' && (
-                <StandingsTable tournamentId={tournament.id} registrations={registrations} />
+                tournament.type === 'group_stage' ? (
+                  <GroupStageTournamentView tournamentId={tournament.id} />
+                ) : (
+                  <StandingsTable tournamentId={tournament.id} registrations={registrations} tournamentType={tournament.type} />
+                )
               )}
               {activeTab === 'players' && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

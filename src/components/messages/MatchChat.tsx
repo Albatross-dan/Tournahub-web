@@ -591,10 +591,12 @@ function MessageItem({ message, isMe, badgeUrl, opponentId, isOpponentOnline }: 
                   <Loader2 className="w-2.5 h-2.5 animate-spin text-zinc-600" />
                 ) : isError ? (
                   <span className="text-[8px] font-black text-red-500 uppercase">FAILED</span>
-                ) : delivered ? (
-                  <CheckCheck className="w-3 h-3 text-primary" />
+                ) : isReadByOpponent ? (
+                  <CheckCheck className="w-3 h-3 text-sky-400 font-bold" />
+                ) : (isOpponentOnline || delivered) ? (
+                  <CheckCheck className="w-3 h-3 text-zinc-500" />
                 ) : (
-                  <Check className="w-3 h-3 text-zinc-600" />
+                  <Check className="w-3 h-3 text-zinc-500" />
                 )}
               </div>
             )}

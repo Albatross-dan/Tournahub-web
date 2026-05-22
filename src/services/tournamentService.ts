@@ -44,21 +44,49 @@ export const tournamentService = {
 
       // Fetch registration counts for these tournaments
       const tournamentIds = (tournaments as any[]).map(t => t.id);
-      const { data: allRegs, error: regsError } = await (supabase as any)
-        .from('registrations')
-        .select('tournament_id, status')
-        .in('tournament_id', tournamentIds);
+      
+      // Let's fetch registrations, standings, and matches in parallel to compile accurate, consistent counts
+      const [regsRes, standingsRes, matchesRes] = await Promise.all([
+        (supabase as any).from('registrations').select('tournament_id, status, user_id').in('tournament_id', tournamentIds),
+        (supabase as any).from('standings').select('tournament_id, player_id').in('tournament_id', tournamentIds),
+        (supabase as any).from('matches').select('tournament_id, player1, player2').in('tournament_id', tournamentIds)
+      ]);
 
-      if (regsError) {
-        console.error('[tournamentService] Error fetching registrations for counts:', regsError);
-        return (tournaments as any[]).map(t => ({ ...t, registrations_count: 0 }));
-      }
+      const allRegs = regsRes.data || [];
+      const allStandings = standingsRes.data || [];
+      const allMatches = matchesRes.data || [];
 
       return (tournaments as any[]).map(t => {
-        const matchingRegs = (allRegs as any[])?.filter(r => r.tournament_id === t.id) || [];
-        const count = matchingRegs.filter(r => 
-          ['registered', 'approved', 'checked_in', 'pending', 'confirmed', 'waitlisted'].includes(r.status || '')
-        ).length;
+        const uniqueUserIds = new Set<string>();
+
+        // 1. Add active registrations
+        allRegs
+          .filter(r => r.tournament_id === t.id && ['registered', 'approved', 'checked_in', 'pending', 'confirmed', 'waitlisted'].includes(r.status || ''))
+          .forEach(r => {
+            if (r.user_id) uniqueUserIds.add(r.user_id);
+          });
+
+        // 2. Add players from standings
+        allStandings
+          .filter(s => s.tournament_id === t.id)
+          .forEach(s => {
+            const pId = s.player_id;
+            if (pId) uniqueUserIds.add(pId);
+          });
+
+        // 3. Add players from matches (fixtures)
+        allMatches
+          .filter(m => m.tournament_id === t.id)
+          .forEach(m => {
+            if (m.player1 && m.player1 !== '00000000-0000-0000-0000-000000000000') {
+              uniqueUserIds.add(m.player1);
+            }
+            if (m.player2 && m.player2 !== '00000000-0000-0000-0000-000000000000') {
+              uniqueUserIds.add(m.player2);
+            }
+          });
+
+        const count = uniqueUserIds.size;
         
         return {
           ...t,
@@ -376,30 +404,122 @@ export const tournamentService = {
       
       // 2. Fetch all registrations manually to ensure we didn't miss anyone
       const manualRegs = await this.getRegistrations(tournamentId);
-      
-      // 3. Merge them, preferring RPC data for duplicate entries
-      const merged = [...manualRegs];
-      rpcPlayers.forEach((rpcP: any) => {
-        const userId = rpcP.user_id || rpcP.id;
-        const idx = merged.findIndex(m => (m.user_id || m.id) === userId);
-        
-        // Ensure RPC data also has flattened fields
-        const flattenedRpc = {
-          ...rpcP,
-          username: getPublicIdentity(rpcP)
-        };
 
-        if (idx >= 0) {
-          merged[idx] = { ...merged[idx], ...flattenedRpc };
-        } else {
-          merged.push(flattenedRpc);
+      // Use a Map keyed on unique user profile UUID (user_id) to eliminate duplicates
+      const playersMap = new Map<string, any>();
+
+      // Merge manual registrations
+      (manualRegs || []).forEach((m: any) => {
+        const uId = m.user_id;
+        if (uId) {
+          playersMap.set(uId, {
+            user_id: uId,
+            id: m.id || uId,
+            username: m.username || 'Contender',
+            avatar_url: m.avatar_url || null,
+            badge_id: m.badge_id || null,
+            status: m.status || 'registered',
+            registration_status: m.registration_status || m.status || 'Registered'
+          });
         }
       });
+
+      // Merge RPC players (from get_tournament_registered_players)
+      (rpcPlayers || []).forEach((rpcP: any) => {
+        const uId = rpcP.user_id || rpcP.id;
+        if (uId) {
+          const existing = playersMap.get(uId) || {};
+          playersMap.set(uId, {
+            ...existing,
+            user_id: uId,
+            id: existing.id || rpcP.id || uId,
+            username: rpcP.username || getPublicIdentity(rpcP) || existing.username || 'Contender',
+            avatar_url: rpcP.avatar_url || existing.avatar_url || null,
+            badge_id: rpcP.badge_id || existing.badge_id || null,
+            status: rpcP.status || existing.status || 'registered',
+            registration_status: rpcP.registration_status || rpcP.status || existing.registration_status || 'Registered'
+          });
+        }
+      });
+
+      // 4. Extract players from fixtures in case registration state has altered
+      try {
+        const fixtures = await this.getFixturesWithBadges(tournamentId);
+        if (fixtures && fixtures.length > 0) {
+          fixtures.forEach((f: any) => {
+            if (f.player1 && f.player1 !== '00000000-0000-0000-0000-000000000000') {
+              const uId = f.player1;
+              const existing = playersMap.get(uId) || {};
+              playersMap.set(uId, {
+                ...existing,
+                user_id: uId,
+                id: existing.id || uId,
+                username: f.player1_username || existing.username || 'Contender',
+                avatar_url: f.player1_avatar || existing.avatar_url || null,
+                badge_id: f.player1_badge_id || existing.badge_id || null,
+                status: existing.status || 'registered',
+                registration_status: existing.registration_status || 'Registered'
+              });
+            }
+            if (f.player2 && f.player2 !== '00000000-0000-0000-0000-000000000000') {
+              const uId = f.player2;
+              const existing = playersMap.get(uId) || {};
+              playersMap.set(uId, {
+                ...existing,
+                user_id: uId,
+                id: existing.id || uId,
+                username: f.player2_username || existing.username || 'Contender',
+                avatar_url: f.player2_avatar || existing.avatar_url || null,
+                badge_id: f.player2_badge_id || existing.badge_id || null,
+                status: existing.status || 'registered',
+                registration_status: existing.registration_status || 'Registered'
+              });
+            }
+          });
+        }
+      } catch (fixtureErr) {
+        console.warn('[tournamentService] Failed to extract tournament players from fixtures:', fixtureErr);
+      }
+
+      // 5. Extract players from standings (for group stages)
+      try {
+        const { data: standingsData } = await supabase
+          .from('standings')
+          .select('*, profiles(id, username, avatar_url)')
+          .eq('tournament_id', tournamentId);
+        
+        if (standingsData && standingsData.length > 0) {
+          standingsData.forEach((st: any) => {
+            const uId = st.player_id || st.profiles?.id;
+            if (uId) {
+              const existing = playersMap.get(uId) || {};
+              playersMap.set(uId, {
+                ...existing,
+                user_id: uId,
+                id: existing.id || uId,
+                username: st.profiles?.username || existing.username || 'Contender',
+                avatar_url: st.profiles?.avatar_url || existing.avatar_url || null,
+                status: existing.status || 'registered',
+                registration_status: existing.registration_status || 'Registered'
+              });
+            }
+          });
+        }
+      } catch (standingsErr) {
+        console.warn('[tournamentService] Failed to extract tournament players from standings:', standingsErr);
+      }
       
-      return merged;
+      return Array.from(playersMap.values());
     } catch (err) {
       console.error('[tournamentService] getRegisteredPlayers failed:', err);
-      return this.getRegistrations(tournamentId);
+      // Fallback: try manual registrations + fixtures/standings
+      let fallbackMerged: any[] = [];
+      try {
+        fallbackMerged = await this.getRegistrations(tournamentId);
+      } catch (rErr) {
+        fallbackMerged = [];
+      }
+      return fallbackMerged;
     }
   },
 
@@ -411,7 +531,23 @@ export const tournamentService = {
       console.error('[tournamentService] getFixturesWithBadges failed:', error);
       throw error;
     }
-    return data?.fixtures || [];
+    const fixturesList = Array.isArray(data) ? data : (data?.fixtures || []);
+    const seen = new Set();
+    const uniqueFixtures = [];
+    for (const f of fixturesList) {
+      if (!f) continue;
+      
+      const p1Id = f.player1 || f.player1_username || '';
+      const p2Id = f.player2 || f.player2_username || '';
+      const sortedPlayers = [p1Id, p2Id].sort().join('-');
+      const matchKey = `${f.stage || ''}-${f.round || ''}-${f.group_name || ''}-${sortedPlayers}`;
+
+      if (!seen.has(matchKey)) {
+        seen.add(matchKey);
+        uniqueFixtures.push(f);
+      }
+    }
+    return uniqueFixtures;
   },
 
   async listBadgesForPicker(tournamentId: string) {

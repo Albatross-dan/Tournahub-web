@@ -9,7 +9,7 @@ import { Notification } from '../types/database';
 import LoadingState from '../components/ui/LoadingState';
 
 export default function Notifications() {
-  const { user } = useAuth();
+  const { user, refetchSignal } = useAuth();
   const isInitialLoad = React.useRef(true);
   useRefetchOnFocus(fetchNotifications);
   const navigate = useNavigate();
@@ -17,10 +17,10 @@ export default function Notifications() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
+    if (user?.id) {
       fetchNotifications();
     }
-  }, [user]);
+  }, [user?.id, refetchSignal]);
 
   async function fetchNotifications() {
     try {

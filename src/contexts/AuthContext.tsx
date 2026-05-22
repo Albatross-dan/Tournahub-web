@@ -88,11 +88,30 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log(`[AuthContext] Auth event: ${event}`);
       
+      if (event === 'PASSWORD_RECOVERY') {
+        console.log('[AuthContext] PASSWORD_RECOVERY event detected, routing to /reset-password');
+        await applySession(session);
+        if (onNavigate) {
+          onNavigate('/reset-password');
+        } else {
+          window.location.href = '/reset-password';
+        }
+        return;
+      }
+
       if (event === 'SIGNED_OUT') {
         if (!isMounted) return;
         setUser(null);
         setProfile(null);
         setLoading(false);
+        return;
+      }
+
+      if (event === 'TOKEN_REFRESHED') {
+        await applySession(session);
+        if (isMounted) {
+          setRefetchSignal(prev => prev + 1);
+        }
         return;
       }
 
@@ -107,71 +126,6 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       }
     });
 
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState !== 'visible') return;
-
-      // Step 1: Try to get current session
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (!session) {
-        // No session at all — force re-login
-        await supabase.auth.signOut();
-        if (isMounted) {
-          setUser(null);
-          setProfile(null);
-        }
-        if (onNavigate) {
-          onNavigate('/login');
-        } else {
-          window.location.href = '/login';
-        }
-        return;
-      }
-
-      // Step 2: Check if the token is close to expiry or already 
-      // expired. If so, force a refresh and WAIT for it to complete
-      // before doing anything else. This is the critical fix —
-      // we do not signal page components to re-fetch until we are
-      // 100% sure the token is fresh and valid.
-      const expiresAt = session.expires_at ? session.expires_at * 1000 : 0;
-      const fiveMinutes = 1000 * 60 * 5;
-      const needsRefresh = expiresAt - Date.now() < fiveMinutes;
-
-      let freshSession = session;
-
-      if (needsRefresh) {
-        const { data: refreshed, error: refreshError } = 
-          await supabase.auth.refreshSession();
-        
-        if (refreshError || !refreshed.session) {
-          // Refresh failed — token is dead, force re-login
-          await supabase.auth.signOut();
-          if (isMounted) {
-            setUser(null);
-            setProfile(null);
-          }
-          if (onNavigate) {
-            onNavigate('/login');
-          } else {
-            window.location.href = '/login';
-          }
-          return;
-        }
-
-        freshSession = refreshed.session;
-      }
-
-      // Step 3: Only NOW that we have a guaranteed fresh token,
-      // update auth state and signal page components to re-fetch.
-      // They will fetch with a valid token and get real data.
-      await applySession(freshSession);
-      if (isMounted) {
-        setRefetchSignal(prev => prev + 1);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
     // Safety timeout
     const timer = setTimeout(() => {
       if (isMounted) {
@@ -183,7 +137,6 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       isMounted = false;
       subscription.unsubscribe();
       clearTimeout(timer);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [onNavigate]);
 
@@ -201,22 +154,32 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         .maybeSingle();
 
       if (!existingProfile) {
-        // Prioritize username from metadata (passed during signup)
+        // Prioritize username from metadata (passed during signup) or pending Google signup username
+        const pendingUsername = localStorage.getItem('pending_oauth_username');
         const metadataUsername = user.user_metadata?.username;
         const baseUsername = user.email?.split('@')[0] || 'user';
-        const finalUsername = metadataUsername || `${baseUsername}_${user.id.slice(0, 4)}`;
+        const finalUsername = pendingUsername || metadataUsername || `${baseUsername}_${user.id.slice(0, 4)}`;
 
         await (supabase as any).from('profiles').insert({
           id: user.id,
           username: finalUsername,
           role: isDevAdmin ? 'admin' : 'user'
         });
+
+        if (pendingUsername) {
+          localStorage.removeItem('pending_oauth_username');
+        }
       } else {
-        // Migration: If profile exists but username is still a default/missing, try to sync from metadata
+        // Migration: If profile exists but username is still a default/missing, try to sync from metadata or pending oauth
+        const pendingUsername = localStorage.getItem('pending_oauth_username');
         const metadataUsername = user.user_metadata?.username;
-        if (metadataUsername && (!existingProfile.username || existingProfile.username.includes('_'))) {
+        const targetUsername = pendingUsername || metadataUsername;
+        if (targetUsername && (!existingProfile.username || existingProfile.username.includes('_'))) {
            // Only update if it looks like a generated name or is null
-           await (supabase as any).from('profiles').update({ username: metadataUsername }).eq('id', user.id);
+           await (supabase as any).from('profiles').update({ username: targetUsername }).eq('id', user.id);
+           if (pendingUsername) {
+             localStorage.removeItem('pending_oauth_username');
+           }
         }
         
         if (isDevAdmin && existingProfile.role !== 'admin') {

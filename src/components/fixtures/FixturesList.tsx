@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { tournamentService } from '../../services/tournamentService';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatDate, getPublicIdentity } from '../../lib/utils';
 import LoadingState from '../ui/LoadingState';
 import { PlayerBadge } from '../ui/PlayerBadge';
 import { useMatchCompletionSync } from '../../hooks/useMatchCompletionSync';
-import { Calendar } from 'lucide-react';
+import { Calendar, Trophy, Share2, Grid, List } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
 interface FixturesListProps {
   tournamentId: string;
@@ -14,11 +15,12 @@ interface FixturesListProps {
 
 export default function FixturesList({ tournamentId }: FixturesListProps) {
   const [matches, setMatches] = useState<any[]>([]);
+  const [tournament, setTournament] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const { refreshCount } = useMatchCompletionSync(tournamentId);
 
   useEffect(() => {
-    fetchMatches();
+    fetchMatchesAndTournament();
 
     const channel = supabase
       .channel(`fixtures-badges-${tournamentId}`)
@@ -31,7 +33,7 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
           filter: `tournament_id=eq.${tournamentId}`,
         },
         () => {
-          fetchMatches();
+          fetchMatchesAndTournament();
         }
       )
       .subscribe();
@@ -41,12 +43,32 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
     };
   }, [tournamentId, refreshCount]);
 
-  async function fetchMatches() {
+  async function fetchMatchesAndTournament() {
     try {
-      const data = await tournamentService.getFixturesWithBadges(tournamentId);
-      setMatches(data || []);
+      const [matchesData, tournamentData] = await Promise.all([
+        tournamentService.getFixturesWithBadges(tournamentId),
+        tournamentService.getById(tournamentId),
+      ]);
+      const rawMatches = matchesData || [];
+      const seen = new Set();
+      const uniqueMatches = [];
+      for (const m of rawMatches) {
+        if (!m) continue;
+        
+        const p1Id = m.player1 || m.player1_username || '';
+        const p2Id = m.player2 || m.player2_username || '';
+        const sortedPlayers = [p1Id, p2Id].sort().join('-');
+        const matchKey = `${m.stage || ''}-${m.round || ''}-${m.group_name || ''}-${sortedPlayers}`;
+
+        if (!seen.has(matchKey)) {
+          seen.add(matchKey);
+          uniqueMatches.push(m);
+        }
+      }
+      setMatches(uniqueMatches);
+      setTournament(tournamentData);
     } catch (err) {
-      console.error('Error fetching matches:', err);
+      console.error('Error fetching matches or tournament:', err);
     } finally {
       setLoading(false);
     }
@@ -60,7 +82,9 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
     );
   }
 
-  // Group by stage and round
+  const isKnockout = tournament?.type === 'knockout';
+
+  // Group matches by stage and round
   const groupedMatches = matches.reduce((acc: any, match) => {
     const stage = match.stage || 'knockout';
     if (!acc[stage]) acc[stage] = {};
@@ -70,11 +94,9 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
     return acc;
   }, {});
 
-  // Get all unique stages from the data to ensure we show everything
   const dataStages = Object.keys(groupedMatches);
   const stagesInOrderPredefined = ['group', 'group_stage', 'league', 'knockout', 'main', 'quarterfinal', 'semifinal', 'final'];
   
-  // Combine predefined order with any other stages found in data
   const stagesInOrder = [
     ...stagesInOrderPredefined.filter(s => dataStages.includes(s)),
     ...dataStages.filter(s => !stagesInOrderPredefined.includes(s))
@@ -98,7 +120,7 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {roundMatches.map((match: any, idx: number) => (
                     <motion.div
-                      key={`${match.id}-${idx}`}
+                      key={`${match.match_id || match.id || idx}`}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: idx * 0.05 }}

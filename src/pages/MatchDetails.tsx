@@ -21,7 +21,7 @@ import { PlayerBadge } from '../components/ui/PlayerBadge';
 
 export default function MatchDetails() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, refetchSignal } = useAuth();
   const isInitialLoad = React.useRef(true);
   useRefetchOnFocus(loadMatchData);
   const navigate = useNavigate();
@@ -52,7 +52,7 @@ export default function MatchDetails() {
     return () => {
       supabase.removeChannel(matchChannel);
     };
-  }, [id]);
+  }, [id, user?.id, refetchSignal]);
 
   async function loadMatchData(showLoading = isInitialLoad.current) {
     if (!id) return;

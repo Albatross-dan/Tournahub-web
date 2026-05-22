@@ -10,7 +10,7 @@ import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
 export function useWallet(preferredCurrency: SupportedCurrency = 'USD') {
-  const { user } = useAuth();
+  const { user, refetchSignal } = useAuth();
   const [summary, setSummary] = useState<WalletSummary | null>(null);
   const [limits, setLimits] = useState<WalletLimits | null>(null);
   const [recentActivity, setRecentActivity] = useState<FinancialActivity[]>([]);
@@ -18,7 +18,7 @@ export function useWallet(preferredCurrency: SupportedCurrency = 'USD') {
   const [refreshing, setRefreshing] = useState(false);
   
   const refreshWallet = useCallback(async (isAuto = false) => {
-    if (!user) return;
+    if (!user?.id) return;
     
     try {
       if (!isAuto) setRefreshing(true);
@@ -40,11 +40,11 @@ export function useWallet(preferredCurrency: SupportedCurrency = 'USD') {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user, preferredCurrency]);
+  }, [user?.id, preferredCurrency]);
 
   // Initial load
   useEffect(() => {
-    if (user) {
+    if (user?.id) {
       refreshWallet();
     } else {
       setSummary(null);
@@ -52,11 +52,11 @@ export function useWallet(preferredCurrency: SupportedCurrency = 'USD') {
       setRecentActivity([]);
       setLoading(false);
     }
-  }, [user, refreshWallet]);
+  }, [user?.id, refetchSignal, refreshWallet]);
 
   // Real-time subscription for wallet changes
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
 
     // Listen for changes in wallets table
     const walletChannel = supabase
@@ -98,7 +98,7 @@ export function useWallet(preferredCurrency: SupportedCurrency = 'USD') {
       supabase.removeChannel(walletChannel);
       supabase.removeChannel(txChannel);
     };
-  }, [user, refreshWallet]);
+  }, [user?.id, refreshWallet]);
 
   return {
     summary,

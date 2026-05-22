@@ -14,7 +14,7 @@ import { Transaction, SupportedCurrency, TransactionType } from '../types/financ
 import { Link } from 'react-router-dom';
 
 export default function WalletHistory() {
-  const { user } = useAuth();
+  const { user, refetchSignal } = useAuth();
   const isInitialLoad = React.useRef(true);
   useRefetchOnFocus(loadHistory);
   const [currency, setCurrency] = useState<SupportedCurrency>('KES');
@@ -27,10 +27,10 @@ export default function WalletHistory() {
 
   useEffect(() => {
     isInitialLoad.current = true;
-    if (user) {
+    if (user?.id) {
       loadHistory();
     }
-  }, [user, page, filter, currency]);
+  }, [user?.id, page, filter, currency, refetchSignal]);
 
   async function loadHistory() {
     try {

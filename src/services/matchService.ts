@@ -711,7 +711,22 @@ export const matchService = {
       .order('round', { ascending: true });
     
     if (error) throw error;
-    return (data || []) as any[];
+    const fixturesList = (data || []) as any[];
+    const seen = new Set();
+    const uniqueFixtures = [];
+    for (const f of fixturesList) {
+      if (!f) continue;
+      const id = f.match_id || f.id;
+      if (id) {
+        if (!seen.has(id)) {
+          seen.add(id);
+          uniqueFixtures.push(f);
+        }
+      } else {
+        uniqueFixtures.push(f);
+      }
+    }
+    return uniqueFixtures;
   },
 
   async getStandingsWithBadges(tournamentId: string) {

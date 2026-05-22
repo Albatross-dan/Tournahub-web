@@ -80,7 +80,7 @@ export default function ManageTournamentDetails() {
   async function loadRegistrations() {
     if (!id) return;
     try {
-      const rData = await tournamentService.getRegistrations(id);
+      const rData = await tournamentService.getRegisteredPlayers(id);
       setRegistrations(rData || []);
     } catch (err) {
       console.error('Error loading registrations:', err);
@@ -178,7 +178,7 @@ export default function ManageTournamentDetails() {
                 <StatusBadge status={tournament.status} />
               </div>
               <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] flex items-center">
-                <span className="text-primary italic mr-2">{tournament.type}</span> • {(registrations || []).filter(r => ['registered', 'approved', 'checked_in'].includes(r.status)).length}/{tournament.max_players} Contenders Joined
+                <span className="text-primary italic mr-2">{tournament.type}</span> • {(registrations || []).length}/{tournament.max_players} Contenders Joined
               </p>
             </div>
           </div>

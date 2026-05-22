@@ -16,7 +16,7 @@ import TrophyWall from '../components/profile/TrophyWall';
 import SettingsMenu from '../components/profile/SettingsMenu';
 
 export default function Profile() {
-  const { profile, user, signOut } = useAuth();
+  const { profile, user, signOut, refetchSignal } = useAuth();
   useRefetchOnFocus(loadStats);
   const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
   const [username, setUsername] = useState(profile?.username || '');
@@ -26,10 +26,10 @@ export default function Profile() {
   const initial = (profile?.username || user?.email || 'U')[0].toUpperCase();
 
   useEffect(() => {
-    if (user) {
+    if (user?.id) {
       loadStats();
     }
-  }, [user]);
+  }, [user?.id, refetchSignal]);
 
   async function loadStats() {
     if (!user) return;

@@ -10,14 +10,14 @@ import { formatDistanceToNow } from 'date-fns';
 import { getPublicIdentity } from '../lib/utils';
 
 export default function Chat() {
-  const { user } = useAuth();
+  const { user, refetchSignal } = useAuth();
   const isInitialLoad = React.useRef(true);
   useRefetchOnFocus(loadConversations);
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
+    if (user?.id) {
       loadConversations(true);
 
       // Realtime subscription for message updates to update previews/unread counts
@@ -37,7 +37,7 @@ export default function Chat() {
         supabase.removeChannel(channel);
       };
     }
-  }, [user]);
+  }, [user?.id, refetchSignal]);
 
   async function loadConversations(showLoading = isInitialLoad.current) {
     if (!user) return;

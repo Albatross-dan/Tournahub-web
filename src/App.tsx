@@ -8,6 +8,7 @@ import LoadingState from './components/ui/LoadingState';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import Legal from './pages/Legal';
 import Dashboard from './pages/Dashboard';
 import Tournaments from './pages/Tournaments';
 import TournamentDetails from './pages/TournamentDetails';
@@ -46,6 +47,9 @@ function AppRoutes() {
             <Route path="/login" element={<Login />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/terms" element={<Legal />} />
+            <Route path="/privacy" element={<Legal />} />
+            <Route path="/legal" element={<Legal />} />
             
             <Route element={<ProtectedRoute />}>
               <Route path="/dashboard" element={<Dashboard />} />

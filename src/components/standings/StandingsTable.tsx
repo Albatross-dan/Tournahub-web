@@ -6,14 +6,16 @@ import LoadingState from '../ui/LoadingState';
 import { tournamentService } from '../../services/tournamentService';
 import { useMatchCompletionSync } from '../../hooks/useMatchCompletionSync';
 import { PlayerBadge } from '../ui/PlayerBadge';
+import KnockoutTree from '../fixtures/KnockoutTree';
 
 interface StandingsTableProps {
   tournamentId: string;
   groupName?: string;
   registrations?: any[];
+  tournamentType?: string;
 }
 
-export default function StandingsTable({ tournamentId, groupName, registrations }: StandingsTableProps) {
+export default function StandingsTable({ tournamentId, groupName, registrations, tournamentType }: StandingsTableProps) {
   const [standings, setStandings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +110,10 @@ export default function StandingsTable({ tournamentId, groupName, registrations 
     } finally {
       setLoading(false);
     }
+  }
+
+  if (tournamentType === 'knockout') {
+    return <KnockoutTree tournamentId={tournamentId} />;
   }
 
   if (loading) {

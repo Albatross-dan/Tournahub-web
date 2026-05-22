@@ -15,8 +15,19 @@ export default function ForgotPassword() {
     setError(null);
 
     try {
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const isTournaHub = window.location.hostname.includes('tournahub.me');
+      
+      let redirectTo = 'https://tournahub.me/reset-password';
+      if (isLocalhost) {
+        redirectTo = 'http://localhost:3000/reset-password';
+      } else if (!isTournaHub) {
+        // Fallback to active origin for AI Studio dev and preview frames
+        redirectTo = `${window.location.origin}/reset-password`;
+      }
+
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: redirectTo,
       });
 
       if (error) throw error;

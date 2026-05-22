@@ -3,12 +3,12 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 export function useUserRegistrations() {
-  const { user } = useAuth();
+  const { user, refetchSignal } = useAuth();
   const [userRegistrations, setUserRegistrations] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) {
+    if (!user?.id) {
       setUserRegistrations(new Set());
       setLoading(false);
       return;
@@ -35,7 +35,7 @@ export function useUserRegistrations() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user?.id, refetchSignal]);
 
   async function loadUserRegistrations() {
     try {

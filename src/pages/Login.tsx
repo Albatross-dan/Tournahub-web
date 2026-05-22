@@ -11,6 +11,8 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [isSignUp, setIsSignUp] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
   const navigate = useNavigate();
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -21,13 +23,17 @@ export default function Login() {
 
     try {
       if (isSignUp) {
+        if (!agreedToTerms || !agreedToPrivacy) {
+          throw new Error('Please agree to both the Terms & Conditions and the Privacy Policy by ticking the boxes.');
+        }
+
         // Enforce username requirements
         if (!username || username.length < 3) {
-          throw new Error('Username must be at least 3 characters long');
+          throw new Error('Tournaments username must be at least 3 characters long');
         }
 
         if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-          throw new Error('Username can only contain letters, numbers, and underscores');
+          throw new Error('Tournaments username can only contain letters, numbers, and underscores');
         }
 
         // Check uniqueness before signing up (quick pre-check)
@@ -39,7 +45,7 @@ export default function Login() {
 
         if (checkError) console.error('Username check error:', checkError);
         if (existing) {
-          throw new Error('Username is already taken. Try another one, champion.');
+          throw new Error('Tournaments username is already taken. Try another one, champion.');
         }
 
         const { error, data } = await supabase.auth.signUp({ 
@@ -105,7 +111,7 @@ export default function Login() {
           <form onSubmit={handleAuth} className="space-y-6">
             {isSignUp && (
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em] ml-1">Username</label>
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em] ml-1">Tournaments username</label>
                 <div className="relative group">
                   <div className="absolute inset-0 bg-primary/5 rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
@@ -115,7 +121,7 @@ export default function Login() {
                     type="text"
                     required
                     className="w-full bg-background/40 border border-border-main rounded-2xl pl-12 pr-4 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-text-main font-medium relative z-10"
-                    placeholder="Enter your username"
+                    placeholder="Enter your Tournaments username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value.trim())}
                   />
@@ -164,6 +170,54 @@ export default function Login() {
               </div>
             </div>
 
+            {isSignUp && (
+              <div className="space-y-3 px-1">
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    id="agree-terms"
+                    checked={agreedToTerms}
+                    onChange={(e) => setAgreedToTerms(e.target.checked)}
+                    className="h-4 w-4 bg-background/40 border border-border-main rounded text-primary focus:ring-1 focus:ring-primary/50 accent-primary cursor-pointer relative z-20"
+                  />
+                  <label htmlFor="agree-terms" className="text-[10px] font-black text-text-muted hover:text-text-main uppercase tracking-wider leading-none cursor-pointer select-none relative z-20">
+                    I agree to the{" "}
+                    <span
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigate("/terms");
+                      }}
+                      className="text-primary hover:underline italic font-black cursor-pointer"
+                    >
+                      Terms & Conditions
+                    </span>
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    id="agree-privacy"
+                    checked={agreedToPrivacy}
+                    onChange={(e) => setAgreedToPrivacy(e.target.checked)}
+                    className="h-4 w-4 bg-background/40 border border-border-main rounded text-primary focus:ring-1 focus:ring-primary/50 accent-primary cursor-pointer relative z-20"
+                  />
+                  <label htmlFor="agree-privacy" className="text-[10px] font-black text-text-muted hover:text-text-main uppercase tracking-wider leading-none cursor-pointer select-none relative z-20">
+                    I agree to the{" "}
+                    <span
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigate("/privacy");
+                      }}
+                      className="text-primary hover:underline italic font-black cursor-pointer"
+                    >
+                      Privacy Policy
+                    </span>
+                  </label>
+                </div>
+              </div>
+            )}
+
             {error && (
               <div className="bg-red-500/5 border border-red-500/10 text-red-500 text-[11px] font-bold p-4 rounded-xl flex items-center space-x-3">
                 <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
@@ -194,17 +248,57 @@ export default function Login() {
             <button 
               type="button"
               onClick={async () => {
-                const { data, error } = await supabase.auth.signInWithOAuth({ 
-                  provider: 'google',
-                  options: {
-                    redirectTo: window.location.origin,
-                    skipBrowserRedirect: false
+                setLoading(true);
+                setError(null);
+                setSuccess(null);
+                try {
+                  if (isSignUp) {
+                    if (!agreedToTerms || !agreedToPrivacy) {
+                      throw new Error('Please agree to both the Terms & Conditions and the Privacy Policy by ticking the boxes.');
+                    }
+
+                    // Enforce username requirements
+                    if (!username || username.length < 3) {
+                      throw new Error('Please enter a Tournaments username (at least 3 characters) above first to sign up with Google.');
+                    }
+
+                    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+                      throw new Error('Tournaments username can only contain letters, numbers, and underscores.');
+                    }
+
+                    // Check uniqueness
+                    const { data: existing, error: checkError } = await (supabase as any)
+                      .from('profiles')
+                      .select('username')
+                      .eq('username', username)
+                      .maybeSingle();
+
+                    if (checkError) {
+                      console.error('Username check error:', checkError);
+                    }
+                    if (existing) {
+                      throw new Error('This Tournaments username is already taken. Try another one, champion.');
+                    }
+
+                    // Save username to local storage so AuthContext can pick it up on redirect back
+                    localStorage.setItem('pending_oauth_username', username);
                   }
-                });
-                
-                if (error) {
-                  setError(error.message);
-                  return;
+
+                  const { data, error } = await supabase.auth.signInWithOAuth({ 
+                    provider: 'google',
+                    options: {
+                      redirectTo: window.location.origin,
+                      skipBrowserRedirect: false
+                    }
+                  });
+                  
+                  if (error) {
+                    throw error;
+                  }
+                } catch (err: any) {
+                  setError(err.message);
+                } finally {
+                  setLoading(false);
                 }
               }}
               className="w-full flex items-center justify-center space-x-4 bg-surface hover:bg-surface-hover border border-border-main py-4 rounded-2xl transition-all"
@@ -235,6 +329,22 @@ export default function Login() {
           <div className="h-px w-8 bg-border-main" />
           <span className="text-[9px] font-black uppercase tracking-[0.5em] text-text-muted">Encrypted Uplink Established</span>
           <div className="h-px w-8 bg-border-main" />
+        </div>
+
+        <div className="mt-6 text-center flex items-center justify-center space-x-4">
+          <button
+            onClick={() => navigate('/terms')}
+            className="text-[10px] font-black uppercase tracking-widest text-text-muted hover:text-primary transition-all underline underline-offset-4 decoration-border-main"
+          >
+            Terms & Conditions
+          </button>
+          <span className="text-border-main text-xs font-black">•</span>
+          <button
+            onClick={() => navigate('/privacy')}
+            className="text-[10px] font-black uppercase tracking-widest text-text-muted hover:text-primary transition-all underline underline-offset-4 decoration-border-main"
+          >
+            Privacy Policy
+          </button>
         </div>
       </div>
     </div>
