@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
   Trophy, Wallet, RefreshCw, LayoutDashboard, 
-  Calendar, MessageSquare, Shield, Bell, Menu, X
+  Calendar, MessageSquare, Shield, Bell, Menu, X, Tv
 } from 'lucide-react';
 import NotificationBell from '../notifications/NotificationBell';
 import { walletService } from '../../services/walletService';
@@ -14,6 +14,7 @@ import { usePWAInstall } from '../../hooks/usePWAInstall';
 
 export default function Navbar() {
   const { profile, user, isAdmin } = useAuth();
+  const location = useLocation();
   const [balance, setBalance] = useState<number | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>(new Date().toLocaleTimeString());
   const [unreadCount, setUnreadCount] = useState(0);
@@ -31,6 +32,7 @@ export default function Navbar() {
       { name: 'Tournaments', path: '/tournaments', icon: Trophy },
       { name: 'Chat', path: '/chat', icon: MessageSquare },
       { name: 'Wallet', path: '/wallet', icon: Wallet },
+      { name: 'Live Streams', path: '/streams', icon: Tv },
     ];
     if (isAdmin) {
       items.push({ name: 'Admin', path: '/admin', icon: Shield });
@@ -206,12 +208,26 @@ export default function Navbar() {
                     key={item.path}
                     to={item.path}
                     onClick={() => setIsMenuOpen(false)}
-                    className={({ isActive }) => cn(
-                      "flex items-center space-x-4 px-6 py-5 rounded-2xl transition-all",
-                      isActive 
-                        ? "bg-primary text-slate-900 border border-primary/20 shadow-[0_0_20px_rgba(var(--color-primary),0.3)]" 
-                        : "bg-background text-text-muted border border-border-main hover:bg-surface-hover hover:border-primary/30"
-                    )}
+                    className={() => {
+                      const currentPath = location.pathname + location.search;
+                      let isItemActive = false;
+                      if (item.path === '/dashboard') {
+                        isItemActive = location.pathname === '/dashboard';
+                      } else if (item.path.includes('tab=')) {
+                        isItemActive = currentPath.includes(item.path);
+                      } else if (item.path === '/matches') {
+                        isItemActive = location.pathname === '/matches' && !location.search.includes('tab=');
+                      } else {
+                        isItemActive = location.pathname.startsWith(item.path);
+                      }
+                      
+                      return cn(
+                        "flex items-center space-x-4 px-6 py-5 rounded-2xl transition-all",
+                        isItemActive 
+                          ? "bg-primary text-slate-900 border border-primary/20 shadow-[0_0_20px_rgba(var(--color-primary),0.3)]" 
+                          : "bg-background text-text-muted border border-border-main hover:bg-surface-hover hover:border-primary/30"
+                      );
+                    }}
                   >
                     <Icon className="w-5 h-5" />
                     <span className="text-xs font-black uppercase tracking-widest italic">{item.name}</span>

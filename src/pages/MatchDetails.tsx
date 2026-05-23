@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase';
 import Shell from '../components/layout/Shell';
 import { 
   Info, ArrowLeft, Trophy,
-  Shield
+  Shield, ArrowUpRight
 } from 'lucide-react';
 import { getPublicIdentity } from '../lib/utils';
 import LoadingState from '../components/ui/LoadingState';
@@ -29,6 +29,12 @@ export default function MatchDetails() {
   const [loading, setLoading] = useState(true);
   const { badges } = useTournamentBadges(match?.tournament_id || '');
 
+  // Live stream states
+  const [streamUrls, setStreamUrls] = useState<any[]>([]);
+  const [myStreamUrlInput, setMyStreamUrlInput] = useState('');
+  const [submittingStream, setSubmittingStream] = useState(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
+
   const activePlayer1Id = typeof match?.player1 === 'object' ? (match.player1 as any)?.id : match?.player1;
   const activePlayer2Id = typeof match?.player2 === 'object' ? (match.player2 as any)?.id : match?.player2;
   const isParticipant = !!(user && (activePlayer1Id === user.id || activePlayer2Id === user.id));
@@ -38,6 +44,7 @@ export default function MatchDetails() {
     if (!id) return;
     
     loadMatchData();
+    loadMatchStreamUrls();
 
     const matchChannel = supabase
       .channel(`match-detail-${id}-${Math.random().toString(36).substring(7)}`)
@@ -49,10 +56,120 @@ export default function MatchDetails() {
       }, () => loadMatchData(false))
       .subscribe();
 
+    const streamChannel = supabase
+      .channel(`match-streams-${id}-${Math.random().toString(36).substring(7)}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'fixture_stream_urls',
+        filter: `match_id=eq.${id}`
+      }, () => loadMatchStreamUrls())
+      .subscribe();
+
     return () => {
       supabase.removeChannel(matchChannel);
+      supabase.removeChannel(streamChannel);
     };
   }, [id, user?.id, refetchSignal]);
+
+  async function loadMatchStreamUrls() {
+    if (!id) return;
+    try {
+      const { data, error } = await (supabase as any)
+        .from('fixture_stream_urls')
+        .select(`
+          id,
+          stream_url,
+          updated_at,
+          submitted_by,
+          profiles ( username, avatar_url )
+        `)
+        .eq('match_id', id);
+
+      if (error) {
+        console.error('[MatchDetails] Error loading stream URLs:', error);
+        return;
+      }
+
+      setStreamUrls(data || []);
+      
+      if (user) {
+        const myStream = data?.find((s: any) => s.submitted_by === user.id);
+        if (myStream) {
+          setMyStreamUrlInput(myStream.stream_url);
+        } else {
+          setMyStreamUrlInput('');
+        }
+      }
+    } catch (err) {
+      console.error('[MatchDetails] Failed to load stream URLs:', err);
+    }
+  }
+
+  const handleUpsertStream = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!id || !user) return;
+    
+    setSubmittingStream(true);
+    setStreamError(null);
+    
+    let url = myStreamUrlInput.trim();
+    if (!url) {
+      setStreamError('Please specify a stream URL.');
+      setSubmittingStream(false);
+      return;
+    }
+
+    if (!/^https?:\/\//i.test(url)) {
+      url = 'https://' + url;
+    }
+
+    try {
+      const { error } = await (supabase as any)
+        .from('fixture_stream_urls')
+        .upsert(
+          {
+            match_id: id,
+            submitted_by: user.id,
+            stream_url: url,
+            updated_at: new Date().toISOString()
+          },
+          { onConflict: 'match_id,submitted_by' }
+        );
+
+      if (error) throw error;
+      await loadMatchStreamUrls();
+    } catch (err: any) {
+      console.error('[MatchDetails] Upsert stream error:', err);
+      setStreamError(err.message || 'Failed to submit stream URL.');
+    } finally {
+      setSubmittingStream(false);
+    }
+  };
+
+  const handleRemoveStream = async () => {
+    if (!id || !user) return;
+    
+    setSubmittingStream(true);
+    setStreamError(null);
+
+    try {
+      const { error } = await (supabase as any)
+        .from('fixture_stream_urls')
+        .delete()
+        .eq('match_id', id)
+        .eq('submitted_by', user.id);
+
+      if (error) throw error;
+      setMyStreamUrlInput('');
+      await loadMatchStreamUrls();
+    } catch (err: any) {
+      console.error('[MatchDetails] Remove stream error:', err);
+      setStreamError(err.message || 'Failed to remove stream URL.');
+    } finally {
+      setSubmittingStream(false);
+    }
+  };
 
   async function loadMatchData(showLoading = isInitialLoad.current) {
     if (!id) return;
@@ -145,6 +262,132 @@ export default function MatchDetails() {
                     </div>
                   </div>
                </div>
+
+               {/* Live Streams Section */}
+               {(isParticipant || streamUrls.length > 0) && (
+                 <div className="mt-6 pt-6 border-t border-zinc-800 space-y-4">
+                   {/* Opponent's Stream URL Display (or all URLs for spectator) */}
+                   {isParticipant ? (
+                     streamUrls.find((s: any) => s.submitted_by !== user?.id) && (
+                       <div className="p-4 bg-zinc-950/60 border border-zinc-800 rounded-2xl flex items-center justify-between gap-4">
+                         <div className="flex items-center space-x-3 min-w-0">
+                           {streamUrls.find((s: any) => s.submitted_by !== user?.id).profiles?.avatar_url ? (
+                             <img
+                               src={streamUrls.find((s: any) => s.submitted_by !== user?.id).profiles.avatar_url}
+                               alt={streamUrls.find((s: any) => s.submitted_by !== user?.id).profiles.username}
+                               className="w-8 h-8 rounded-xl object-cover shrink-0"
+                               referrerPolicy="no-referrer"
+                             />
+                           ) : (
+                             <div className="w-8 h-8 rounded-xl bg-zinc-800 flex items-center justify-center font-black text-xs text-zinc-400 uppercase shrink-0">
+                               {streamUrls.find((s: any) => s.submitted_by !== user?.id).profiles?.username?.[0] || 'O'}
+                             </div>
+                           )}
+                           <div className="min-w-0">
+                             <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block leading-none mb-1">Live Stream</span>
+                             <span className="text-xs font-black text-white truncate block">{streamUrls.find((s: any) => s.submitted_by !== user?.id).profiles?.username || 'Opponent'}</span>
+                           </div>
+                         </div>
+                         <a
+                           href={streamUrls.find((s: any) => s.submitted_by !== user?.id).stream_url}
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           className="btn-secondary py-1.5 px-4 text-xs font-black uppercase italic flex items-center space-x-1.5 shrink-0"
+                         >
+                           <span>Watch Play</span>
+                           <ArrowUpRight className="w-3.5 h-3.5" />
+                         </a>
+                       </div>
+                     )
+                   ) : (
+                     streamUrls.length > 0 && (
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                         {streamUrls.map((s) => (
+                           <div key={s.id} className="p-3 bg-zinc-950/60 border border-zinc-800 rounded-2xl flex items-center justify-between gap-4">
+                             <div className="flex items-center space-x-3 min-w-0">
+                               {s.profiles?.avatar_url ? (
+                                 <img
+                                   src={s.profiles.avatar_url}
+                                   alt={s.profiles.username}
+                                   className="w-8 h-8 rounded-xl object-cover shrink-0"
+                                   referrerPolicy="no-referrer"
+                                 />
+                               ) : (
+                                 <div className="w-8 h-8 rounded-xl bg-zinc-800 flex items-center justify-center font-black text-xs text-zinc-400 uppercase shrink-0">
+                                   {s.profiles?.username?.[0] || 'P'}
+                                 </div>
+                               )}
+                               <div className="min-w-0">
+                                 <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block leading-none mb-1">Live Broadcast</span>
+                                 <span className="text-xs font-black text-white truncate block">{s.profiles?.username || 'Player'}</span>
+                               </div>
+                             </div>
+                             <a
+                               href={s.stream_url}
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               className="btn-secondary py-1.5 px-4 text-xs font-black uppercase italic flex items-center space-x-1.5 shrink-0"
+                             >
+                               <span>Watch Live</span>
+                               <ArrowUpRight className="w-3.5 h-3.5" />
+                             </a>
+                           </div>
+                         ))}
+                       </div>
+                     )
+                   )}
+
+                   {/* Add / Update Form for Participant */}
+                   {isParticipant && (
+                     <div className="bg-zinc-950/40 p-4 border border-zinc-800/60 rounded-2xl space-y-3">
+                       <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest leading-none">
+                         Add stream URL (optional)
+                       </label>
+                       <form onSubmit={handleUpsertStream} className="flex flex-col sm:flex-row gap-2">
+                         <input
+                           type="url"
+                           placeholder="https://twitch.tv/yourusername"
+                           value={myStreamUrlInput}
+                           onChange={(e) => setMyStreamUrlInput(e.target.value)}
+                           className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-primary transition-all placeholder:text-zinc-600"
+                         />
+                         <div className="flex gap-2 shrink-0">
+                           {streamUrls.some((s: any) => s.submitted_by === user?.id) ? (
+                             <>
+                               <button
+                                 type="submit"
+                                 disabled={submittingStream}
+                                 className="btn-primary py-2 px-4 text-xs font-black uppercase italic"
+                               >
+                                 {submittingStream ? 'Saving...' : 'Update'}
+                               </button>
+                               <button
+                                 type="button"
+                                 onClick={handleRemoveStream}
+                                 disabled={submittingStream}
+                                 className="px-4 py-2 bg-red-950/15 border border-red-900/30 text-red-400 hover:bg-red-900/20 text-xs font-black uppercase italic rounded-xl hover:text-red-200 transition-colors"
+                               >
+                                 Remove
+                               </button>
+                             </>
+                           ) : (
+                             <button
+                               type="submit"
+                               disabled={submittingStream || !myStreamUrlInput.trim()}
+                               className="btn-primary py-2 px-6 text-xs font-black uppercase italic disabled:opacity-50 disabled:cursor-not-allowed"
+                             >
+                               {submittingStream ? 'Saving...' : 'Add'}
+                             </button>
+                           )}
+                         </div>
+                       </form>
+                       {streamError && (
+                         <p className="text-red-400 text-[10px] font-bold uppercase tracking-wider">{streamError}</p>
+                       )}
+                     </div>
+                   )}
+                 </div>
+               )}
             </div>
 
             {isParticipant ? (

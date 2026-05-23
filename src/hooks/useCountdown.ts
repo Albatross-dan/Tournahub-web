@@ -1,57 +1,59 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 
-export function useCountdown(targetIso: string | null, serverTimeOffsetMs: number = 0) {
+export function useCountdown(targetDate: string | Date, serverTimeOffsetMs: number = 0) {
   const [seconds, setSeconds] = useState<number>(0);
   const [isExpired, setIsExpired] = useState<boolean>(false);
 
   useEffect(() => {
-    if (!targetIso) {
-      setSeconds(0);
-      setIsExpired(false);
-      return;
-    }
-
-    const targetTime = new Date(targetIso).getTime();
-
-    const calculate = () => {
-      const now = Date.now() + serverTimeOffsetMs;
-      const diff = Math.floor((targetTime - now) / 1000);
-      
-      if (diff <= 0) {
+    const calculateTimeLeft = () => {
+      if (!targetDate) {
         setSeconds(0);
         setIsExpired(true);
-        return false; // Stop ticking
-      } else {
-        setSeconds(diff);
-        setIsExpired(false);
-        return true;
+        return;
       }
+      const targetTime = new Date(targetDate).getTime();
+      if (isNaN(targetTime)) {
+        setSeconds(0);
+        setIsExpired(true);
+        return;
+      }
+      // Adjust with server time offset if provided
+      const now = Date.now() + serverTimeOffsetMs;
+      const difference = targetTime - now;
+
+      if (difference <= 0) {
+        setSeconds(0);
+        setIsExpired(true);
+        return;
+      }
+
+      setSeconds(Math.floor(difference / 1000));
+      setIsExpired(false);
     };
 
-    // Initial check
-    const running = calculate();
-    if (!running) return;
+    calculateTimeLeft();
+    const timer = setInterval(calculateTimeLeft, 1000);
 
-    const interval = setInterval(() => {
-      if (!calculate()) {
-        clearInterval(interval);
-      }
-    }, 1000);
+    return () => clearInterval(timer);
+  }, [targetDate, serverTimeOffsetMs]);
 
-    return () => clearInterval(interval);
-  }, [targetIso, serverTimeOffsetMs]);
+  const formatTime = (totalSeconds: number) => {
+    if (totalSeconds <= 0) return '00:00';
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
 
-  const formatted = useMemo(() => {
-    if (seconds <= 0) return '00:00:00';
-    
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    
-    return [h, m, s]
-      .map(v => v.toString().padStart(2, '0'))
-      .join(':');
-  }, [seconds]);
+    const pad = (num: number) => String(num).padStart(2, '0');
 
-  return { seconds, isExpired, formatted };
+    if (h > 0) {
+      return `${pad(h)}:${pad(m)}:${pad(s)}`;
+    }
+    return `${pad(m)}:${pad(s)}`;
+  };
+
+  return {
+    seconds,
+    isExpired,
+    formatted: formatTime(seconds)
+  };
 }

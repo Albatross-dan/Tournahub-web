@@ -3,7 +3,7 @@ import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { 
   Trophy, Users, Wallet, 
   ArrowUpRight, Gamepad2, Timer,
-  Loader2
+  Loader2, Tv
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatCurrency, cn, getPublicIdentity } from '../lib/utils';
@@ -202,22 +202,25 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-4">
           {/* Main Feed: Scheduled Matches */}
-            <motion.div variants={item} className="lg:col-span-2 space-y-6">
-            <SectionHeader title="Next Scheduled Battles" link="/matches" />
-            <div className="space-y-4">
-              <AnimatePresence mode="popLayout">
-                {scheduledMatches.length > 0 ? (
-                  scheduledMatches.map((match) => (
-                    <motion.div key={match.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
-                      <MatchCard match={match} />
-                    </motion.div>
-                  ))
-                ) : (
-                  <div className="card p-12 text-center text-text-muted italic rounded-3xl border-dashed border-2 border-border-main">
-                    No matches found. Go join a tournament!
-                  </div>
-                )}
-              </AnimatePresence>
+            <motion.div variants={item} className="lg:col-span-2 space-y-8">
+            
+            <div>
+              <SectionHeader title="Next Scheduled Battles" link="/matches" />
+              <div className="space-y-4 mt-4">
+                <AnimatePresence mode="popLayout">
+                  {scheduledMatches.length > 0 ? (
+                    scheduledMatches.map((match) => (
+                      <motion.div key={match.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
+                        <MatchCard match={match} />
+                      </motion.div>
+                    ))
+                  ) : (
+                    <div className="card p-12 text-center text-text-muted italic rounded-3xl border-dashed border-2 border-border-main">
+                      No matches found. Go join a tournament!
+                    </div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </motion.div>
 

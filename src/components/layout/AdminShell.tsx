@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { name: 'Fixtures', path: '/admin/fixtures', icon: Gamepad2 },
   { name: 'Disputes', path: '/admin/moderation', icon: Gavel },
   { name: 'Contenders', path: '/admin/players', icon: Users },
+  { name: 'Logs', path: '/admin/logs', icon: Shield },
   { name: 'Wallet', path: '/admin/wallet', icon: Wallet },
   { name: 'Standings', path: '/admin/standings', icon: BarChart3 },
 ];

@@ -14,6 +14,7 @@ import Tournaments from './pages/Tournaments';
 import TournamentDetails from './pages/TournamentDetails';
 import MatchDetails from './pages/MatchDetails';
 import Matches from './pages/Matches';
+import LiveStreams from './pages/LiveStreams';
 import Chat from './pages/Chat';
 import Notifications from './pages/Notifications';
 import Wallet from './pages/Wallet';
@@ -35,6 +36,7 @@ const AdminStandings = lazy(() => import('./pages/admin/AdminStandings'));
 const ScheduleTournament = lazy(() => import('./pages/admin/ScheduleTournament'));
 const LiveTournament = lazy(() => import('./pages/admin/LiveTournament'));
 const Moderation = lazy(() => import('./pages/admin/Moderation'));
+const ModerationLogs = lazy(() => import('./pages/admin/ModerationLogs'));
 
 function HomeRoute() {
   const { user, loading } = useAuth();
@@ -73,6 +75,7 @@ function AppRoutes() {
               <Route path="/tournaments/:id/champion" element={<TournamentChampion />} />
               <Route path="/matches/:id" element={<MatchDetails />} />
               <Route path="/matches" element={<Matches />} />
+              <Route path="/streams" element={<LiveStreams />} />
               <Route path="/chat" element={<Chat />} />
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/wallet" element={<Wallet />} />
@@ -94,6 +97,7 @@ function AppRoutes() {
               <Route path="/admin/wallet" element={<AdminWallet />} />
               <Route path="/admin/standings" element={<AdminStandings />} />
               <Route path="/admin/moderation" element={<Moderation />} />
+              <Route path="/admin/logs" element={<ModerationLogs />} />
             </Route>
 
             <Route path="/" element={<HomeRoute />} />

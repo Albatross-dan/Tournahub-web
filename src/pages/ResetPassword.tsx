@@ -65,6 +65,11 @@ export default function ResetPassword() {
           setIsLinkExpired(true);
         } else {
           console.log('[ResetPassword] Verified active session for password change:', activeSession.user?.email);
+          try {
+            window.history.replaceState(null, '', window.location.pathname);
+          } catch (e) {
+            console.error('[ResetPassword] Failed to clear URL query/hash params:', e);
+          }
         }
       } catch (err: any) {
         setError(err.message || 'An error occurred while establishing your session.');
@@ -99,18 +104,35 @@ export default function ResetPassword() {
     setError(null);
 
     try {
-      const { error } = await supabase.auth.updateUser({
+      console.log('[ResetPassword] Calling supabase.auth.updateUser to update password...');
+      const { data, error } = await supabase.auth.updateUser({
         password: password
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[ResetPassword] Supabase password update failed:', error);
+        throw error;
+      }
       
+      console.log('[ResetPassword] Password updated successfully. Client User metadata:', data.user?.email);
+      
+      // Explicitly sign out of all active sessions to terminate recovery state and ensure a clean slate
+      try {
+        console.log('[ResetPassword] Requesting global signout...');
+        await supabase.auth.signOut();
+        console.log('[ResetPassword] Signed out cleanly.');
+      } catch (signOutErr) {
+        console.warn('[ResetPassword] Warning during post-reset signout:', signOutErr);
+      }
+
       setSuccess(true);
       setTimeout(() => {
-        navigate('/login');
+        console.log('[ResetPassword] Timeout triggered, navigating back to /login');
+        navigate('/login', { replace: true });
       }, 3000);
     } catch (err: any) {
-      setError(err.message);
+      console.error('[ResetPassword] Catch block encountered error:', err);
+      setError(err.message || 'Failed to update your password. Please try again.');
     } finally {
       setLoading(false);
     }

@@ -6,12 +6,30 @@ import {
   Trophy, Users, Activity, Wallet, 
   Plus, Search, MoreVertical, Edit2, 
   Trash2, ExternalLink, ArrowUpRight,
-  TrendingUp, Clock, Gamepad2, Radio
+  TrendingUp, Clock, Gamepad2, Radio,
+  Shield, Gavel, ShieldAlert, FileText, UserCheck
 } from 'lucide-react';
 import { Tournament } from '../../types/database';
 import { Link } from 'react-router-dom';
 import { formatCurrency, cn, getStorageUrl } from '../../lib/utils';
 import { useRealtimeTournaments } from '../../hooks/useRealtimeTournaments';
+import { moderationService } from '../../services/moderationService';
+
+function formatRelativeTime(isoString: string) {
+  if (!isoString) return 'Never';
+  const now = new Date();
+  const date = new Date(isoString);
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHr = Math.floor(diffMin / 60);
+  const diffDays = Math.floor(diffHr / 24);
+
+  if (diffSec < 60) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  return `${diffDays}d ago`;
+}
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -22,10 +40,27 @@ export default function AdminDashboard() {
   });
   const { tournaments, loading: tournamentsLoading } = useRealtimeTournaments();
   const [loading, setLoading] = useState(true);
+  
+  // Moderation summary states
+  const [modSummary, setModSummary] = useState<any>(null);
+  const [modLoading, setModLoading] = useState(true);
 
   useEffect(() => {
     loadAdminData();
+    loadModSummary();
   }, [tournaments]);
+
+  async function loadModSummary() {
+    try {
+      setModLoading(true);
+      const data = await moderationService.getModerationSummary();
+      setModSummary(data);
+    } catch (err) {
+      console.error('Error loading moderation summary:', err);
+    } finally {
+      setModLoading(false);
+    }
+  }
 
   async function loadAdminData() {
     try {
@@ -50,6 +85,7 @@ export default function AdminDashboard() {
   }
 
   const recentTournaments = Array.isArray(tournaments) ? tournaments.slice(0, 5) : [];
+
 
   return (
     <AdminShell>
@@ -106,6 +142,113 @@ export default function AdminDashboard() {
             color="bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
             trend="Locked & Ready"
           />
+        </div>
+
+        {/* User Moderation Section */}
+        <div className="space-y-6">
+          <div className="flex items-center space-x-3">
+            <div className="w-1.5 h-6 bg-red-500 rounded-full" />
+            <h2 className="text-xl font-black text-white italic uppercase tracking-tight">User Moderation</h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <AdminStatCard 
+              title="Total Users" 
+              value={modLoading ? "..." : (modSummary?.user_counts?.total ?? 0).toLocaleString()} 
+              icon={<Users />} 
+              color="bg-slate-800 text-slate-300 border-slate-700"
+              trend="Global registered accounts"
+            />
+            <AdminStatCard 
+              title="Active Users" 
+              value={modLoading ? "..." : (modSummary?.user_counts?.active ?? 0).toLocaleString()} 
+              icon={<UserCheck className="text-emerald-500" />} 
+              color="bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+              trend="Accounts in good standing"
+            />
+            <AdminStatCard 
+              title="Banned Users" 
+              value={modLoading ? "..." : (modSummary?.user_counts?.banned ?? 0).toLocaleString()} 
+              icon={<ShieldAlert className="text-red-500" />} 
+              color="bg-red-500/10 text-red-400 border-red-500/20"
+              trend="Permanent disqualifications"
+            />
+            <AdminStatCard 
+              title="Suspended Users" 
+              value={modLoading ? "..." : (modSummary?.user_counts?.suspended ?? 0).toLocaleString()} 
+              icon={<Clock className="text-amber-500" />} 
+              color="bg-amber-500/10 text-amber-400 border-amber-500/20"
+              trend="Temporary penalty box"
+            />
+          </div>
+
+          {/* Recent Moderation Activity List */}
+          <div className="card border-white/5 bg-surface/20 p-6 space-y-4">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest italic flex items-center gap-2">
+              <Clock className="w-4 h-4 text-primary animate-pulse" />
+              Recent Moderation Activity Feed
+            </h3>
+
+            {modLoading ? (
+              <div className="py-6 text-center text-slate-500 font-bold uppercase tracking-widest text-xs animate-pulse">
+                Syncing COMMS...
+              </div>
+            ) : modSummary?.recent_actions?.length > 0 ? (
+              <div className="divide-y divide-slate-800/50">
+                {modSummary.recent_actions.slice(0, 10).map((act: any) => {
+                  let badgeClass = 'bg-slate-800 text-slate-400 border-slate-700';
+                  const actionType = (act.action_type || '').toLowerCase();
+                  if (['ban', 'banned'].includes(actionType)) {
+                    badgeClass = 'bg-red-500/15 text-red-400 border-red-500/20';
+                  } else if (['suspend', 'suspended'].includes(actionType)) {
+                    badgeClass = 'bg-orange-500/15 text-orange-400 border-orange-500/20';
+                  } else if (['restore', 'active'].includes(actionType)) {
+                    badgeClass = 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20';
+                  } else if (['soft_delete', 'deleted'].includes(actionType)) {
+                    badgeClass = 'bg-slate-800 text-slate-400 border-slate-700';
+                  } else if (['permanent_delete'].includes(actionType)) {
+                    badgeClass = 'bg-red-950 text-red-500 border-red-900';
+                  } else if (['note'].includes(actionType)) {
+                    badgeClass = 'bg-blue-500/15 text-blue-400 border-blue-500/20';
+                  }
+
+                  const reasonToShow = act.reason
+                    ? act.reason.length > 60
+                      ? act.reason.substring(0, 60) + '...'
+                      : act.reason
+                    : 'No reason provided';
+
+                  return (
+                    <div key={act.id} className="py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs font-medium">
+                      <div className="flex items-center space-x-3 flex-wrap gap-2">
+                        <span className={cn("px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-md border", badgeClass)}>
+                          {act.action_type?.toUpperCase() || 'ACTION'}
+                        </span>
+                        <span className="text-white font-bold">
+                          {act.admin_username}
+                        </span>
+                        <span className="text-slate-500">targeted</span>
+                        <span className="text-primary font-bold">
+                          @{act.target_username}
+                        </span>
+                        <span className="text-slate-400 hidden md:inline">•</span>
+                        <span className="text-slate-400 italic text-[11px]">
+                          "{reasonToShow}"
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-mono shrink-0">
+                        {formatRelativeTime(act.created_at)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-center py-6 text-slate-500 font-bold uppercase tracking-widest text-xs">
+                No recent moderation activity.
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">

@@ -4,8 +4,8 @@ import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { Match } from '../types/database';
 import { supabase } from '../lib/supabase';
 import Shell from '../components/layout/Shell';
-import { Link } from 'react-router-dom';
-import { Gamepad2, Timer, ArrowRight, Trophy, Clock, ClipboardList, MessageSquare, ChevronRight, User, Calendar } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Gamepad2, Timer, ArrowRight, Trophy, Clock, ClipboardList, MessageSquare, ChevronRight, User, Calendar, Tv, ArrowUpRight } from 'lucide-react';
 import { cn, getPublicIdentity, formatDate } from '../lib/utils';
 import LoadingState from '../components/ui/LoadingState';
 import { formatDistanceToNow } from 'date-fns';
@@ -16,17 +16,37 @@ import { motion, AnimatePresence } from 'motion/react';
 
 export default function Matches() {
   const { user, refetchSignal } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+
   const isInitialLoad = React.useRef(true);
   const [matches, setMatches] = useState<Match[]>([]);
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'matches' | 'chat'>('matches');
+  
+  const [activeTab, setActiveTab] = useState<'matches' | 'chat'>(() => {
+    if (tabParam === 'chat') {
+      return tabParam;
+    }
+    return 'matches';
+  });
+
+  useEffect(() => {
+    if (tabParam === 'chat' || tabParam === 'matches') {
+      setActiveTab(tabParam as any);
+    }
+  }, [tabParam]);
+
+  const handleTabChange = (tab: 'matches' | 'chat') => {
+    setActiveTab(tab);
+    setSearchParams({ tab });
+  };
 
   const fetchData = () => {
     if (!user) return;
     if (activeTab === 'matches') {
       loadMatches(false);
-    } else {
+    } else if (activeTab === 'chat') {
       loadConversations(false);
     }
   };
@@ -39,7 +59,7 @@ export default function Matches() {
     
     if (activeTab === 'matches') {
       loadMatches();
-    } else {
+    } else if (activeTab === 'chat') {
       loadConversations();
     }
 
@@ -117,7 +137,7 @@ export default function Matches() {
 
         <div className="flex border-b border-white/5">
           <button 
-            onClick={() => setActiveTab('matches')}
+            onClick={() => handleTabChange('matches')}
             className={cn(
               "px-8 py-4 text-sm font-bold uppercase tracking-widest transition-all relative",
               activeTab === 'matches' ? "text-primary" : "text-slate-500 hover:text-slate-400"
@@ -129,7 +149,7 @@ export default function Matches() {
             )}
           </button>
           <button 
-            onClick={() => setActiveTab('chat')}
+            onClick={() => handleTabChange('chat')}
             className={cn(
               "px-8 py-4 text-sm font-bold uppercase tracking-widest transition-all relative",
               activeTab === 'chat' ? "text-primary" : "text-slate-500 hover:text-slate-400"
@@ -159,90 +179,92 @@ export default function Matches() {
                 description="Join a tournament to get started with your first competitive arena battle." 
               />
             )
-          ) : conversations.length > 0 ? (
-            <div className="card divide-y divide-slate-800 rounded-3xl overflow-hidden border-slate-800/50">
-              {conversations.map((conv) => {
-                const match = conv.matches;
-                if (!match) return null;
-
-                const p1Id = typeof match.player1 === 'object' ? match.player1?.id : match.player1;
-                const p2Id = typeof match.player2 === 'object' ? match.player2?.id : match.player2;
-                
-                const opponent = p1Id === user?.id 
-                  ? (typeof match.player2 === 'object' ? match.player2 : { id: p2Id }) 
-                  : (typeof match.player1 === 'object' ? match.player1 : { id: p1Id });
-                
-                const opponentName = getPublicIdentity(opponent);
-                const lastMessage = conv.lastMessage;
-                const unreadCount = conv.unreadCount;
-
-                return (
-                  <Link 
-                    key={conv.id}
-                    to={`/matches/${match.id}`}
-                    className="p-6 flex items-center justify-between hover:bg-slate-800/30 transition-all group relative"
-                  >
-                    <div className="flex items-center space-x-6 min-w-0 flex-1">
-                      <div className="relative">
-                        <div className="w-14 h-14 rounded-2xl bg-slate-900 flex items-center justify-center border border-slate-800 shadow-lg group-hover:border-primary/30 transition-colors overflow-hidden">
-                          {opponent?.avatar_url ? (
-                            <img 
-                              src={opponent.avatar_url} 
-                              alt={opponentName} 
-                              className="w-full h-full object-cover" 
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <User className="w-6 h-6 text-slate-700" />
-                          )}
-                        </div>
-                        {unreadCount > 0 && (
-                          <div className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-slate-950 animate-pulse">
-                            {unreadCount}
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="space-y-1 min-w-0 flex-1">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xs md:text-sm font-black text-primary uppercase tracking-widest truncate">
-                            {match.tournaments?.name || 'Tournament'}
-                          </span>
-                          <span className="w-1 h-1 bg-slate-700 rounded-full shrink-0" />
-                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest shrink-0">Round {match.round}</span>
-                        </div>
-                        
-                        <div className="flex items-baseline justify-between gap-4">
-                          <h3 className="text-xl font-black text-white italic uppercase tracking-tighter truncate">
-                            {opponentName}
-                          </h3>
-                          {lastMessage && (
-                            <span className="text-[10px] font-medium text-slate-500 uppercase shrink-0">
-                              {formatDistanceToNow(new Date(lastMessage.created_at))} ago
-                            </span>
-                          )}
-                        </div>
-                        
-                        {lastMessage ? (
-                          <p className={`text-sm truncate ${unreadCount > 0 ? 'text-slate-200 font-bold' : 'text-slate-500 font-medium'}`}>
-                            {lastMessage.sender_id === user?.id ? 'You: ' : ''}{lastMessage.content}
-                          </p>
-                        ) : (
-                          <p className="text-sm italic text-slate-600 font-medium tracking-tight">No messages yet. Send a "Good Luck" msg!</p>
-                        )}
-                      </div>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-white transition-all group-hover:translate-x-1 ml-4" />
-                  </Link>
-                );
-              })}
-            </div>
           ) : (
-            <EmptyState 
-              tab="chat" 
-              title="No Conversations" 
-              description="Start playing matches to unlock private communications with your opponents." 
-            />
+            conversations.length > 0 ? (
+              <div className="card divide-y divide-slate-800 rounded-3xl overflow-hidden border-slate-800/50">
+                {conversations.map((conv) => {
+                  const match = conv.matches;
+                  if (!match) return null;
+
+                  const p1Id = typeof match.player1 === 'object' ? match.player1?.id : match.player1;
+                  const p2Id = typeof match.player2 === 'object' ? match.player2?.id : match.player2;
+                  
+                  const opponent = p1Id === user?.id 
+                    ? (typeof match.player2 === 'object' ? match.player2 : { id: p2Id }) 
+                    : (typeof match.player1 === 'object' ? match.player1 : { id: p1Id });
+                  
+                  const opponentName = getPublicIdentity(opponent);
+                  const lastMessage = conv.lastMessage;
+                  const unreadCount = conv.unreadCount;
+
+                  return (
+                    <Link 
+                      key={conv.id}
+                      to={`/matches/${match.id}`}
+                      className="p-6 flex items-center justify-between hover:bg-slate-800/30 transition-all group relative"
+                    >
+                      <div className="flex items-center space-x-6 min-w-0 flex-1">
+                        <div className="relative">
+                          <div className="w-14 h-14 rounded-2xl bg-slate-900 flex items-center justify-center border border-slate-800 shadow-lg group-hover:border-primary/30 transition-colors overflow-hidden">
+                            {opponent?.avatar_url ? (
+                              <img 
+                                src={opponent.avatar_url} 
+                                alt={opponentName} 
+                                className="w-full h-full object-cover" 
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <User className="w-6 h-6 text-slate-700" />
+                            )}
+                          </div>
+                          {unreadCount > 0 && (
+                            <div className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-slate-950 animate-pulse">
+                              {unreadCount}
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="space-y-1 min-w-0 flex-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs md:text-sm font-black text-primary uppercase tracking-widest truncate">
+                              {match.tournaments?.name || 'Tournament'}
+                            </span>
+                            <span className="w-1 h-1 bg-slate-700 rounded-full shrink-0" />
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest shrink-0">Round {match.round}</span>
+                          </div>
+                          
+                          <div className="flex items-baseline justify-between gap-4">
+                            <h3 className="text-xl font-black text-white italic uppercase tracking-tighter truncate">
+                              {opponentName}
+                            </h3>
+                            {lastMessage && (
+                              <span className="text-[10px] font-medium text-slate-500 uppercase shrink-0">
+                                {formatDistanceToNow(new Date(lastMessage.created_at))} ago
+                              </span>
+                            )}
+                          </div>
+                          
+                          {lastMessage ? (
+                            <p className={`text-sm truncate ${unreadCount > 0 ? 'text-slate-200 font-bold' : 'text-slate-500 font-medium'}`}>
+                              {lastMessage.sender_id === user?.id ? 'You: ' : ''}{lastMessage.content}
+                            </p>
+                          ) : (
+                            <p className="text-sm italic text-slate-600 font-medium tracking-tight">No messages yet. Send a "Good Luck" msg!</p>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-white transition-all group-hover:translate-x-1 ml-4" />
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <EmptyState 
+                tab="chat" 
+                title="No Conversations" 
+                description="Start playing matches to unlock private communications with your opponents." 
+              />
+            )
           )}
         </div>
       </div>
