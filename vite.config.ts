@@ -17,7 +17,7 @@ export default defineConfig(({mode}) => {
           enabled: true,
           type: 'module'
         },
-        includeAssets: ['favicon.ico', 'favicon.png', 'apple-touch-icon.png', 'robots.txt', 'sitemap.xml'],
+        includeAssets: ['favicon.ico', 'favicon.png', 'apple-touch-icon.png'],
         manifest: {
           name: 'Tournahub',
           short_name: 'Tournahub',
