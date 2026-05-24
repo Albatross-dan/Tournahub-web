@@ -18,6 +18,7 @@ import StatusBadge from '../components/ui/StatusBadge';
 import { TournamentStatus } from '../constants';
 
 import { useRealtimeTournaments } from '../hooks/useRealtimeTournaments';
+import PWAInstallButton from '../components/layout/PWAInstallButton';
 
 import VerificationStatusBadge from '../components/match/VerificationStatusBadge';
 import VerificationStatusBanner from '../components/match/VerificationStatusBanner';
@@ -136,6 +137,9 @@ export default function Dashboard() {
         animate="show"
         className="space-y-8"
       >
+        {/* PWA Hero Install Banner */}
+        <PWAInstallButton layout="hero" />
+
         {/* Tournament Auto-Slider (Available Tournaments) */}
         <div className="space-y-4">
           <div>

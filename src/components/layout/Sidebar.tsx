@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import PWAInstallButton from './PWAInstallButton';
 
 const logoUrl = '/android-chrome-512x512.png';
 
@@ -148,6 +149,9 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
                   <p className="text-[8px] font-black text-primary uppercase tracking-[0.2em] text-center">Standard Account</p>
                </div>
             )}
+            <div className="pt-2">
+              <PWAInstallButton layout="menu" />
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

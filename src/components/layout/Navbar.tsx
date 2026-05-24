@@ -11,6 +11,7 @@ import { formatCurrency, cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../../lib/supabase';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
+import PWAInstallButton from './PWAInstallButton';
 
 const logoUrl = '/android-chrome-512x512.png';
 
@@ -202,50 +203,56 @@ export default function Navbar() {
             exit={{ opacity: 0, y: -10 }}
             className="absolute top-full left-0 right-0 bg-surface border-b border-border-main p-6 z-40 backdrop-blur-xl shadow-2xl"
           >
-            <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <NavLink
-                    key={item.path}
-                    to={item.path}
-                    onClick={() => setIsMenuOpen(false)}
-                    className={() => {
-                      const currentPath = location.pathname + location.search;
-                      let isItemActive = false;
-                      if (item.path === '/dashboard') {
-                        isItemActive = location.pathname === '/dashboard';
-                      } else if (item.path.includes('tab=')) {
-                        isItemActive = currentPath.includes(item.path);
-                      } else if (item.path === '/matches') {
-                        isItemActive = location.pathname === '/matches' && !location.search.includes('tab=');
-                      } else {
-                        isItemActive = location.pathname.startsWith(item.path);
-                      }
-                      
-                      return cn(
-                        "flex items-center space-x-4 px-6 py-5 rounded-2xl transition-all",
-                        isItemActive 
-                          ? "bg-primary text-slate-900 border border-primary/20 shadow-[0_0_20px_rgba(var(--color-primary),0.3)]" 
-                          : "bg-background text-text-muted border border-border-main hover:bg-surface-hover hover:border-primary/30"
-                      );
-                    }}
-                  >
-                    <Icon className="w-5 h-5" />
-                    <span className="text-xs font-black uppercase tracking-widest italic">{item.name}</span>
-                    {item.name === 'Chat' && unreadChatCount > 0 && (
-                      <span className="bg-primary text-slate-900 text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-lg shadow-primary/20">
-                        {unreadChatCount}
-                      </span>
-                    )}
-                    {item.name !== 'Chat' && item.name === 'Notifications' && unreadCount > 0 && (
-                      <span className="bg-primary text-slate-900 text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-lg shadow-primary/20">
-                        {unreadCount}
-                      </span>
-                    )}
-                  </NavLink>
-                );
-              })}
+            <div className="max-w-7xl mx-auto space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      onClick={() => setIsMenuOpen(false)}
+                      className={() => {
+                        const currentPath = location.pathname + location.search;
+                        let isItemActive = false;
+                        if (item.path === '/dashboard') {
+                          isItemActive = location.pathname === '/dashboard';
+                        } else if (item.path.includes('tab=')) {
+                          isItemActive = currentPath.includes(item.path);
+                        } else if (item.path === '/matches') {
+                          isItemActive = location.pathname === '/matches' && !location.search.includes('tab=');
+                        } else {
+                          isItemActive = location.pathname.startsWith(item.path);
+                        }
+                        
+                        return cn(
+                          "flex items-center space-x-4 px-6 py-5 rounded-2xl transition-all",
+                          isItemActive 
+                            ? "bg-primary text-slate-900 border border-primary/20 shadow-[0_0_20px_rgba(var(--color-primary),0.3)]" 
+                            : "bg-background text-text-muted border border-border-main hover:bg-surface-hover hover:border-primary/30"
+                        );
+                      }}
+                    >
+                      <Icon className="w-5 h-5" />
+                      <span className="text-xs font-black uppercase tracking-widest italic">{item.name}</span>
+                      {item.name === 'Chat' && unreadChatCount > 0 && (
+                        <span className="bg-primary text-slate-900 text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-lg shadow-primary/20">
+                          {unreadChatCount}
+                        </span>
+                      )}
+                      {item.name !== 'Chat' && item.name === 'Notifications' && unreadCount > 0 && (
+                        <span className="bg-primary text-slate-900 text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-lg shadow-primary/20">
+                          {unreadCount}
+                        </span>
+                      )}
+                    </NavLink>
+                  );
+                })}
+              </div>
+
+              <div className="border-t border-border-main/50 pt-4 max-w-sm">
+                <PWAInstallButton layout="menu" />
+              </div>
             </div>
           </motion.div>
         )}

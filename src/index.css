@@ -41,8 +41,20 @@
 }
 
 @layer base {
+  html, body {
+    overscroll-behavior-y: none; /* Prevents chrome refresh pull, feels standalone */
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
     @apply bg-background text-text-main font-sans antialiased transition-colors duration-300;
+    -webkit-overflow-scrolling: touch;
+    user-select: none; /* Feels native and prevents text selection highlight on taps */
+  }
+
+  /* Allow text selection specifically for forms and dynamic select containers */
+  input, textarea, [contenteditable="true"], .allow-select {
+    user-select: text;
   }
 }
 

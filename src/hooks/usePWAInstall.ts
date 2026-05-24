@@ -12,45 +12,75 @@ interface BeforeInstallPromptEvent extends Event {
 export function usePWAInstall() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstallable, setIsInstallable] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
+    // Check standalone mode initially
+    const checkStandalone = () => {
+      const isStandaloneMode = 
+        window.matchMedia('(display-mode: standalone)').matches || 
+        (window.navigator as any).standalone === true;
+      setIsStandalone(isStandaloneMode);
+      if (isStandaloneMode) {
+        setIsInstallable(false);
+      }
+    };
+
+    checkStandalone();
+
     const handleBeforeInstallPrompt = (e: Event) => {
-      // Prevent Chrome 67 and earlier from automatically showing the prompt
+      // Prevent automatic prompt to design custom UI
       e.preventDefault();
-      // Stash the event so it can be triggered later.
+      // Store event
       setInstallPrompt(e as BeforeInstallPromptEvent);
-      setIsInstallable(true);
+      
+      // If already in standalone mode, let's not prompt
+      const isStandaloneMode = 
+        window.matchMedia('(display-mode: standalone)').matches || 
+        (window.navigator as any).standalone === true;
+        
+      if (!isStandaloneMode) {
+        setIsInstallable(true);
+      }
+    };
+
+    const handleAppInstalled = () => {
+      setIsInstallable(false);
+      setInstallPrompt(null);
+      setIsStandalone(true);
+      console.log('Tournahub was successfully installed!');
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-    // Check if app is already installed/running in standalone mode
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      setIsInstallable(false);
-    }
+    window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
 
-  const installApp = async () => {
+  const installApp = async (): Promise<boolean> => {
     if (!installPrompt) return false;
 
-    // Show the install prompt
-    await installPrompt.prompt();
+    try {
+      // Trigger native browser prompt
+      await installPrompt.prompt();
 
-    // Wait for the user to respond to the prompt
-    const { outcome } = await installPrompt.userChoice;
-    
-    if (outcome === 'accepted') {
-      setIsInstallable(false);
-      setInstallPrompt(null);
-      return true;
+      // Collect user decision
+      const { outcome } = await installPrompt.userChoice;
+      
+      if (outcome === 'accepted') {
+        setIsInstallable(false);
+        setInstallPrompt(null);
+        return true;
+      }
+    } catch (err) {
+      console.error('Failed to prompt PWA installation:', err);
     }
     
     return false;
   };
 
-  return { isInstallable, installApp };
+  return { isInstallable, isStandalone, installApp };
 }

@@ -56,6 +56,7 @@ function HomeRoute() {
 import { PlatformStatusProvider, usePlatformStatus } from './contexts/PlatformStatusContext';
 import MaintenanceScreen from './components/layout/MaintenanceScreen';
 import AdminBypassNotice from './components/layout/AdminBypassNotice';
+import PWAUpdateNotification from './components/layout/PWAUpdateNotification';
 
 function RootPlatformGate({ children }: { children: React.ReactNode }) {
   const { status, loading } = usePlatformStatus();
@@ -134,6 +135,7 @@ function AppRoutes() {
                 <Route path="/" element={<HomeRoute />} />
               </Routes>
             </Suspense>
+            <PWAUpdateNotification />
           </ThemeProvider>
         </RootPlatformGate>
       </PlatformStatusProvider>

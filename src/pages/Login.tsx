@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate, Link } from 'react-router-dom';
 import { Trophy, Mail, Lock, Loader2 } from 'lucide-react';
+import PWAInstallButton from '../components/layout/PWAInstallButton';
 
 const logoUrl = '/android-chrome-512x512.png';
 
@@ -312,12 +313,15 @@ export default function Login() {
 
             <div className="text-center">
               <button
+                type="button"
                 onClick={() => setIsSignUp(!isSignUp)}
                 className="text-[11px] font-black uppercase tracking-widest text-text-muted hover:text-primary transition-all underline underline-offset-8 decoration-border-main hover:decoration-primary/30"
               >
                 {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
               </button>
             </div>
+
+            <PWAInstallButton layout="auth" />
           </div>
         </div>
         
