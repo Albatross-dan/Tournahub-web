@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, Lock, Loader2, CheckCircle2, Eye, EyeOff, AlertTriangle, ArrowRight } from 'lucide-react';
 
-const logoUrl = '/logo.png';
+const logoUrl = '/android-chrome-512x512.png';
 
 export default function ResetPassword() {
   const [password, setPassword] = useState('');

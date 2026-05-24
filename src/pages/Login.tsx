@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useNavigate, Link } from 'react-router-dom';
 import { Trophy, Mail, Lock, Loader2 } from 'lucide-react';
 
-const logoUrl = '/logo.png';
+const logoUrl = '/android-chrome-512x512.png';
 
 export default function Login() {
   const [email, setEmail] = useState('');

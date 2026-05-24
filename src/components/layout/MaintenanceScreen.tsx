@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { usePlatformStatus } from '../../contexts/PlatformStatusContext';
 import { useAuth } from '../../contexts/AuthContext';
 
-const logoUrl = '/logo.png';
+const logoUrl = '/android-chrome-512x512.png';
 import { format, parseISO } from 'date-fns';
 import { Loader2, RefreshCw, Wrench, LogOut } from 'lucide-react';
 

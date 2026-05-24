@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
 import { Trophy, Mail, Loader2, ArrowLeft } from 'lucide-react';
 
-const logoUrl = '/logo.png';
+const logoUrl = '/android-chrome-512x512.png';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');

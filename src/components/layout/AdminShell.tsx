@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useAdminDisputes } from '../../hooks/useAdminDisputes';
 import { useAuth } from '../../contexts/AuthContext';
 
-const logoUrl = '/logo.png';
+const logoUrl = '/android-chrome-512x512.png';
 import UpcomingMaintenanceBanner from './UpcomingMaintenanceBanner';
 import AnnouncementBanner from './AnnouncementBanner';
 

@@ -9,7 +9,7 @@ import {
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
-const logoUrl = '/logo.png';
+const logoUrl = '/android-chrome-512x512.png';
 
 interface SidebarProps {
   isOpen: boolean;

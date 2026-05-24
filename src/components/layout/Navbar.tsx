@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../../lib/supabase';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
 
-const logoUrl = '/logo.png';
+const logoUrl = '/android-chrome-512x512.png';
 
 export default function Navbar() {
   const { profile, user, isAdmin } = useAuth();
