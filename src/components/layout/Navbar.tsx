@@ -11,7 +11,8 @@ import { formatCurrency, cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../../lib/supabase';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
-import logoUrl from '@/src/assets/images/logo.png';
+
+const logoUrl = '/logo.png';
 
 export default function Navbar() {
   const { profile, user, isAdmin } = useAuth();

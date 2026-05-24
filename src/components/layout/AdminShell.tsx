@@ -10,7 +10,8 @@ import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAdminDisputes } from '../../hooks/useAdminDisputes';
 import { useAuth } from '../../contexts/AuthContext';
-import logoUrl from '@/src/assets/images/logo.png';
+
+const logoUrl = '/logo.png';
 import UpcomingMaintenanceBanner from './UpcomingMaintenanceBanner';
 import AnnouncementBanner from './AnnouncementBanner';
 

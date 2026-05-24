@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate, Link } from 'react-router-dom';
 import { Trophy, Mail, Lock, Loader2 } from 'lucide-react';
-import logoUrl from '@/src/assets/images/logo.png';
+
+const logoUrl = '/logo.png';
 
 export default function Login() {
   const [email, setEmail] = useState('');

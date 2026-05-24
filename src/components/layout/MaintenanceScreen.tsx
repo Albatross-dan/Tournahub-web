@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { usePlatformStatus } from '../../contexts/PlatformStatusContext';
 import { useAuth } from '../../contexts/AuthContext';
-import logoUrl from '../../assets/images/logo.png';
+
+const logoUrl = '/logo.png';
 import { format, parseISO } from 'date-fns';
 import { Loader2, RefreshCw, Wrench, LogOut } from 'lucide-react';
 

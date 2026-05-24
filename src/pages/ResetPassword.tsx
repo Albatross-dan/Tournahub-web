@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, Lock, Loader2, CheckCircle2, Eye, EyeOff, AlertTriangle, ArrowRight } from 'lucide-react';
-import logoUrl from '@/src/assets/images/logo.png';
+
+const logoUrl = '/logo.png';
 
 export default function ResetPassword() {
   const [password, setPassword] = useState('');

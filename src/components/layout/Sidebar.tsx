@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import logoUrl from '@/src/assets/images/logo.png';
+
+const logoUrl = '/logo.png';
 
 interface SidebarProps {
   isOpen: boolean;
