@@ -1,6 +1,8 @@
 import React from 'react';
 import Navbar from './Navbar';
 import { motion } from 'motion/react';
+import UpcomingMaintenanceBanner from './UpcomingMaintenanceBanner';
+import AnnouncementBanner from './AnnouncementBanner';
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -11,6 +13,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative z-10">
         {/* Navbar */}
         <Navbar />
+
+        {/* Top-aligned warnings and banners */}
+        <UpcomingMaintenanceBanner />
+        <AnnouncementBanner />
 
         {/* Main Content */}
         <main className="flex-1 px-4 overflow-y-auto w-full custom-scrollbar">

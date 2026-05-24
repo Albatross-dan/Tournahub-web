@@ -4,16 +4,19 @@ import {
   LayoutDashboard, Trophy, Users, 
   Gamepad2, Wallet, BarChart3, 
   ChevronRight, LogOut, Shield,
-  Menu, X, Gavel
+  Menu, X, Gavel, Wrench
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAdminDisputes } from '../../hooks/useAdminDisputes';
 import { useAuth } from '../../contexts/AuthContext';
 import logoUrl from '@/src/assets/images/logo.png';
+import UpcomingMaintenanceBanner from './UpcomingMaintenanceBanner';
+import AnnouncementBanner from './AnnouncementBanner';
 
 const NAV_ITEMS = [
   { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
+  { name: 'Platform Gates', path: '/admin/platform', icon: Wrench },
   { name: 'Tournaments', path: '/admin/tournaments', icon: Trophy },
   { name: 'Fixtures', path: '/admin/fixtures', icon: Gamepad2 },
   { name: 'Disputes', path: '/admin/moderation', icon: Gavel },
@@ -159,6 +162,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             {isSidebarOpen ? <X /> : <Menu />}
           </button>
         </header>
+
+        {/* Dynamic warning and alert banners */}
+        <UpcomingMaintenanceBanner />
+        <AnnouncementBanner />
 
         <div className="p-6 md:p-10 max-w-7xl mx-auto">
           <motion.div

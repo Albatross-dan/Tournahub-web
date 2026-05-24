@@ -17,7 +17,7 @@ export default defineConfig(({mode}) => {
           enabled: true,
           type: 'module'
         },
-        includeAssets: ['favicon.ico', 'favicon.png', 'apple-touch-icon.png'],
+        includeAssets: ['favicon.ico', 'favicon-32x32.png', 'favicon-16x16.png', 'apple-touch-icon.png', 'android-chrome-192x192.png', 'android-chrome-512x512.png'],
         manifest: {
           name: 'Tournahub',
           short_name: 'Tournahub',
@@ -30,28 +30,28 @@ export default defineConfig(({mode}) => {
           orientation: 'portrait',
           icons: [
             {
-              src: '/favicon.png',
+              src: '/favicon-32x32.png',
               sizes: '32x32',
               type: 'image/png'
             },
             {
-              src: '/icon-192.png',
+              src: '/android-chrome-192x192.png',
               sizes: '192x192',
               type: 'image/png'
             },
             {
-              src: '/icon-512.png',
+              src: '/android-chrome-512x512.png',
               sizes: '512x512',
               type: 'image/png'
             },
             {
-              src: '/icon-192.png',
+              src: '/android-chrome-192x192.png',
               sizes: '192x192',
               type: 'image/png',
               purpose: 'any maskable'
             },
             {
-              src: '/icon-512.png',
+              src: '/android-chrome-512x512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any maskable'

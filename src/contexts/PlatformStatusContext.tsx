@@ -1,0 +1,185 @@
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import { useAuth } from './AuthContext';
+import { platformService, PlatformStatus } from '../services/platformService';
+import { supabase } from '../lib/supabase';
+
+interface AnnouncementNotification {
+  id: string;
+  title: string;
+  body: string;
+  priority: 'high' | 'urgent';
+  is_read: boolean;
+  created_at: string;
+}
+
+interface PlatformStatusContextType {
+  status: PlatformStatus | null;
+  loading: boolean;
+  checkStatus: () => Promise<PlatformStatus | null>;
+  unreadAnnouncements: AnnouncementNotification[];
+  dismissAnnouncement: (id: string) => Promise<void>;
+  refetchAnnouncements: () => Promise<void>;
+}
+
+const PlatformStatusContext = createContext<PlatformStatusContextType | undefined>(undefined);
+
+export function PlatformStatusProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const [status, setStatus] = useState<PlatformStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [unreadAnnouncements, setUnreadAnnouncements] = useState<AnnouncementNotification[]>([]);
+  const isFetchingRef = useRef(false);
+
+  // 1. Fetch current status
+  const checkStatus = async (): Promise<PlatformStatus | null> => {
+    if (isFetchingRef.current) return status;
+    isFetchingRef.current = true;
+    try {
+      const data = await platformService.getPlatformStatus();
+      setStatus(data);
+      return data;
+    } catch (err) {
+      console.error('[PlatformStatusProvider] Error polling status:', err);
+      return null;
+    } finally {
+      isFetchingRef.current = false;
+      setLoading(false);
+    }
+  };
+
+  // 2. Fetch announcements for authenticated user
+  const refetchAnnouncements = async () => {
+    if (!user) {
+      setUnreadAnnouncements([]);
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('id, title, body, priority, is_read, created_at')
+        .eq('user_id', user.id)
+        .eq('type', 'announcement')
+        .eq('is_read', false)
+        .in('priority', ['high', 'urgent'])
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('[PlatformStatusProvider] Error fetching announcements:', error);
+      } else if (data) {
+        setUnreadAnnouncements(data as AnnouncementNotification[]);
+      }
+    } catch (err) {
+      console.error('[PlatformStatusProvider] Error fetching announcements:', err);
+    }
+  };
+
+  // 3. Mark warning/announcement as read
+  const dismissAnnouncement = async (id: string) => {
+    try {
+      const { error } = await (supabase.from('notifications') as any)
+        .update({ is_read: true })
+        .eq('id', id);
+
+      if (error) {
+        console.error('[PlatformStatusProvider] Error dismissing announcement:', error);
+      } else {
+        setUnreadAnnouncements(prev => prev.filter(a => a.id !== id));
+      }
+    } catch (err) {
+      console.error('[PlatformStatusProvider] Exception during dismiss:', err);
+    }
+  };
+
+  // Initial status fetch on mount
+  useEffect(() => {
+    checkStatus();
+  }, [user]);
+
+  // Load announcements and subscribe to real-time notification changes
+  useEffect(() => {
+    if (user) {
+      refetchAnnouncements();
+
+      const channelName = `pwa-announcements-${Math.random().toString(36).substring(7)}`;
+      const channel = supabase
+        .channel(channelName)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`
+        }, () => {
+          refetchAnnouncements();
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    } else {
+      setUnreadAnnouncements([]);
+    }
+  }, [user]);
+
+  // Dynamic Polling logic (60s if live, 30s if blocked, respects tab visibility)
+  useEffect(() => {
+    let timerId: NodeJS.Timeout | null = null;
+    let isVisible = true;
+
+    const runPoll = async () => {
+      if (isVisible) {
+        await checkStatus();
+      }
+      const delay = status?.is_blocked ? 30000 : 60000;
+      timerId = setTimeout(runPoll, delay);
+    };
+
+    const isBlocked = status?.is_blocked;
+    timerId = setTimeout(runPoll, isBlocked ? 30000 : 60000);
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        isVisible = false;
+        if (timerId) {
+          clearTimeout(timerId);
+          timerId = null;
+        }
+      } else {
+        isVisible = true;
+        runPoll();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (timerId) {
+        clearTimeout(timerId);
+      }
+    };
+  }, [status?.is_blocked]);
+
+  const value = {
+    status,
+    loading,
+    checkStatus,
+    unreadAnnouncements,
+    dismissAnnouncement,
+    refetchAnnouncements
+  };
+
+  return (
+    <PlatformStatusContext.Provider value={value}>
+      {children}
+    </PlatformStatusContext.Provider>
+  );
+}
+
+export function usePlatformStatus() {
+  const context = useContext(PlatformStatusContext);
+  if (context === undefined) {
+    throw new Error('usePlatformStatus must be used within a PlatformStatusProvider');
+  }
+  return context;
+}

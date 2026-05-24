@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -25,6 +25,7 @@ import TournamentChampion from './pages/TournamentChampion';
 
 // Lazy load admin pages only
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const AdminPlatform = lazy(() => import('./pages/admin/AdminPlatform'));
 const ManageTournaments = lazy(() => import('./pages/admin/ManageTournaments'));
 const CreateTournament = lazy(() => import('./pages/admin/CreateTournament'));
 const EditTournament = lazy(() => import('./pages/admin/EditTournament'));
@@ -52,58 +53,90 @@ function HomeRoute() {
   return <Login />;
 }
 
+import { PlatformStatusProvider, usePlatformStatus } from './contexts/PlatformStatusContext';
+import MaintenanceScreen from './components/layout/MaintenanceScreen';
+import AdminBypassNotice from './components/layout/AdminBypassNotice';
+
+function RootPlatformGate({ children }: { children: React.ReactNode }) {
+  const { status, loading } = usePlatformStatus();
+  const { isAdmin } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return <LoadingState fullPage />;
+  }
+
+  const isPublicRoute = ['/', '/login', '/forgot-password', '/reset-password', '/terms', '/privacy-policy', '/privacy', '/legal'].includes(location.pathname);
+
+  if (status?.is_blocked && !isPublicRoute && !isAdmin) {
+    return <MaintenanceScreen />;
+  }
+
+  return (
+    <>
+      {children}
+      <AdminBypassNotice />
+    </>
+  );
+}
+
 function AppRoutes() {
   const navigate = useNavigate();
 
   return (
     <AuthProvider onNavigate={navigate}>
-      <ThemeProvider>
-        <Suspense fallback={<LoadingState fullPage />}>
-          <Routes>
-            <Route path="/login" element={<HomeRoute />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/terms" element={<Legal />} />
-            <Route path="/privacy-policy" element={<Legal />} />
-            <Route path="/privacy" element={<Navigate to="/privacy-policy" replace />} />
-            <Route path="/legal" element={<Navigate to="/privacy-policy" replace />} />
-            
-            <Route element={<ProtectedRoute />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/tournaments" element={<Tournaments />} />
-              <Route path="/tournaments/:id" element={<TournamentDetails />} />
-              <Route path="/tournaments/:id/champion" element={<TournamentChampion />} />
-              <Route path="/matches/:id" element={<MatchDetails />} />
-              <Route path="/matches" element={<Matches />} />
-              <Route path="/streams" element={<LiveStreams />} />
-              <Route path="/chat" element={<Chat />} />
-              <Route path="/notifications" element={<Notifications />} />
-              <Route path="/wallet" element={<Wallet />} />
-              <Route path="/wallet/history" element={<WalletHistory />} />
-              <Route path="/profile/wins" element={<WinnerHistory />} />
-              <Route path="/profile" element={<Profile />} />
-            </Route>
+      <PlatformStatusProvider>
+        <RootPlatformGate>
+          <ThemeProvider>
+            <Suspense fallback={<LoadingState fullPage />}>
+              <Routes>
+                <Route path="/login" element={<HomeRoute />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/terms" element={<Legal />} />
+                <Route path="/privacy-policy" element={<Legal />} />
+                <Route path="/privacy" element={<Navigate to="/privacy-policy" replace />} />
+                <Route path="/legal" element={<Navigate to="/privacy-policy" replace />} />
+                
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/tournaments" element={<Tournaments />} />
+                  <Route path="/tournaments/:id" element={<TournamentDetails />} />
+                  <Route path="/tournaments/:id/champion" element={<TournamentChampion />} />
+                  <Route path="/matches/:id" element={<MatchDetails />} />
+                  <Route path="/matches" element={<Matches />} />
+                  <Route path="/streams" element={<LiveStreams />} />
+                  <Route path="/chat" element={<Chat />} />
+                  <Route path="/notifications" element={<Notifications />} />
+                  <Route path="/wallet" element={<Wallet />} />
+                  <Route path="/wallet/history" element={<WalletHistory />} />
+                  <Route path="/profile/wins" element={<WinnerHistory />} />
+                  <Route path="/profile" element={<Profile />} />
+                </Route>
 
-            <Route element={<ProtectedRoute allowAdminOnly />}>
-              <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/admin/tournaments" element={<ManageTournaments />} />
-              <Route path="/admin/tournaments/create" element={<CreateTournament />} />
-              <Route path="/admin/tournaments/:id" element={<EditTournament />} />
-              <Route path="/admin/tournaments/:id/manage" element={<ManageTournamentDetails />} />
-              <Route path="/admin/tournaments/:id/schedule" element={<ScheduleTournament />} />
-              <Route path="/admin/tournaments/:id/live" element={<LiveTournament />} />
-              <Route path="/admin/fixtures" element={<AdminFixtures />} />
-              <Route path="/admin/players" element={<AdminPlayers />} />
-              <Route path="/admin/wallet" element={<AdminWallet />} />
-              <Route path="/admin/standings" element={<AdminStandings />} />
-              <Route path="/admin/moderation" element={<Moderation />} />
-              <Route path="/admin/logs" element={<ModerationLogs />} />
-            </Route>
+                <Route element={<ProtectedRoute allowAdminOnly />}>
+                  <Route path="/admin" element={<AdminDashboard />} />
+                  <Route path="/admin/platform" element={<AdminPlatform />} />
+                  <Route path="/admin/tournaments" element={<ManageTournaments />} />
+                  <Route path="/admin/tournaments/create" element={<CreateTournament />} />
+                  <Route path="/admin/tournaments/:id" element={<EditTournament />} />
+                  <Route path="/admin/tournaments/:id/manage" element={<ManageTournamentDetails />} />
+                  <Route path="/admin/tournaments/:id/schedule" element={<ScheduleTournament />} />
+                  <Route path="/admin/tournaments/:id/live" element={<LiveTournament />} />
+                  <Route path="/admin/fixtures" element={<AdminFixtures />} />
+                  <Route path="/admin/players" element={<AdminPlayers />} />
+                  <Route path="/admin/wallet" element={<AdminWallet />} />
+                  <Route path="/admin/standings" element={<AdminStandings />} />
+                  <Route path="/admin/moderation" element={<Moderation />} />
+                  <Route path="/admin/logs" element={<ModerationLogs />} />
+                </Route>
 
-            <Route path="/" element={<HomeRoute />} />
-          </Routes>
-        </Suspense>
-      </ThemeProvider>
+                <Route path="/" element={<HomeRoute />} />
+              </Routes>
+            </Suspense>
+          </ThemeProvider>
+        </RootPlatformGate>
+      </PlatformStatusProvider>
     </AuthProvider>
   );
 }
