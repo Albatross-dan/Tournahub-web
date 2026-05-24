@@ -11,6 +11,7 @@ import { formatCurrency, cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../../lib/supabase';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
+import logoUrl from '@/src/assets/images/logo.png';
 
 export default function Navbar() {
   const { profile, user, isAdmin } = useAuth();
@@ -158,7 +159,7 @@ export default function Navbar() {
         <NavLink to="/dashboard" className="flex items-center space-x-4 group cursor-pointer">
           <div className="relative">
             <div className="absolute inset-0 bg-primary/20 blur-lg rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-            <img src="/logo.png" alt="TournaHub" className="w-10 h-10 object-contain relative z-10" referrerPolicy="no-referrer" />
+            <img src={logoUrl} alt="TournaHub" className="w-10 h-10 object-contain relative z-10" referrerPolicy="no-referrer" />
           </div>
           <div>
             <h1 className="text-xl font-black text-text-main italic -tracking-widest uppercase transition-colors group-hover:text-primary">

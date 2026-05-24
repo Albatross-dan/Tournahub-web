@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, Lock, Loader2, CheckCircle2, Eye, EyeOff, AlertTriangle, ArrowRight } from 'lucide-react';
+import logoUrl from '@/src/assets/images/logo.png';
 
 export default function ResetPassword() {
   const [password, setPassword] = useState('');
@@ -159,7 +160,7 @@ export default function ResetPassword() {
             <div className="relative">
               <div className="absolute inset-0 bg-primary/10 blur-2xl rounded-full animate-pulse" />
               <img 
-                src="/logo.png" 
+                src={logoUrl} 
                 alt="TournaHubLogo" 
                 className="w-24 h-24 object-contain relative z-10" 
                 referrerPolicy="no-referrer" 

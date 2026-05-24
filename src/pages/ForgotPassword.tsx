@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
 import { Trophy, Mail, Loader2, ArrowLeft } from 'lucide-react';
+import logoUrl from '@/src/assets/images/logo.png';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -51,7 +52,7 @@ export default function ForgotPassword() {
             <div className="relative">
               <div className="absolute inset-0 bg-primary/10 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
               <img 
-                src="/logo.png" 
+                src={logoUrl} 
                 alt="TournaHubLogo" 
                 className="w-24 h-24 object-contain relative z-10 grayscale hover:grayscale-0 transition-all duration-500" 
                 referrerPolicy="no-referrer" 

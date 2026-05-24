@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate, Link } from 'react-router-dom';
 import { Trophy, Mail, Lock, Loader2 } from 'lucide-react';
+import logoUrl from '@/src/assets/images/logo.png';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -90,7 +91,7 @@ export default function Login() {
             <div className="relative">
               <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
               <img 
-                src="/logo.png" 
+                src={logoUrl} 
                 alt="TournaHubLogo" 
                 className="w-32 h-32 object-contain relative z-10 transition-transform duration-500 group-hover:scale-110" 
                 referrerPolicy="no-referrer" 

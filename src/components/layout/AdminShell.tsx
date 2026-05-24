@@ -10,6 +10,7 @@ import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAdminDisputes } from '../../hooks/useAdminDisputes';
 import { useAuth } from '../../contexts/AuthContext';
+import logoUrl from '@/src/assets/images/logo.png';
 
 const NAV_ITEMS = [
   { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
@@ -42,7 +43,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           {/* Logo Section */}
           <div className="p-6 flex items-center justify-between">
             <Link to="/admin" className="flex items-center space-x-3 group">
-              <img src="/logo.png" alt="Admin" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform" referrerPolicy="no-referrer" />
+              <img src={logoUrl} alt="Admin" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform" referrerPolicy="no-referrer" />
               <AnimatePresence>
                 {isSidebarOpen && (
                   <motion.span 
@@ -151,7 +152,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         {/* Top bar for mobile */}
         <header className="md:hidden flex items-center justify-between p-4 bg-[#0d0f26] border-b border-slate-800/50 mb-6">
           <div className="flex items-center space-x-3">
-             <img src="/logo.png" alt="Admin" className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
+             <img src={logoUrl} alt="Admin" className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
              <span className="font-black italic uppercase text-white tracking-widest">Admin Hub</span>
           </div>
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 text-slate-400">
