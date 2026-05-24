@@ -4,13 +4,13 @@
   "description": "Create and manage football and eFootball tournaments with fixtures, standings, knockout brackets, leagues, and competitions on Tournahub.",
   "icons": [
     {
-      "src": "/web-app-manifest-192x192.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/web-app-manifest-512x512.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
