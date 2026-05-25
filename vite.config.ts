@@ -74,6 +74,8 @@ export default defineConfig(({mode}) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json,xml}'],
+          clientsClaim: true,
+          skipWaiting: true,
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.(?:googleapis|gstatic)\.com\/.*/i,
