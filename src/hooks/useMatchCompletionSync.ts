@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -7,6 +8,7 @@ import { supabase } from '../lib/supabase';
  */
 export function useMatchCompletionSync(tournamentId: string | undefined) {
   const [refreshCount, setRefreshCount] = useState(0);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!tournamentId) return;
@@ -27,6 +29,11 @@ export function useMatchCompletionSync(tournamentId: string | undefined) {
 
         if (hasCompleted || hasVerified) {
           console.log(`[useMatchCompletionSync] Terminal state detected for match ${newMatch.id}. Triggering global sector refresh...`);
+          
+          // Clear and invalidate TanStack caches to keep live standing panels and tournament details consistent
+          queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] });
+          queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+
           setRefreshCount(prev => prev + 1);
         }
       })

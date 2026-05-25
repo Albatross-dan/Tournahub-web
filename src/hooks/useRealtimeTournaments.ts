@@ -1,53 +1,42 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { Tournament } from '../types/database';
 import { tournamentService } from '../services/tournamentService';
-import { fetchWithRetry } from '../lib/fetchWithRetry';
 
+/**
+ * Custom hook with TanStack Query and Supabase Realtime synchronization.
+ * Fetches and caches tournament listings with background revalidation.
+ */
 export function useRealtimeTournaments(status?: string | string[], limit?: number, columns?: string) {
-  const [tournaments, setTournaments] = useState<(Tournament & { registrations_count?: number })[]>([]);
-  const [loading, setLoading] = useState(true);
-
+  const queryClient = useQueryClient();
   const statusKey = Array.isArray(status) ? [...status].sort().join(',') : (status || 'all');
+  const cacheKey = ['tournaments', statusKey, limit || 'all'];
 
+  // Fetcher compliant with the tournament API
+  const fetchTournaments = async () => {
+    console.log(`[Query Cache] Fetching tournaments for key: ${statusKey}`);
+    const res = await tournamentService.getAll(status, limit, columns);
+    return res as (Tournament & { registrations_count?: number })[];
+  };
+
+  // React Query with smart caching policies
+  const { data: tournaments = [], status: queryStatus, error, isFetching } = useQuery({
+    queryKey: cacheKey,
+    queryFn: fetchTournaments,
+    staleTime: 1000 * 15, // 15 seconds staleTime
+    gcTime: 1000 * 60 * 60 * 24, // 24 hours garbage collection
+    refetchOnReconnect: 'always',
+    refetchOnWindowFocus: true,
+  });
+
+  // Listen to Supabase Postgres changes and cleanly trigger query invalidations
   useEffect(() => {
-    const fetchInitial = async (isBackground = false) => {
-      if (!navigator.onLine) return;
-      if (!isBackground) setLoading(true);
-      
-      const timeoutId = setTimeout(() => {
-        if (!isBackground) {
-          setLoading(false);
-          console.warn(`[useRealtimeTournaments] Initial fetch timed out for ${statusKey}`);
-        }
-      }, 10000);
-      
-      try {
-        console.log(`[useRealtimeTournaments] Fetching initial for ${statusKey}, limit: ${limit}`);
-        const { data, error } = await fetchWithRetry(async () => {
-          try {
-            const res = await tournamentService.getAll(status, limit, columns);
-            return { data: res, error: null };
-          } catch (e) {
-            return { data: null, error: e };
-          }
-        });
-        if (error) throw error;
-        console.log(`[useRealtimeTournaments] Success for ${statusKey}:`, data?.length, 'items');
-        setTournaments(data as (Tournament & { registrations_count: number })[] || []);
-      } catch (err) {
-        console.error(`[useRealtimeTournaments] Error for ${statusKey}:`, err);
-      } finally {
-        clearTimeout(timeoutId);
-        if (!isBackground) setLoading(false);
-      }
-    };
+    const channelId = `realtime-list-${statusKey}-${limit || 'all'}-${Math.random().toString(36).substring(7)}`;
+    console.log(`[Realtime Sync] Plugging in tournament list channel: ${channelId}`);
 
-    fetchInitial(false);
-
-    const channelName = `tournaments-${statusKey}-${limit || 'all'}-${Math.random().toString(36).substring(7)}`;
     const channel = supabase
-      .channel(channelName)
+      .channel(channelId)
       .on(
         'postgres_changes',
         {
@@ -55,60 +44,15 @@ export function useRealtimeTournaments(status?: string | string[], limit?: numbe
           schema: 'public',
           table: 'tournaments'
         },
-        (payload) => {
-          const matchesStatus = (t: any) => {
-            if (!status || status === 'all') return true;
-            if (Array.isArray(status)) return status.includes(t.status);
-            return t.status === status;
-          };
+        async (payload) => {
+          console.log(`[Realtime Sync] Tournament changed (${payload.eventType}). Invalidating list cache...`);
+          
+          // Invalidate listings
+          queryClient.invalidateQueries({ queryKey: ['tournaments'] });
 
-          if (payload.eventType === 'INSERT') {
-            const newTourney = payload.new as Tournament;
-            if (matchesStatus(newTourney)) {
-              // For inserts, we re-fetch to ensure we get the registrations_count correctly
-              // or we could just append if we don't care about the count immediately
-              fetchInitial(true);
-            }
-          } else if (payload.eventType === 'UPDATE') {
-            const updatedTourney = payload.new as Tournament;
-            setTournaments((prev) => {
-              const existing = prev.find(t => t.id === updatedTourney.id);
-              
-              // Helper to extract count from various possible payload shapes
-              const getCount = (obj: any) => {
-                if (!obj) return existing?.registrations_count ?? 0;
-                
-                const countData = obj.registrations_count ?? obj.registrations ?? obj.tournament_players;
-                if (Array.isArray(countData)) {
-                  if (typeof countData[0] === 'number') return countData[0];
-                  return countData[0]?.count ?? 0;
-                }
-                if (typeof countData === 'object' && countData !== null) return countData.count ?? 0;
-                if (typeof countData === 'number') return countData;
-                return existing?.registrations_count ?? 0;
-              };
-
-              const merged = {
-                ...existing,
-                ...updatedTourney,
-                registrations_count: getCount(updatedTourney)
-              } as any;
-
-              if (existing) {
-                if (matchesStatus(updatedTourney)) {
-                  return prev.map((t) => (t.id === updatedTourney.id ? merged : t));
-                } else {
-                  return prev.filter((t) => t.id !== updatedTourney.id);
-                }
-              } else {
-                if (matchesStatus(updatedTourney)) {
-                   return [merged, ...prev];
-                }
-                return prev;
-              }
-            });
-          } else if (payload.eventType === 'DELETE') {
-            setTournaments((prev) => prev.filter((t) => t.id !== payload.old.id));
+          // If detail updated, invalidate specificity
+          if (payload.new && (payload.new as any).id) {
+            queryClient.invalidateQueries({ queryKey: ['tournament', (payload.new as any).id] });
           }
         }
       )
@@ -119,61 +63,69 @@ export function useRealtimeTournaments(status?: string | string[], limit?: numbe
           schema: 'public',
           table: 'registrations'
         },
-        () => {
-          // Re-fetch all to get latest counts from backend source of truth
-          // Use background mode to avoid showing loading spinner to everyone
-          fetchInitial(true);
+        async (payload) => {
+          console.log(`[Realtime Sync] Registration changed (${payload.eventType}). Invalidating list cache to update counts...`);
+          
+          queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+
+          const tourId = (payload.new as any)?.tournament_id || (payload.old as any)?.tournament_id;
+          if (tourId) {
+            queryClient.invalidateQueries({ queryKey: ['tournament', tourId] });
+          }
         }
       )
       .subscribe();
 
     return () => {
+      console.log(`[Realtime Sync] Closing tournament list channel: ${channelId}`);
       supabase.removeChannel(channel);
     };
-  }, [statusKey, limit, columns]);
+  }, [statusKey, limit, queryClient]);
 
-  return { tournaments, loading };
+  // Make sure we never block UI if we have cached tournaments from previous persistent load
+  const isLoading = queryStatus === 'pending' && tournaments.length === 0;
+
+  return { 
+    tournaments, 
+    loading: isLoading,
+    isFetching,
+    error
+  };
 }
 
+/**
+ * Custom hook with TanStack Query and Supabase Realtime synchronization.
+ * Fetches and caches a specific tournament details with background revalidation.
+ */
 export function useRealtimeTournament(id: string | undefined) {
-  const [tournament, setTournament] = useState<Tournament | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const cacheKey = ['tournament', id];
+
+  const fetchTournament = async () => {
+    if (!id) throw new Error('Tournament ID is undefined');
+    console.log(`[Query Cache] Fetching tournament detail for: ${id}`);
+    const res = await tournamentService.getById(id);
+    return res as Tournament;
+  };
+
+  const { data: tournament = null, status: queryStatus, error, isFetching } = useQuery({
+    queryKey: cacheKey,
+    queryFn: fetchTournament,
+    enabled: !!id,
+    staleTime: 1000 * 5, // shorter staleTime for live tournament details page
+    gcTime: 1000 * 60 * 60 * 4, // 4 hours details GC
+    refetchOnReconnect: 'always',
+    refetchOnWindowFocus: true,
+  });
 
   useEffect(() => {
     if (!id) return;
 
-    const fetchInitial = async () => {
-      if (!navigator.onLine) return;
-      setLoading(true);
-      const timeoutId = setTimeout(() => {
-        setLoading(false);
-        console.warn(`[useRealtimeTournament] Fetch details timed out for ${id}`);
-      }, 10000);
-      
-      try {
-        console.log('Fetching tournament details for id:', id);
-        const { data, error } = await fetchWithRetry(async () => {
-          try {
-            const res = await tournamentService.getById(id);
-            return { data: res, error: null };
-          } catch (e) {
-            return { data: null, error: e };
-          }
-        });
-        if (error) throw error;
-        setTournament(data);
-      } catch (err: any) {
-        console.error('Error fetching tournament in hook:', err);
-      } finally {
-        clearTimeout(timeoutId);
-        setLoading(false);
-      }
-    };
-
-    fetchInitial();
+    const channelId = `realtime-detail-${id}-${Math.random().toString(36).substring(7)}`;
+    console.log(`[Realtime Sync] Plugging in tournament details channel: ${channelId}`);
 
     const channel = supabase
-      .channel(`tournament-detail-${id}-${Math.random().toString(36).substring(7)}`)
+      .channel(channelId)
       .on(
         'postgres_changes',
         {
@@ -183,7 +135,20 @@ export function useRealtimeTournament(id: string | undefined) {
           filter: `id=eq.${id}`
         },
         (payload) => {
-          setTournament(payload.new as Tournament);
+          console.log('[Realtime Sync] Realtime detail update received. Updating local query state...');
+          
+          // Instant local cache merge before background query refreshes
+          queryClient.setQueryData(cacheKey, (old: any) => {
+            if (!old) return old;
+            return {
+              ...old,
+              ...(payload.new as any),
+            };
+          });
+
+          // Trigger invalidate & fetch in background
+          queryClient.invalidateQueries({ queryKey: cacheKey });
+          queryClient.invalidateQueries({ queryKey: ['tournaments'] });
         }
       )
       .on(
@@ -195,15 +160,25 @@ export function useRealtimeTournament(id: string | undefined) {
           filter: `id=eq.${id}`
         },
         () => {
-          setTournament(null);
+          console.log('[Realtime Sync] Tournament deleted. Revoking detail query cache...');
+          queryClient.setQueryData(cacheKey, null);
+          queryClient.invalidateQueries({ queryKey: ['tournaments'] });
         }
       )
       .subscribe();
 
     return () => {
+      console.log(`[Realtime Sync] Closing tournament details channel: ${channelId}`);
       supabase.removeChannel(channel);
     };
-  }, [id]);
+  }, [id, queryClient]);
 
-  return { tournament, loading };
+  const isLoading = queryStatus === 'pending' && !tournament;
+
+  return {
+    tournament,
+    loading: isLoading,
+    isFetching,
+    error
+  };
 }

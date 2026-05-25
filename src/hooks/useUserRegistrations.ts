@@ -1,24 +1,53 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { fetchWithRetry } from '../lib/fetchWithRetry';
 
+/**
+ * Hook to retrieve and cache the current user's direct tournament registration IDs.
+ * Utilizes TanStack Query for caching and Supabase Realtime for instant synchronization.
+ */
 export function useUserRegistrations() {
-  const { user, refetchSignal } = useAuth();
-  const [userRegistrations, setUserRegistrations] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const cacheKey = ['userRegistrations', user?.id || 'anonymous'];
 
-  useEffect(() => {
-    if (!user?.id) {
-       setUserRegistrations(new Set());
-       setLoading(false);
-       return;
+  const fetchUserRegistrations = async (): Promise<Set<string>> => {
+    if (!user?.id) return new Set<string>();
+    
+    console.log(`[Query Cache] Fetching registrations for user: ${user.id}`);
+    const { data, error } = await (supabase as any)
+      .from('registrations')
+      .select('tournament_id')
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('[useUserRegistrations Cache] Error loading user registrations:', error);
+      throw error;
     }
 
-    loadUserRegistrations();
+    const ids = new Set((data as any[])?.map(r => r.tournament_id).filter(Boolean) || []);
+    return ids;
+  };
+
+  const { data: userRegistrations = new Set<string>(), status: queryStatus } = useQuery({
+    queryKey: cacheKey,
+    queryFn: fetchUserRegistrations,
+    enabled: !!user?.id,
+    staleTime: 1000 * 30, // 30 seconds staleTime
+    gcTime: 1000 * 60 * 60 * 2, // 2 hours garbage collection
+    refetchOnReconnect: 'always',
+    refetchOnWindowFocus: true,
+  });
+
+  // Maintain immediate postgres changes subscription
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channelId = `realtime-user-regs-${user.id}-${Math.random().toString(36).substring(7)}`;
 
     const channel = supabase
-      .channel(`user-registrations-${user.id}-${Math.random().toString(36).substring(7)}`)
+      .channel(channelId)
       .on(
         'postgres_changes',
         {
@@ -28,7 +57,10 @@ export function useUserRegistrations() {
           filter: `user_id=eq.${user.id}`,
         },
         () => {
-          loadUserRegistrations();
+          console.log('[Realtime Sync] User registration changed in DB. Invalidating user registrations query...');
+          queryClient.invalidateQueries({ queryKey: cacheKey });
+          // Also invalidate tournaments to update player status
+          queryClient.invalidateQueries({ queryKey: ['tournaments'] });
         }
       )
       .subscribe();
@@ -36,28 +68,12 @@ export function useUserRegistrations() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id, refetchSignal]);
+  }, [user?.id, queryClient, cacheKey]);
 
-  async function loadUserRegistrations() {
-    if (!navigator.onLine) return;
-    try {
-      const { data, error } = await fetchWithRetry(() =>
-        (supabase as any)
-          .from('registrations')
-          .select('tournament_id')
-          .eq('user_id', user?.id)
-      );
+  const isLoading = queryStatus === 'pending' && userRegistrations.size === 0;
 
-      if (error) throw error;
-      
-      const ids = new Set((data as any[])?.map(r => r.tournament_id).filter(Boolean) || []);
-      setUserRegistrations(ids);
-    } catch (err) {
-      console.error('Error loading user registrations:', err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return { userRegistrations, loading };
+  return { 
+    userRegistrations, 
+    loading: isLoading 
+  };
 }

@@ -1,5 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './lib/queryClient';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -22,6 +24,7 @@ import WalletHistory from './pages/WalletHistory';
 import WinnerHistory from './pages/WinnerHistory';
 import Profile from './pages/Profile';
 import TournamentChampion from './pages/TournamentChampion';
+import PaymentCallback from './pages/PaymentCallback';
 
 // Lazy load admin pages only
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
@@ -113,6 +116,7 @@ function AppRoutes() {
                   <Route path="/notifications" element={<Notifications />} />
                   <Route path="/wallet" element={<Wallet />} />
                   <Route path="/wallet/history" element={<WalletHistory />} />
+                  <Route path="/payment/callback" element={<PaymentCallback />} />
                   <Route path="/profile/wins" element={<WinnerHistory />} />
                   <Route path="/profile" element={<Profile />} />
                 </Route>
@@ -147,8 +151,10 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <Router>
-      <AppRoutes />
-    </Router>
+    <QueryClientProvider client={queryClient}>
+      <Router>
+        <AppRoutes />
+      </Router>
+    </QueryClientProvider>
   );
 }

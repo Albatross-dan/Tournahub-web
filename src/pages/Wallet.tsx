@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { useWallet } from '../hooks/useWallet';
 import Shell from '../components/layout/Shell';
@@ -11,14 +11,16 @@ import { formatCurrencyDynamic, formatDate, cn } from '../lib/utils';
 import LoadingState from '../components/ui/LoadingState';
 import { SupportedCurrency } from '../types/finance';
 import { Link } from 'react-router-dom';
-import DepositModal from '../components/wallet/DepositModal';
+import { WalletBalanceCard } from '../components/wallet/WalletBalanceCard';
 import WithdrawalModal from '../components/wallet/WithdrawalModal';
+import { walletService } from '../services/walletService';
+import toast from 'react-hot-toast';
 
 export default function Wallet() {
   const { profile } = useAuth();
   const [currency, setCurrency] = useState<SupportedCurrency>('KES'); // Default to KES for demo/preference
-  const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
+  const [verificationLoading, setVerificationLoading] = useState(false);
 
   const { 
     summary, limits, recentActivity, 
@@ -30,9 +32,41 @@ export default function Wallet() {
 
   const isSandbox = environment === 'sandbox';
 
-  if (loading) return (
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const reference = params.get('reference') || params.get('trxref');
+    
+    if (reference) {
+      handleVerify(reference);
+    }
+  }, []);
+
+   async function handleVerify(reference: string) {
+    try {
+      setVerificationLoading(true);
+      toast.loading('Verifying secure payment transaction...', { id: 'wallet-verify' });
+      
+      await walletService.confirmPaymentRequest(reference, { reference, status: 'success' });
+
+      toast.success('Transaction verified! Funds deposited successfully.', { id: 'wallet-verify' });
+      refreshWallet();
+    } catch (err: any) {
+      console.error('[Payment Verification] Error:', err);
+      toast.error(err.message || 'Verification failed. Please contact support.', { id: 'wallet-verify' });
+    } finally {
+      setVerificationLoading(false);
+      // Clean up URL query parameters cleanly
+      const url = new URL(window.location.href);
+      url.searchParams.delete('reference');
+      url.searchParams.delete('trxref');
+      url.searchParams.delete('provider');
+      window.history.replaceState({}, document.title, url.pathname + url.search);
+    }
+  }
+
+  if (loading || verificationLoading) return (
     <Shell>
-      <LoadingState message="Decrypting Ledger..." />
+      <LoadingState message={verificationLoading ? "Verifying secure payment..." : "Decrypting Ledger..."} />
     </Shell>
   );
 
@@ -97,59 +131,43 @@ export default function Wallet() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Balance Card */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="card p-8 bg-surface border-border-main shadow-2xl relative overflow-hidden">
-               <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -mr-20 -mt-20" />
-               
-               <div className="flex items-start justify-between relative z-10">
-                  <div className="space-y-4">
-                    <p className="text-sm font-bold text-text-muted uppercase tracking-widest">Available Balance</p>
-                    <div className="flex items-baseline space-x-3">
-                      <span className="text-2xl font-black text-primary italic uppercase tracking-tighter">
-                        {summary?.display_symbol}
-                      </span>
-                      <span className="text-7xl font-black text-text-main italic tracking-tighter leading-none">
-                        {summary?.balance_display.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2 text-text-muted">
-                      <span className="text-xs font-bold uppercase tracking-widest">≈ ${summary?.balance_usd.toFixed(2)} USD</span>
-                      <span className="w-1 h-1 bg-border-main rounded-full" />
-                      <span className="text-xs font-bold uppercase tracking-widest">Rate: 1 USD = {summary?.exchange_rate} {currency}</span>
-                    </div>
-                  </div>
-                  <div className="w-20 h-20 bg-background rounded-3xl flex items-center justify-center border border-border-main shadow-2xl transform rotate-3">
-                    <WalletIcon className="w-10 h-10 text-primary" />
-                  </div>
-               </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <WalletBalanceCard 
+                balance={summary?.balance_usd || 0}
+                isLoading={loading}
+                onTopUpSuccess={(_newBalance) => {
+                  refreshWallet(true);
+                }}
+              />
+              
+              {/* Withdrawal Display Card */}
+              <div className="card p-8 bg-[#0b0e14] border border-white/10 rounded-3xl relative overflow-hidden flex flex-col justify-between shadow-2xl">
+                 <div className="absolute top-0 right-0 w-64 h-64 bg-red-500/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
+                 
+                 <div className="space-y-4">
+                   <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Available Payout</p>
+                   <div className="flex items-baseline space-x-2">
+                     <span className="text-3xl font-black text-red-500 italic uppercase tracking-tighter">$</span>
+                     <span className="text-6xl font-black text-white italic tracking-tighter leading-none">
+                       {(summary?.balance_usd || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                     </span>
+                   </div>
+                   <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                     Withdrawals process securely within 24 hours
+                   </p>
+                 </div>
 
-               <div className="grid grid-cols-2 gap-4 mt-12 relative z-10 border-t border-border-main pt-8">
-                  <button 
-                    disabled={isLocked || (limits?.remaining_deposit_usd || 0) <= 0}
-                    onClick={() => setIsDepositOpen(true)}
-                    className="bg-primary hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition-all py-5 rounded-2xl flex flex-col items-center justify-center space-y-1 shadow-xl shadow-primary/20 group"
-                  >
-                    <div className="flex items-center space-x-2">
-                       <Plus className="w-5 h-5 text-slate-900 group-hover:scale-125 transition-transform" />
-                       <span className="text-slate-900 font-black uppercase italic tracking-tighter text-lg">Deposit</span>
-                    </div>
-                    {(limits?.remaining_deposit_usd || 0) <= 0 && (
-                      <span className="text-[10px] text-slate-900/60 font-black uppercase">Daily limit reached</span>
-                    )}
-                  </button>
-                  <button 
-                    disabled={isLocked || (summary?.balance_usd || 0) < 1 || (limits?.remaining_withdrawal_usd || 0) <= 0}
-                    onClick={() => setIsWithdrawOpen(true)}
-                    className="bg-surface hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed border border-border-main transition-all py-5 rounded-2xl flex flex-col items-center justify-center space-y-1"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <ArrowUpRight className="w-5 h-5 text-text-main" />
-                      <span className="text-text-main font-black uppercase italic tracking-tighter text-lg">Withdraw</span>
-                    </div>
-                    {(summary?.balance_usd || 0) < 1 && (
-                      <span className="text-[10px] text-text-muted font-black uppercase">Min $1.00 USD</span>
-                    )}
-                  </button>
-               </div>
+                 <div className="mt-10 pt-6 border-t border-white/5">
+                   <button 
+                     disabled={isLocked || (summary?.balance_usd || 0) < 1 || (limits?.remaining_withdrawal_usd || 0) <= 0}
+                     onClick={() => setIsWithdrawOpen(true)}
+                     className="w-full h-14 rounded-2xl bg-white hover:bg-neutral-200 disabled:opacity-50 disabled:cursor-not-allowed text-black font-black uppercase italic tracking-wider shadow-lg active:scale-[0.98] transition-all flex items-center justify-center space-x-2 text-sm cursor-pointer"
+                   >
+                     <Plus className="w-5 h-5 rotate-45 transform" />
+                     <span>Withdraw Funds</span>
+                   </button>
+                 </div>
+              </div>
             </div>
 
             {/* Stats Row */}
@@ -214,14 +232,6 @@ export default function Wallet() {
           </div>
         </div>
       </div>
-
-      <DepositModal 
-        isOpen={isDepositOpen}
-        onClose={() => setIsDepositOpen(false)}
-        onSuccess={refreshWallet}
-        environment={environment}
-        exchangeRate={summary?.exchange_rate || 1}
-      />
 
       <WithdrawalModal 
         isOpen={isWithdrawOpen}
