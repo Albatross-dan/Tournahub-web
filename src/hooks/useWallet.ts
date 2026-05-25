@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { walletService } from '../services/walletService';
+import { fetchWithRetry } from '../lib/fetchWithRetry';
 import { 
   WalletSummary, WalletLimits, Transaction, 
   SupportedCurrency, FinancialActivity 
@@ -19,19 +20,41 @@ export function useWallet(preferredCurrency: SupportedCurrency = 'USD') {
   
   const refreshWallet = useCallback(async (isAuto = false) => {
     if (!user?.id) return;
+    if (!navigator.onLine) return;
     
     try {
       if (!isAuto) setRefreshing(true);
       
-      const [newSummary, newLimits, activity] = await Promise.all([
-        walletService.getWalletSummary(preferredCurrency),
-        walletService.getWalletLimits(),
-        walletService.getRecentFinancialActivity(5)
+      const [summaryRes, limitsRes, activityRes] = await Promise.all([
+        fetchWithRetry(async () => {
+          try {
+            const res = await walletService.getWalletSummary(preferredCurrency);
+            return { data: res, error: null };
+          } catch (e) {
+            return { data: null, error: e };
+          }
+        }),
+        fetchWithRetry(async () => {
+          try {
+            const res = await walletService.getWalletLimits();
+            return { data: res, error: null };
+          } catch (e) {
+            return { data: null, error: e };
+          }
+        }),
+        fetchWithRetry(async () => {
+          try {
+            const res = await walletService.getRecentFinancialActivity(5);
+            return { data: res, error: null };
+          } catch (e) {
+            return { data: null, error: e };
+          }
+        })
       ]);
       
-      setSummary(newSummary);
-      setLimits(newLimits);
-      setRecentActivity(activity);
+      if (summaryRes.data) setSummary(summaryRes.data);
+      if (limitsRes.data) setLimits(limitsRes.data);
+      if (activityRes.data) setRecentActivity(activityRes.data || []);
     } catch (err: any) {
       console.error('[useWallet] Refresh error:', err);
       // Don't show toast for auto-refreshes to avoid spamming

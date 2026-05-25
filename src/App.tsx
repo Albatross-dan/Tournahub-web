@@ -57,6 +57,7 @@ import { PlatformStatusProvider, usePlatformStatus } from './contexts/PlatformSt
 import MaintenanceScreen from './components/layout/MaintenanceScreen';
 import AdminBypassNotice from './components/layout/AdminBypassNotice';
 import PWAUpdateNotification from './components/layout/PWAUpdateNotification';
+import NetworkBanner from './components/ui/NetworkBanner';
 
 function RootPlatformGate({ children }: { children: React.ReactNode }) {
   const { status, loading } = usePlatformStatus();
@@ -86,6 +87,7 @@ function AppRoutes() {
 
   return (
     <AuthProvider onNavigate={navigate}>
+      <NetworkBanner />
       <PlatformStatusProvider>
         <RootPlatformGate>
           <ThemeProvider>

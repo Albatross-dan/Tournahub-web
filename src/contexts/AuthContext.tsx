@@ -135,10 +135,36 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       }
     }, 6000);
 
+    // When internet comes back, verify session is still alive
+    // and signal all page components to re-fetch their data
+    const handleOnline = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        // Session died while offline — force re-login
+        setUser(null);
+        setProfile(null);
+        if (onNavigate) {
+          onNavigate('/login');
+        } else {
+          window.location.href = '/login';
+        }
+        return;
+      }
+
+      // Session alive — re-sync and trigger data refetch
+      // on all page components
+      await applySession(session);
+      setRefetchSignal(prev => prev + 1);
+    };
+
+    window.addEventListener('online', handleOnline);
+
     return () => {
       isMounted = false;
       subscription.unsubscribe();
       clearTimeout(timer);
+      window.removeEventListener('online', handleOnline);
     };
   }, [onNavigate]);
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Calendar, Clock, Eye, RotateCcw, Search, Timer } from 'lucide-react';
 import { MatchStatusBadge } from './MatchStatusBadge';
-import { cn, getPublicIdentity } from '../../lib/utils';
+import { cn, getPublicIdentity, formatFixtureTime } from '../../lib/utils';
 
 interface MatchCardProps {
   match: any;
@@ -70,10 +70,13 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match, onAction }) => {
         <div className="flex flex-col text-left">
           <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest italic mb-1">Scheduled Time</p>
           <div className="flex items-center text-[10px] font-black text-white uppercase italic">
-            {match.scheduled_at ? (
+            {(match.scheduled_date && match.scheduled_time) || match.scheduled_at ? (
                <>
                   <Clock className="w-3 h-3 mr-1 text-primary" />
-                  {new Date(match.scheduled_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                  {match.scheduled_date && match.scheduled_time 
+                    ? formatFixtureTime(match.scheduled_date, match.scheduled_time, match.timezone)
+                    : new Date(match.scheduled_at!).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+                  }
                </>
             ) : (
                <span className="text-slate-600">UNSCHEDULED</span>

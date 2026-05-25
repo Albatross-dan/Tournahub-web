@@ -122,13 +122,14 @@ export interface Database {
           score1: number | null
           score2: number | null
           winner: string | null
-          status: 'pending' | 'ongoing' | 'completed' | 'awaiting_result' | 'match_in_progress' | 'lobby_open' | 'under_review' | null
-          result_verification_status: 'none' | 'single_submission' | 'matched' | 'disputed' | 'verified' | null
+          status: 'pending' | 'ongoing' | 'completed' | 'awaiting_result' | 'match_in_progress' | 'lobby_open' | 'under_review' | 'scheduled' | 'waiting_for_players' | null
+          result_verification_status: 'none' | 'single_submission' | 'matched' | 'disputed' | 'verified' | 'pending' | 'abandoned' | 'superseded' | null
           locked: boolean | null
           created_at: string | null
           stage: string | null
           bracket_slot: number | null
           next_match_id: string | null
+          loser_next_match_id: string | null
           match_order: number | null
           scheduled_at: string | null
           group_name: string | null
@@ -142,13 +143,14 @@ export interface Database {
           score1?: number | null
           score2?: number | null
           winner?: string | null
-          status?: 'pending' | 'ongoing' | 'completed' | 'awaiting_result' | 'match_in_progress' | 'lobby_open' | 'under_review' | null
-          result_verification_status?: 'none' | 'single_submission' | 'matched' | 'disputed' | 'verified' | null
+          status?: 'pending' | 'ongoing' | 'completed' | 'awaiting_result' | 'match_in_progress' | 'lobby_open' | 'under_review' | 'scheduled' | 'waiting_for_players' | null
+          result_verification_status?: 'none' | 'single_submission' | 'matched' | 'disputed' | 'verified' | 'pending' | 'abandoned' | 'superseded' | null
           locked?: boolean | null
           created_at?: string | null
           stage?: string | null
           bracket_slot?: number | null
           next_match_id?: string | null
+          loser_next_match_id?: string | null
           match_order?: number | null
           scheduled_at?: string | null
           group_name?: string | null
@@ -162,13 +164,14 @@ export interface Database {
           score1?: number | null
           score2?: number | null
           winner?: string | null
-          status?: 'pending' | 'ongoing' | 'completed' | 'awaiting_result' | 'match_in_progress' | 'lobby_open' | 'under_review' | null
-          result_verification_status?: 'none' | 'single_submission' | 'matched' | 'disputed' | 'verified' | null
+          status?: 'pending' | 'ongoing' | 'completed' | 'awaiting_result' | 'match_in_progress' | 'lobby_open' | 'under_review' | 'scheduled' | 'waiting_for_players' | null
+          result_verification_status?: 'none' | 'single_submission' | 'matched' | 'disputed' | 'verified' | 'pending' | 'abandoned' | 'superseded' | null
           locked?: boolean | null
           created_at?: string | null
           stage?: string | null
           bracket_slot?: number | null
           next_match_id?: string | null
+          loser_next_match_id?: string | null
           match_order?: number | null
           scheduled_at?: string | null
           group_name?: string | null

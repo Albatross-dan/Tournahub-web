@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Tournament } from '../types/database';
 import { tournamentService } from '../services/tournamentService';
+import { fetchWithRetry } from '../lib/fetchWithRetry';
 
 export function useRealtimeTournaments(status?: string | string[], limit?: number, columns?: string) {
   const [tournaments, setTournaments] = useState<(Tournament & { registrations_count?: number })[]>([]);
@@ -11,6 +12,7 @@ export function useRealtimeTournaments(status?: string | string[], limit?: numbe
 
   useEffect(() => {
     const fetchInitial = async (isBackground = false) => {
+      if (!navigator.onLine) return;
       if (!isBackground) setLoading(true);
       
       const timeoutId = setTimeout(() => {
@@ -22,7 +24,15 @@ export function useRealtimeTournaments(status?: string | string[], limit?: numbe
       
       try {
         console.log(`[useRealtimeTournaments] Fetching initial for ${statusKey}, limit: ${limit}`);
-        const data = await tournamentService.getAll(status, limit, columns);
+        const { data, error } = await fetchWithRetry(async () => {
+          try {
+            const res = await tournamentService.getAll(status, limit, columns);
+            return { data: res, error: null };
+          } catch (e) {
+            return { data: null, error: e };
+          }
+        });
+        if (error) throw error;
         console.log(`[useRealtimeTournaments] Success for ${statusKey}:`, data?.length, 'items');
         setTournaments(data as (Tournament & { registrations_count: number })[] || []);
       } catch (err) {
@@ -133,6 +143,7 @@ export function useRealtimeTournament(id: string | undefined) {
     if (!id) return;
 
     const fetchInitial = async () => {
+      if (!navigator.onLine) return;
       setLoading(true);
       const timeoutId = setTimeout(() => {
         setLoading(false);
@@ -141,7 +152,15 @@ export function useRealtimeTournament(id: string | undefined) {
       
       try {
         console.log('Fetching tournament details for id:', id);
-        const data = await tournamentService.getById(id);
+        const { data, error } = await fetchWithRetry(async () => {
+          try {
+            const res = await tournamentService.getById(id);
+            return { data: res, error: null };
+          } catch (e) {
+            return { data: null, error: e };
+          }
+        });
+        if (error) throw error;
         setTournament(data);
       } catch (err: any) {
         console.error('Error fetching tournament in hook:', err);

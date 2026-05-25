@@ -63,8 +63,17 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
 
   const height = 660; // Standard bracket height for perfect alignment
 
+  // Filter tournament bracket matches to knockout and playoffs stages only (excluding third_place)
+  const bracketMatches = matches.filter(
+    (m) => (m.stage === 'knockout' || m.stage === 'playoffs' || m.stage === 'stage-playoffs')
+  );
+
+  const thirdPlaceMatch = matches.find(
+    (m) => (m.stage === 'third_place' || m.stage === 'third-place')
+  );
+
   // Group by round
-  const roundMap = matches.reduce((acc: any, match) => {
+  const roundMap = bracketMatches.reduce((acc: any, match) => {
     const r = match.round || 1;
     if (!acc[r]) acc[r] = [];
     acc[r].push(match);
@@ -183,29 +192,49 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
             ))}
           </div>
 
-          {/* CENTRAL STAGE FOCAL POINT (The Grand Final with the Championship Cup) */}
-          <div className="flex flex-col items-center justify-center gap-5 min-w-[240px] relative">
+          {/* CENTRAL STAGE FOCAL POINT (The Grand Final & 3rd Place with the Championship Cup) */}
+          <div className="flex flex-col items-center justify-center gap-6 min-w-[280px] relative px-4">
             <div className="absolute w-48 h-48 bg-primary/10 rounded-full blur-3xl pointer-events-none -z-10" />
 
             <div className="flex flex-col items-center text-center space-y-1">
               <div className="w-14 h-14 bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg shadow-yellow-500/10 border-2 border-yellow-300 animate-bounce">
                 <Trophy className="w-8 h-8 text-background font-bold" />
               </div>
-              <h3 className="text-base font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-200 uppercase tracking-widest italic">
-                GRAND FINAL
+              <h3 className="text-base font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-200 uppercase tracking-widest italic animate-pulse">
+                FINALS STAGE
               </h3>
-              <p className="text-[9px] text-text-muted font-bold uppercase tracking-widest">Championship showdown</p>
+              <p className="text-[9px] text-text-muted font-bold uppercase tracking-widest">Championship & Podium showdowns</p>
             </div>
 
-            {finalMatch ? (
-              <div className="relative group p-1 rounded-3xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 scale-[1.03] shadow-xl shadow-yellow-500/15">
-                <MatchNode match={finalMatch} />
+            <div className="flex flex-col lg:flex-row gap-8 items-center justify-center">
+              {/* Grand Final Column */}
+              <div className="flex flex-col items-center gap-2">
+                <span className="text-[8px] font-black text-amber-400 uppercase tracking-[0.2em] bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full select-none">
+                  Grand Final
+                </span>
+                {finalMatch ? (
+                  <div className="relative group p-1 rounded-3xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 scale-[1.03] shadow-xl shadow-yellow-500/15">
+                    <MatchNode match={finalMatch} />
+                  </div>
+                ) : (
+                  <div className="p-8 border-2 border-dashed border-border-main rounded-2xl text-xs italic text-text-muted uppercase text-center font-bold tracking-widest bg-surface/30 w-[190px] sm:w-[220px]">
+                    TBD Finalists
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="p-8 border-2 border-dashed border-border-main rounded-2xl text-xs italic text-text-muted uppercase text-center font-bold tracking-widest bg-surface/30">
-                TBD Finalists
-              </div>
-            )}
+
+              {/* 3rd Place (Bronze) Column */}
+              {thirdPlaceMatch && (
+                <div className="flex flex-col items-center gap-2">
+                  <span className="text-[8px] font-black text-teal-400 uppercase tracking-[0.2em] bg-teal-500/10 border border-teal-500/20 px-2.5 py-0.5 rounded-full select-none">
+                    3rd Place Match
+                  </span>
+                  <div className="relative group p-1 rounded-3xl bg-gradient-to-r from-teal-500 via-emerald-400 to-teal-500 scale-[1.03] shadow-xl">
+                    <MatchNode match={thirdPlaceMatch} />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* RIGHT COLUMN TREE BRACKETS INWARD (Descending, e.g. Semis <- R2 <- R1) */}
@@ -264,7 +293,9 @@ function MatchNode({ match }: { match: any }) {
     >
       {/* Top Status Header */}
       <div className="px-3 py-1 bg-background/50 border-b border-border-main flex justify-between items-center text-[9px] font-black tracking-wider text-text-muted">
-        <span className="uppercase italic">ROUND {match.round}</span>
+        <span className="uppercase italic">
+          {match.stage === 'third_place' || match.stage === 'third-place' ? '3rd Place Match' : `ROUND ${match.round}`}
+        </span>
         <span className={cn(
           "uppercase tracking-widest px-1 py-0.2 rounded font-black",
           match.status === 'completed' ? "text-emerald-500" : "text-primary animate-pulse"

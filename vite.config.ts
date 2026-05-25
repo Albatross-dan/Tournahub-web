@@ -8,6 +8,20 @@ export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
     plugins: [
+      {
+        name: 'mock-ws',
+        configureServer(server) {
+          if (!server.ws) {
+            server.ws = {
+              send() {},
+              close() {},
+              on() {},
+              off() {},
+              listen() {},
+            } as any;
+          }
+        }
+      },
       react(),
       tailwindcss(),
       VitePWA({

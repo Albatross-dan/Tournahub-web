@@ -16,15 +16,83 @@ export default function TournamentChampion() {
 
   const fetchChampionCard = async (tournamentId: string) => {
     try {
-      const { data: championData, error } = await (supabase as any)
-        .rpc('get_tournament_champion_card', { p_tournament_id: tournamentId });
+      // Fetch champion data directly from the tournament_champions table
+      const { data: champRow, error: tableError } = await supabase
+        .from('tournament_champions')
+        .select(`
+          id,
+          tournament_id,
+          tournament_name,
+          tournament_type,
+          is_paid,
+          champion_title,
+          prize_pool,
+          prize_currency,
+          winnings_awarded,
+          final_match_id,
+          completed_at,
+          declared_at,
+          declaration_metadata,
+          winner_id,
+          winner_username,
+          winner_avatar_url,
+          winner_badge_id,
+          winner_score,
+          winner_prize_amount,
+          runner_up_id,
+          runner_up_username,
+          runner_up_avatar_url,
+          runner_up_badge_id,
+          runner_up_score,
+          runner_up_prize_amount
+        `)
+        .eq('tournament_id', tournamentId)
+        .maybeSingle();
 
-      if (error) throw error;
+      if (tableError) throw tableError;
 
-      if (!championData) {
+      const row = champRow as any;
+      if (!row) {
         setInProgress(true);
       } else {
-        setData(championData as ChampionCardData);
+        const metadata = row.declaration_metadata || {};
+        const mappedData: ChampionCardData = {
+          champion_id: row.id,
+          tournament_id: row.tournament_id,
+          tournament_name: row.tournament_name,
+          tournament_type: row.tournament_type as any,
+          is_paid: row.is_paid,
+          champion_title: (row.champion_title || 'Tournament Champion') as any,
+          prize_pool: row.prize_pool || 0,
+          prize_currency: (row.prize_currency || 'USD') as any,
+          winnings_awarded: !!row.winnings_awarded,
+          final_match_id: row.final_match_id,
+          completed_at: row.completed_at,
+          declared_at: row.declared_at,
+          winner: {
+            id: row.winner_id,
+            username: row.winner_username,
+            avatar_url: row.winner_avatar_url,
+            badge_id: row.winner_badge_id,
+            score: row.winner_score,
+            prize_amount: row.winner_prize_amount || 0,
+          },
+          runner_up: row.runner_up_id ? {
+            id: row.runner_up_id,
+            username: row.runner_up_username || '',
+            avatar_url: row.runner_up_avatar_url,
+            badge_id: row.runner_up_badge_id,
+            score: row.runner_up_score,
+            prize_amount: row.runner_up_prize_amount || 0,
+          } : null,
+          meta: {
+            tournament_category: metadata.tournament_category || 'Pro',
+            max_players: metadata.max_players || 0,
+            prize_1st_pct: metadata.prize_1st_pct || 60,
+            prize_2nd_pct: metadata.prize_2nd_pct || 30,
+          }
+        };
+        setData(mappedData);
         setInProgress(false);
       }
     } catch (err) {

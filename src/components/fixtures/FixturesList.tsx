@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { tournamentService } from '../../services/tournamentService';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn, formatDate, getPublicIdentity } from '../../lib/utils';
+import { cn, formatDate, formatFixtureTime, getPublicIdentity } from '../../lib/utils';
 import LoadingState from '../ui/LoadingState';
 import { PlayerBadge } from '../ui/PlayerBadge';
 import { useMatchCompletionSync } from '../../hooks/useMatchCompletionSync';
@@ -136,7 +136,9 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
                         <div className="flex items-center text-text-muted space-x-2">
                           <Calendar className="w-3 h-3" />
                           <span className="text-[10px] font-bold uppercase tracking-tight">
-                            {match.scheduled_at ? formatDate(match.scheduled_at) : 'TBD'}
+                            {match.scheduled_date && match.scheduled_time 
+                              ? formatFixtureTime(match.scheduled_date, match.scheduled_time, match.timezone)
+                              : (match.scheduled_at ? formatDate(match.scheduled_at) : 'Time TBD')}
                           </span>
                         </div>
                       </div>

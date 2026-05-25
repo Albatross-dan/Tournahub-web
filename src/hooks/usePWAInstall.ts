@@ -20,6 +20,13 @@ export function usePWAInstall() {
       const isStandaloneMode = 
         window.matchMedia('(display-mode: standalone)').matches || 
         (window.navigator as any).standalone === true;
+      
+      console.log('[PWA Diagnostics] Initial Check:', {
+        isStandaloneMode,
+        isInIFrame: window.self !== window.top,
+        userAgent: navigator.userAgent
+      });
+
       setIsStandalone(isStandaloneMode);
       if (isStandaloneMode) {
         setIsInstallable(false);
@@ -29,6 +36,7 @@ export function usePWAInstall() {
     checkStandalone();
 
     const handleBeforeInstallPrompt = (e: Event) => {
+      console.log('[PWA Diagnostics] received beforeinstallprompt event.');
       // Prevent automatic prompt to design custom UI
       e.preventDefault();
       // Store event
@@ -41,6 +49,7 @@ export function usePWAInstall() {
         
       if (!isStandaloneMode) {
         setIsInstallable(true);
+        console.log('[PWA Diagnostics] App is now marked as installable!');
       }
     };
 
@@ -48,7 +57,7 @@ export function usePWAInstall() {
       setIsInstallable(false);
       setInstallPrompt(null);
       setIsStandalone(true);
-      console.log('Tournahub was successfully installed!');
+      console.log('[PWA Diagnostics] Tournahub was successfully installed!');
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);

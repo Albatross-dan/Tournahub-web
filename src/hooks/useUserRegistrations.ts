@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { fetchWithRetry } from '../lib/fetchWithRetry';
 
 export function useUserRegistrations() {
   const { user, refetchSignal } = useAuth();
@@ -9,9 +10,9 @@ export function useUserRegistrations() {
 
   useEffect(() => {
     if (!user?.id) {
-      setUserRegistrations(new Set());
-      setLoading(false);
-      return;
+       setUserRegistrations(new Set());
+       setLoading(false);
+       return;
     }
 
     loadUserRegistrations();
@@ -38,11 +39,14 @@ export function useUserRegistrations() {
   }, [user?.id, refetchSignal]);
 
   async function loadUserRegistrations() {
+    if (!navigator.onLine) return;
     try {
-      const { data, error } = await (supabase as any)
-        .from('registrations')
-        .select('tournament_id')
-        .eq('user_id', user?.id);
+      const { data, error } = await fetchWithRetry(() =>
+        (supabase as any)
+          .from('registrations')
+          .select('tournament_id')
+          .eq('user_id', user?.id)
+      );
 
       if (error) throw error;
       

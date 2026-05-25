@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import Shell from '../components/layout/Shell';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Gamepad2, Timer, ArrowRight, Trophy, Clock, ClipboardList, MessageSquare, ChevronRight, User, Calendar, Tv, ArrowUpRight } from 'lucide-react';
-import { cn, getPublicIdentity, formatDate } from '../lib/utils';
+import { cn, getPublicIdentity, formatDate, formatFixtureTime } from '../lib/utils';
 import LoadingState from '../components/ui/LoadingState';
 import { formatDistanceToNow } from 'date-fns';
 import VerificationStatusBadge from '../components/match/VerificationStatusBadge';
@@ -354,7 +354,7 @@ function MatchCard({ match }: { match: any; key?: string }) {
                  <div className="flex items-center space-x-2 pt-1">
                    <Calendar className="w-3 h-3 text-slate-600" />
                    <span className="text-[10px] font-bold text-slate-400 border border-slate-800 px-2 rounded-full uppercase tracking-tighter">
-                     {formatDate(match.scheduled_at)}
+                     {(match as any).scheduled_date && (match as any).scheduled_time ? formatFixtureTime((match as any).scheduled_date, (match as any).scheduled_time, (match as any).timezone) : (match.scheduled_at ? formatDate(match.scheduled_at) : 'Time TBD')}
                    </span>
                  </div>
                )}

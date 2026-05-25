@@ -6,12 +6,13 @@ import {
   Loader2, Tv
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { formatCurrency, cn, getPublicIdentity } from '../lib/utils';
+import { formatCurrency, cn, getPublicIdentity, formatFixtureTime } from '../lib/utils';
 import { Tournament, Match, Wallet as WalletType } from '../types/database';
 import { Link } from 'react-router-dom';
 import Shell from '../components/layout/Shell';
 import { matchService } from '../services/matchService';
 import { walletService } from '../services/walletService';
+import { fetchWithRetry } from '../lib/fetchWithRetry';
 import { motion, AnimatePresence } from 'motion/react';
 import LoadingState from '../components/ui/LoadingState';
 import StatusBadge from '../components/ui/StatusBadge';
@@ -59,6 +60,7 @@ export default function Dashboard() {
 
   async function loadDashboardData() {
     if (!user) return;
+    if (!navigator.onLine) return;
     if (isInitialLoad.current) {
       setLoading(true);
     }
@@ -69,13 +71,25 @@ export default function Dashboard() {
     }, 10000);
 
     try {
-       const [matchesRes, statsRes] = await Promise.allSettled([
-        matchService.getUserMatches(user.id),
-        matchService.getUserStats(user.id)
-      ]);
+      const matchesResult = await fetchWithRetry(async () => {
+        try {
+          const res = await matchService.getUserMatches(user.id);
+          return { data: res, error: null };
+        } catch (e) {
+          return { data: null, error: e };
+        }
+      });
+      const statsResult = await fetchWithRetry(async () => {
+        try {
+          const res = await matchService.getUserStats(user.id);
+          return { data: res, error: null };
+        } catch (e) {
+          return { data: null, error: e };
+        }
+      });
 
-      if (matchesRes.status === 'fulfilled') {
-        const matches = (matchesRes.value as any) || [];
+      if (matchesResult.data) {
+        const matches = matchesResult.data || [];
         // Show matches that are pending, ongoing, or awaiting results/review
         const filteredMatches = matches.filter((m: any) => 
           ['pending', 'ongoing', 'awaiting_result', 'match_in_progress', 'lobby_open', 'under_review'].includes(m.status)
@@ -83,8 +97,8 @@ export default function Dashboard() {
         setScheduledMatches(filteredMatches);
       }
 
-      if (statsRes.status === 'fulfilled') {
-        setUserStats(statsRes.value as any);
+      if (statsResult.data) {
+        setUserStats(statsResult.data as any);
       }
       
       clearTimeout(timeoutId);
@@ -137,9 +151,6 @@ export default function Dashboard() {
         animate="show"
         className="space-y-8"
       >
-        {/* PWA Hero Install Banner */}
-        <PWAInstallButton layout="hero" />
-
         {/* Tournament Auto-Slider (Available Tournaments) */}
         <div className="space-y-4">
           <div>
@@ -558,7 +569,9 @@ function MatchCard({ match }: { match: any }) {
             <p className="text-[9px] font-black text-text-muted uppercase tracking-widest mb-1 sm:text-right">Schedule</p>
             <p className="text-xs sm:text-sm font-black text-text-main flex items-center sm:justify-end italic uppercase tracking-tighter">
               <Timer className="w-3.5 h-3.5 mr-1.5 text-primary" />
-              {match.scheduled_at ? new Date(match.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'TBD'}
+              {((match as any).scheduled_date && (match as any).scheduled_time) 
+                ? formatFixtureTime((match as any).scheduled_date, (match as any).scheduled_time, (match as any).timezone)
+                : (match.scheduled_at ? new Date(match.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Time TBD')}
             </p>
           </div>
           {getActionButton()}

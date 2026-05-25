@@ -74,6 +74,20 @@ export function formatDate(dateString: string) {
   });
 }
 
+export function formatFixtureTime(date: string | null | undefined, time: string | null | undefined, tz: string = 'UTC'): string {
+  if (!date || !time) return 'Time TBD';
+  const utcDate = new Date(`${date}T${time}Z`);
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(utcDate);
+  } catch (e) {
+    return `${date} ${time}`;
+  }
+}
+
 /**
  * Gets a public URL for a file in a storage bucket.
  */

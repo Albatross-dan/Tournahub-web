@@ -3,6 +3,7 @@ import Navbar from './Navbar';
 import { motion } from 'motion/react';
 import UpcomingMaintenanceBanner from './UpcomingMaintenanceBanner';
 import AnnouncementBanner from './AnnouncementBanner';
+import PWAInstallButton from './PWAInstallButton';
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -29,6 +30,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           </motion.div>
         </main>
       </div>
+
+      {/* Floating Sitewide PWA Installer Prompt */}
+      <PWAInstallButton layout="float" />
     </div>
   );
 }

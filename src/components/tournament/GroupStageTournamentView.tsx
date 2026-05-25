@@ -257,8 +257,8 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
         `)
         .eq('tournament_id', tournamentId)
         .not('group_name', 'is', null)
-        .order('group_name')
-        .order('group_rank');
+        .order('group_name', { ascending: true })
+        .order('group_rank', { ascending: true, nullsFirst: false });
 
       if (stErr) throw stErr;
 
@@ -390,7 +390,15 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
   }
 
   // Filter current active group context
-  const activeGroupStandings = standings.filter(s => s.group_name === activeGroupTab);
+  const activeGroupStandings = standings
+    .filter(s => s.group_name === activeGroupTab)
+    .sort((a, b) => {
+      const rA = a.group_rank ?? 999;
+      const rB = b.group_rank ?? 999;
+      if (rA !== rB) return rA - rB;
+      // Secondary sort by points if rank is equal or null
+      return (b.points ?? 0) - (a.points ?? 0);
+    });
   const activeGroupMatches = groupMatches.filter(m => m.group_name === activeGroupTab);
 
   // Group active group matches by round
