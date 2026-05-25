@@ -133,7 +133,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       if (isMounted) {
         setLoading(false);
       }
-    }, 6000);
+    }, 1500);
 
     // When internet comes back, verify session is still alive
     // and signal all page components to re-fetch their data

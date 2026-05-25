@@ -57,7 +57,6 @@ import { PlatformStatusProvider, usePlatformStatus } from './contexts/PlatformSt
 import MaintenanceScreen from './components/layout/MaintenanceScreen';
 import AdminBypassNotice from './components/layout/AdminBypassNotice';
 import PWAUpdateNotification from './components/layout/PWAUpdateNotification';
-import PWADebugPanel from './components/pwa/PWADebugPanel';
 import NetworkBanner from './components/ui/NetworkBanner';
 
 function RootPlatformGate({ children }: { children: React.ReactNode }) {
@@ -139,7 +138,6 @@ function AppRoutes() {
               </Routes>
             </Suspense>
             <PWAUpdateNotification />
-            <PWADebugPanel />
           </ThemeProvider>
         </RootPlatformGate>
       </PlatformStatusProvider>
