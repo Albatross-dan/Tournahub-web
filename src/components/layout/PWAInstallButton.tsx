@@ -14,6 +14,7 @@ export default function PWAInstallButton({ layout = 'menu', className = '' }: PW
   const [showGuide, setShowGuide] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);
+  const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
 
   // Check if dismissed previously
   useEffect(() => {
@@ -101,7 +102,11 @@ export default function PWAInstallButton({ layout = 'menu', className = '' }: PW
                 exit={{ opacity: 0, height: 0 }}
                 className="mt-3 pt-3 border-t border-slate-800 text-[10px] text-slate-400 leading-relaxed space-y-2"
               >
-                {isIOS ? (
+                {isInIframe ? (
+                  <p className="text-amber-400 font-bold">
+                    ⚠️ Note: PWA installation is blocked inside iframes or the AI Studio preview window. Please open the app in a new tab (e.g., https://tournahub.me) to install.
+                  </p>
+                ) : isIOS ? (
                   <p>
                     Tap the iOS share button (<span className="text-white italic">"Share"</span>) then select <span className="text-white font-semibold">"Add to Home Screen"</span>.
                   </p>
@@ -145,7 +150,11 @@ export default function PWAInstallButton({ layout = 'menu', className = '' }: PW
               exit={{ opacity: 0, scale: 0.95 }}
               className="mt-2 p-3 bg-slate-950 border border-slate-850 rounded-xl text-[11px] text-slate-400 leading-relaxed relative"
             >
-              {isIOS ? (
+              {isInIframe ? (
+                <p className="text-amber-400 font-medium">
+                  ⚠️ PWA installation is blocked inside preview iframes. Please open the app in a new tab (e.g., <a href="https://tournahub.me" target="_blank" rel="noopener noreferrer" className="text-emerald-400 underline font-semibold">tournahub.me</a>) to enable Chrome installation.
+                </p>
+              ) : isIOS ? (
                 <p>iOS Safari: Slide up options, tap <span className="text-white">"Add to Home Screen"</span>.</p>
               ) : (
                 <p>Look for the app install/download indicator in your browser address bar or menu.</p>
@@ -230,7 +239,9 @@ export default function PWAInstallButton({ layout = 'menu', className = '' }: PW
                   className="mt-3 pt-3 border-t border-slate-800/80 text-[10px] text-slate-400 space-y-1.5"
                 >
                   <p className="font-semibold text-white uppercase tracking-wider">Browser Instruction:</p>
-                  {isIOS ? (
+                  {isInIframe ? (
+                    <p className="text-amber-400 font-medium">⚠️ PWA installation is blocked inside iframes. Change to a direct browser window tab (e.g., <a href="https://tournahub.me" target="_blank" rel="noopener noreferrer" className="text-emerald-400 underline scroll-pb-1 tracking-wide">tournahub.me</a>) to make Chrome installable.</p>
+                  ) : isIOS ? (
                     <p>iOS Safari: Tap the Share button at the bottom menu bar, then scroll and select <span className="text-emerald-400 font-bold">"Add to Home Screen"</span>.</p>
                   ) : (
                     <p>Android Chrome: Press the 3 dots in the top right, then select <span className="text-emerald-400 font-bold">"Install app"</span>.</p>
