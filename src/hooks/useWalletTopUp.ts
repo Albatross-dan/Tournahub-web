@@ -5,6 +5,14 @@ import type { TopUpStep, TopUpParams, InitializePaymentResponse, VerifyPaymentRe
 
 const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string;
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+if (!SUPABASE_URL) {
+  console.error(
+    '[useWalletTopUp] VITE_SUPABASE_URL is not set! ' +
+    'Add it to your .env file and Vercel environment variables.'
+  );
+}
+
 interface UseWalletTopUpReturn {
   step:          TopUpStep;
   errorMessage:  string | null;
@@ -37,7 +45,7 @@ export function useWalletTopUp(): UseWalletTopUpReturn {
   }, []);
 
   // Internal verification function helper
-  const verifyPayment = async (refStr: string) => {
+  const verifyPayment = async (refStr: string, token: string) => {
     if (!isMountedRef.current) return;
     setStep('verifying');
 
@@ -67,75 +75,114 @@ export function useWalletTopUp(): UseWalletTopUpReturn {
 
   const initiateTopUp = useCallback(async (params: TopUpParams): Promise<void> => {
     try {
+      console.log('[TopUp] Step 1: starting, params=', params);
       setStep('initializing');
       setErrorMessage(null);
-      setSuccessAmount(null);
 
-      // STEP 2: Load script
-      console.log('[Paystack SDK] Loading inline script...');
+      console.log('[TopUp] Step 2: loading Paystack script...');
       await loadPaystackScript();
+      console.log('[TopUp] Step 2: Paystack script loaded ✅');
 
-      // STEP 3: Verify session exists
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        if (isMountedRef.current) {
-          setStep('error');
-          setErrorMessage('Please log in again. Your session has expired.');
-        }
-        return;
-      }
+      console.log('[TopUp] Step 3: getting session...');
+      const { data: { session }, error: sessionError } = 
+        await supabase.auth.getSession();
+      console.log('[TopUp] Step 3: session=', session?.user?.email, 'error=', sessionError);
 
-      // STEP 4: Call /paystack-initialize
-      console.log('[Paystack SDK] Initializing payment intent on DB...');
-      const { data: initData, error: initError } = await supabase.functions.invoke('paystack-initialize', {
-        body: {
-          amount_subunit: params.amountSubunit,
-          currency: params.currency,
-          amount_usd: params.amountUsd,
-          idempotency_key: crypto.randomUUID()
-        }
-      });
-
-      if (!isMountedRef.current) return;
-
-      if (initError || !initData) {
+      if (sessionError || !session?.access_token) {
+        console.error('[TopUp] No session — user not logged in');
         setStep('error');
-        const errDetail = initError?.message || initData?.error || initData?.message || 'Initialization failed.';
-        setErrorMessage(errDetail);
+        setErrorMessage('Please log in again to continue.');
+        return;
+      }
+      
+      const token = session.access_token;
+      console.log('[TopUp] Step 3: token obtained ✅ (first 20 chars):', token.substring(0, 20));
+
+      const CURRENT_SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+      const url = `${CURRENT_SUPABASE_URL}/functions/v1/paystack-initialize`;
+      console.log('[TopUp] Step 4: fetching URL=', url);
+
+      const requestBody = {
+        amount_subunit:  params.amountSubunit,
+        currency:        params.currency,
+        amount_usd:      params.amountUsd,
+        idempotency_key: crypto.randomUUID(),
+      };
+      console.log('[TopUp] Step 4: requestBody=', requestBody);
+
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method:  'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type':  'application/json',
+          },
+          body: JSON.stringify(requestBody),
+        });
+        console.log('[TopUp] Step 4: fetch completed, status=', res.status);
+      } catch (fetchErr) {
+        console.error('[TopUp] Step 4: fetch THREW an error:', fetchErr);
+        throw fetchErr;
+      }
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error('[TopUp] Step 4: non-ok response:', res.status, errorData);
+        setStep('error');
+        setErrorMessage(errorData.error ?? `Server error ${res.status}`);
         return;
       }
 
-      const { reference: checkoutRef } = initData as InitializePaymentResponse;
-      setReference(checkoutRef);
+      const data = await res.json();
+      console.log('[TopUp] Step 4: success response=', data);
 
-      // STEP 5: Set step and open Paystack popup iframe
+      if (!data.authorization_url || !data.reference) {
+        console.error('[TopUp] Step 4: missing authorization_url or reference in response', data);
+        setStep('error');
+        setErrorMessage('Invalid response from payment server.');
+        return;
+      }
+
+      setReference(data.reference);
       setStep('awaiting_payment');
-      console.log(`[Paystack SDK] Spawning checkout popup frame with reference: ${checkoutRef}`);
+      console.log('[TopUp] Step 5: opening Paystack popup, ref=', data.reference);
 
       openPaystackPopup({
-        key: PAYSTACK_PUBLIC_KEY,
-        email: params.userEmail,
-        amount: params.amountSubunit,
+        key:      import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string,
+        email:    params.userEmail,
+        amount:   params.amountSubunit,
         currency: params.currency,
-        ref: checkoutRef,
-        label: params.username,
+        ref:      data.reference,
+        label:    params.username,
         onSuccess: (transaction) => {
-          console.log('[Paystack SDK] Successful popup payment action. Verifying with API...', transaction);
-          verifyPayment(transaction.reference);
+          console.log('[TopUp] Paystack onSuccess, ref=', transaction.reference);
+          setStep('verifying');
+          verifyPayment(transaction.reference, token);
         },
         onCancel: () => {
-          console.log('[Paystack SDK] Popup closed prematurely by customer.');
-          if (isMountedRef.current) {
-            setStep('idle');
-          }
-        }
+          console.log('[TopUp] Paystack onCancel');
+          setStep('idle');
+        },
       });
 
-    } catch (err: any) {
-      console.error('[useWalletTopUp] Initialization exception caught:', err);
-      if (isMountedRef.current) {
-        setStep('error');
-        setErrorMessage(err.message || 'Something went wrong. Please try again.');
+    } catch (err) {
+      console.error('[TopUp] CAUGHT EXCEPTION:', err);
+      console.error('[TopUp] Error type:', typeof err);
+      console.error('[TopUp] Error message:', err instanceof Error ? err.message : String(err));
+      console.error('[TopUp] Error stack:', err instanceof Error ? err.stack : 'no stack');
+      setStep('error');
+      if (err instanceof TypeError && err.message === 'Failed to fetch') {
+        setErrorMessage(
+          'Cannot reach the payment server. ' +
+          'Check your internet connection and try again.'
+        );
+      } else if (err instanceof Error && err.message.includes('Paystack')) {
+        setErrorMessage(err.message);
+      } else {
+        setErrorMessage(
+          err instanceof Error ? err.message : 'Something went wrong. Please try again.'
+        );
       }
     }
   }, []);

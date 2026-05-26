@@ -1,56 +1,60 @@
 import type { PaystackPopConfig } from '../types/payment';
 
-let loadingPromise: Promise<void> | null = null;
+let scriptLoadPromise: Promise<void> | null = null;
 
 export function loadPaystackScript(): Promise<void> {
-  if (typeof window === 'undefined') {
-    return Promise.reject(new Error('Window context is required to load Paystack'));
-  }
-
-  // If already loaded on the window object, resolve immediately
-  if (window.PaystackPop) {
+  // Already loaded
+  if (typeof window !== 'undefined' && window.PaystackPop) {
     return Promise.resolve();
   }
+  // Already loading — return same promise
+  if (scriptLoadPromise) return scriptLoadPromise;
 
-  // If already loading, return the existing loading promise
-  if (loadingPromise) {
-    return loadingPromise;
-  }
+  scriptLoadPromise = new Promise<void>((resolve, reject) => {
+    // Check again in case loaded between checks
+    if (window.PaystackPop) {
+      resolve();
+      return;
+    }
 
-  loadingPromise = new Promise<void>((resolve, reject) => {
-    // Check if script element is already in the document
-    const existingScript = document.getElementById('paystack-js');
-    if (existingScript) {
-      existingScript.addEventListener('load', () => resolve());
-      existingScript.addEventListener('error', (err) => reject(err));
+    const existing = document.getElementById('paystack-inline-js');
+    if (existing) {
+      // Script tag exists but PaystackPop not ready yet — wait for it
+      existing.addEventListener('load', () => resolve());
+      existing.addEventListener('error', () => 
+        reject(new Error('Paystack script failed to load'))
+      );
       return;
     }
 
     const script = document.createElement('script');
-    script.id = 'paystack-js';
+    script.id = 'paystack-inline-js';
     script.src = 'https://js.paystack.co/v2/inline.js';
     script.async = true;
 
     script.onload = () => {
+      console.log('[Paystack] Script loaded successfully');
       resolve();
     };
-
-    script.onerror = (err) => {
-      loadingPromise = null; // Reset promise on failure so we can try again
-      reject(new Error('Failed to load Paystack inline SDK script.'));
+    script.onerror = (e) => {
+      console.error('[Paystack] Script failed to load:', e);
+      scriptLoadPromise = null;  // allow retry
+      reject(new Error(
+        'Could not load Paystack. Check your internet connection and try again.'
+      ));
     };
 
     document.head.appendChild(script);
   });
 
-  return loadingPromise;
+  return scriptLoadPromise;
 }
 
 export function openPaystackPopup(config: PaystackPopConfig): void {
-  if (typeof window === 'undefined' || !window.PaystackPop) {
-    throw new Error('Paystack inline SDK is not loaded. Please call loadPaystackScript() first.');
+  if (!window.PaystackPop) {
+    throw new Error('Paystack is not loaded yet. Please try again.');
   }
-
   const handler = window.PaystackPop.setup(config);
   handler.openIframe();
 }
+

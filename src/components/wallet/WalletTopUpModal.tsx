@@ -13,6 +13,16 @@ interface WalletTopUpModalProps {
 }
 
 export function WalletTopUpModal({ isOpen, onClose, onSuccess }: WalletTopUpModalProps) {
+  if (import.meta.env.DEV) {
+    const missing = [
+      'VITE_SUPABASE_URL',
+      'VITE_PAYSTACK_PUBLIC_KEY',
+    ].filter(k => !import.meta.env[k]);
+    if (missing.length > 0) {
+      console.error('[WalletTopUpModal] Missing env vars:', missing);
+    }
+  }
+
   const { user, profile } = useAuth();
   const {
     step,
