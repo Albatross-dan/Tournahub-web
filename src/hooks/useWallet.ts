@@ -1,139 +1,128 @@
-import { useEffect, useCallback } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '../contexts/AuthContext';
-import { walletService } from '../services/walletService';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { SupportedCurrency, WalletSummary, WalletLimits, FinancialActivity } from '../types/finance';
-import toast from 'react-hot-toast';
+import type { Wallet } from '../types/payment';
 
-export function useWallet(preferredCurrency: SupportedCurrency = 'USD') {
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
+interface UseWalletReturn {
+  wallet: Wallet | null;
+  summary: Wallet | null; // Compatibility alias
+  limits: Wallet | null;  // Compatibility alias
+  isLoading: boolean;
+  loading: boolean;      // Compatibility alias
+  error: string | null;
+  refetch: () => Promise<void>;
+  refreshWallet: () => Promise<void>; // Compatibility alias
+  isLocked: boolean;      // Compatibility alias
+  environment: string;    // Compatibility alias
+}
 
-  const walletKey = ['wallet', user?.id || 'anonymous', preferredCurrency];
-  const limitsKey = ['walletLimits', user?.id || 'anonymous'];
-  const activityKey = ['walletActivity', user?.id || 'anonymous'];
+export function useWallet(preferredCurrency?: string): UseWalletReturn {
+  const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const subscriptionRef = useRef<any>(null);
+  const userIdRef = useRef<string | null>(null);
 
-  // 1. Queries definitions
-  const { data: summary = null, status: summaryStatus, isFetching: summaryFetching } = useQuery({
-    queryKey: walletKey,
-    queryFn: async () => {
-      console.log('[Wallet Query] Fetching wallet summary');
-      return await walletService.getWalletSummary(preferredCurrency);
-    },
-    enabled: !!user?.id && navigator.onLine,
-    staleTime: 1000 * 5, // 5 seconds staleTime
-    gcTime: 1000 * 60 * 10, // 10 minutes GC
-  });
-
-  const { data: limits = null, status: limitsStatus, isFetching: limitsFetching } = useQuery({
-    queryKey: limitsKey,
-    queryFn: async () => {
-      console.log('[Wallet Query] Fetching wallet limits');
-      return await walletService.getWalletLimits();
-    },
-    enabled: !!user?.id && navigator.onLine,
-    staleTime: 1000 * 10, // 10 seconds staleTime
-    gcTime: 1000 * 60 * 10,
-  });
-
-  const { data: recentActivity = [], status: activityStatus, isFetching: activityFetching } = useQuery({
-    queryKey: activityKey,
-    queryFn: async () => {
-      console.log('[Wallet Query] Fetching wallet recent activities');
-      const res = await walletService.getRecentFinancialActivity(5);
-      return res || [];
-    },
-    enabled: !!user?.id && navigator.onLine,
-    staleTime: 1000 * 10,
-    gcTime: 1000 * 60 * 10,
-  });
-
-  // 2. Invalidation helper function (maintains compatibility with manual triggers)
-  const refreshWallet = useCallback(async (isAuto = false) => {
-    if (!user?.id) return;
+  const fetchWallet = useCallback(async () => {
     try {
-      if (!isAuto) {
-        toast.loading('Syncing wallet status...', { id: 'wallet-sync' });
-      }
-      
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: walletKey }),
-        queryClient.invalidateQueries({ queryKey: limitsKey }),
-        queryClient.invalidateQueries({ queryKey: activityKey }),
-      ]);
+      setError(null);
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
 
-      if (!isAuto) {
-        toast.success('Wallet synchronized successfully', { id: 'wallet-sync' });
+      if (!user) {
+        setWallet(null);
+        setIsLoading(false);
+        return;
       }
-    } catch (err) {
-      console.error('[useWallet] Sync error:', err);
-      if (!isAuto) {
-        toast.error('Failed to update wallet balance', { id: 'wallet-sync' });
+
+      userIdRef.current = user.id;
+
+      const { data, error: fetchErr } = await supabase
+        .from('wallets')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (fetchErr) {
+        throw fetchErr;
       }
+
+      const rawData = data as unknown as Wallet | null;
+
+      const mapped = rawData ? {
+        ...rawData,
+        balance: rawData.balance || 0,
+        balance_usd: rawData.balance || 0,
+        remaining_withdrawal_usd: Math.max(0, (rawData.daily_withdrawal_limit || 0) - (rawData.total_withdrawn_usd || 0))
+      } : null;
+
+      setWallet(mapped);
+    } catch (err: any) {
+      console.error('[useWallet] Error fetching wallet:', err);
+      setError(err?.message || 'Failed to fetch wallet information');
+    } finally {
+      setIsLoading(false);
     }
-  }, [user?.id, queryClient, walletKey, limitsKey, activityKey]);
+  }, []);
 
-  // 3. Real-time subscription to listen to transactions and balance changes
   useEffect(() => {
-    if (!user?.id) return;
+    let isMounted = true;
 
-    console.log(`[Wallet Realtime] Configuring subscriptions for wallet changes of: ${user.id}`);
+    async function init() {
+      // Fetch initially
+      await fetchWallet();
 
-    // Listen to wallet table modifications
-    const walletChannel = supabase
-      .channel(`wallet-real-state-${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'wallets',
-          filter: `user_id=eq.${user.id}`
-        },
-        () => {
-          console.log('[Wallet Realtime] Wallets row changed, triggering fast cache query invalidation.');
-          refreshWallet(true);
-        }
-      )
-      .subscribe();
+      const userId = userIdRef.current;
+      if (!userId || !isMounted) return;
 
-    // Listen to new transactions
-    const txChannel = supabase
-      .channel(`tx-real-state-${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'wallet_transactions',
-          filter: `user_id=eq.${user.id}`
-        },
-        () => {
-          console.log('[Wallet Realtime] Insert of wallet transaction detected, invalidating cache immediately.');
-          refreshWallet(true);
-        }
-      )
-      .subscribe();
+      // Subscribe to real-time updates for DB balance changes
+      console.log(`[useWallet] Configuring realtime listener for wallet: ${userId}`);
+      const walletChannel = supabase
+        .channel(`wallet-${userId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'wallets',
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            console.log('[useWallet] Received real-time wallet update:', payload.new);
+            if (isMounted && payload.new) {
+              const updated = payload.new as Wallet;
+              setWallet({
+                ...updated,
+                balance_usd: updated.balance,
+                remaining_withdrawal_usd: Math.max(0, (updated.daily_withdrawal_limit || 0) - (updated.total_withdrawn_usd || 0))
+              });
+            }
+          }
+        )
+        .subscribe();
+
+      subscriptionRef.current = walletChannel;
+    }
+
+    init();
 
     return () => {
-      console.log('[Wallet Realtime] Cleaning up wallet listener sockets.');
-      supabase.removeChannel(walletChannel);
-      supabase.removeChannel(txChannel);
+      isMounted = false;
+      if (subscriptionRef.current) {
+        supabase.removeChannel(subscriptionRef.current);
+      }
     };
-  }, [user?.id, refreshWallet]);
-
-  const isLoading = (summaryStatus === 'pending' || limitsStatus === 'pending' || activityStatus === 'pending') && !summary;
-  const isRefreshing = summaryFetching || limitsFetching || activityFetching;
+  }, [fetchWallet]);
 
   return {
-    summary,
-    limits,
-    recentActivity,
-    loading: isLoading,
-    refreshing: isRefreshing,
-    refreshWallet,
-    isLocked: limits?.is_locked || false,
-    environment: summary?.environment || 'production'
+    wallet,
+    summary: wallet,        // Compatibility mapping
+    limits: wallet,         // Compatibility mapping (since is_locked etc are on wallets in schema)
+    isLoading,
+    loading: isLoading,     // Compatibility mapping
+    error,
+    refetch: fetchWallet,
+    refreshWallet: fetchWallet, // Compatibility mapping
+    isLocked: wallet?.is_locked || false,
+    environment: wallet?.environment || 'sandbox'
   };
 }

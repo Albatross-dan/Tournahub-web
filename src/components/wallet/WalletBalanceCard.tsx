@@ -1,108 +1,151 @@
 import React, { useState, useEffect } from 'react';
 import { motion, useMotionValue, useTransform, animate } from 'motion/react';
 import { WalletTopUpModal } from './WalletTopUpModal';
-import { Wallet, Plus, Loader2 } from 'lucide-react';
+import { Wallet as WalletIcon, Plus, Shield, Lock, AlertTriangle } from 'lucide-react';
+import type { Wallet } from '../../types/payment';
 
 interface WalletBalanceCardProps {
-  balance: number; // current USD balance
-  currency?: string; // display currency (default "USD")
-  isLoading?: boolean;
-  onTopUpSuccess?: (newBalance: number) => void;
+  wallet?:          Wallet | null;
+  balance?:         number; // legacy compatibility mapping
+  isLoading?:       boolean;
+  onTopUpSuccess?:  (newBalance: number) => void;
+  className?:       string;
 }
 
 export function WalletBalanceCard({
+  wallet = null,
   balance,
-  currency = "USD",
   isLoading = false,
-  onTopUpSuccess
+  onTopUpSuccess,
+  className = ''
 }: WalletBalanceCardProps) {
-  const [isTopUpOpen, setIsTopUpOpen] = useState(false);
-  
-  // Motion Value for rolling number effect
-  const count = useMotionValue(0);
-  const rounded = useTransform(count, (latest) => 
-    latest.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const [showTopUpModal, setShowTopUpModal] = useState(false);
+
+  // Compute active balance prioritizing database state over legacy input
+  const activeBalance = wallet ? wallet.balance : (typeof balance === 'number' ? balance : 0);
+  const isLocked = wallet ? wallet.is_locked : false;
+  const lockedReason = wallet ? wallet.locked_reason : null;
+  const riskLevel = wallet ? wallet.risk_level : 'normal';
+
+  // Animated rolling counter
+  const balanceAnimValue = useMotionValue(0);
+  const displayValue = useTransform(balanceAnimValue, (latest) =>
+    latest.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   );
 
   useEffect(() => {
-    // Avoid animating from 0 every mount if balance is loaded
-    if (!isLoading && typeof balance === 'number') {
-      const controls = animate(count, balance, {
+    if (!isLoading) {
+      const controls = animate(balanceAnimValue, activeBalance, {
         duration: 0.8,
-        ease: "easeOut"
+        ease: 'easeOut'
       });
       return () => controls.stop();
     }
-  }, [balance, isLoading, count]);
+  }, [activeBalance, isLoading, balanceAnimValue]);
 
   if (isLoading) {
     return (
-      <div className="card p-8 bg-surface border border-border-main rounded-3xl relative overflow-hidden animate-pulse">
+      <div className={`p-6 bg-slate-900 border border-white/10 rounded-2xl relative overflow-hidden animate-pulse ${className}`}>
         <div className="flex items-start justify-between">
-          <div className="space-y-4 w-2/3">
-            <div className="h-4 bg-white/10 rounded w-1/3" />
-            <div className="h-16 bg-white/10 rounded w-3/4" />
-            <div className="h-4 bg-white/10 rounded w-1/2" />
+          <div className="space-y-3 w-2/3">
+            <div className="h-4 bg-white/5 rounded w-1/3" />
+            <div className="h-10 bg-white/5 rounded w-3/4" />
+            <div className="h-4 bg-white/5 rounded w-1/2" />
           </div>
-          <div className="w-20 h-20 bg-white/10 rounded-3xl" />
+          <div className="w-14 h-14 bg-white/5 rounded-xl" />
         </div>
-        <div className="h-14 bg-white/10 rounded-2xl mt-8" />
+        <div className="h-12 bg-white/5 rounded-xl mt-6" />
       </div>
     );
   }
 
-  const handleTopUpSuccess = (creditedUsd: number) => {
-    if (onTopUpSuccess) {
-      onTopUpSuccess(creditedUsd);
-    }
-  };
-
   return (
-    <div className="card p-8 bg-[#0b0e14] border border-white/10 rounded-3xl relative overflow-hidden shadow-2xl">
-      {/* Decorative background gradients */}
-      <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-48 h-48 bg-teal-500/5 rounded-full blur-2xl -ml-20 -mb-20 pointer-events-none" />
+    <div className={`p-6 bg-slate-900 border border-white/10 rounded-2xl relative overflow-hidden shadow-2xl ${className}`}>
+      {/* Visual glowing effects */}
+      <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-32 h-32 bg-teal-500/5 rounded-full blur-2xl -ml-16 -mb-16 pointer-events-none" />
 
       <div className="flex items-start justify-between relative z-10">
-        <div className="space-y-4">
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-            Current balance (USD)
-          </p>
-          <div className="flex items-baseline space-x-2">
-            <span className="text-3xl font-black text-emerald-500 italic uppercase tracking-tighter">
-              $
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-black uppercase tracking-widest text-slate-400">
+              Wallet Balance
             </span>
-            <motion.span className="text-6xl font-black text-white italic tracking-tighter leading-none">
-              {rounded}
+            {riskLevel !== 'normal' && (
+              <span className="px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-[8px] font-black text-red-400 uppercase tracking-widest">
+                ⚠️ {riskLevel}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-black italic text-emerald-400">$</span>
+            <motion.span className="text-5xl font-black italic text-white tracking-tight leading-none">
+              {displayValue}
             </motion.span>
           </div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-            Exchange rates sync actively with market prices
-          </p>
+
+          {isLocked && (
+            <div className="flex items-center gap-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 max-w-sm">
+              <Lock className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="text-[10px] font-bold uppercase tracking-wide">
+                Locked: {lockedReason || 'Verification active'}
+              </span>
+            </div>
+          )}
         </div>
 
-        <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center border border-white/10 shadow-xl transform rotate-3 hover:rotate-0 transition-transform duration-300">
-          <Wallet className="w-8 h-8 text-emerald-500" />
+        <div className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center border border-white/10 shadow-lg shrink-0">
+          <WalletIcon className="w-7 h-7 text-emerald-400" />
         </div>
       </div>
 
-      <div className="mt-10 relative z-10 pt-6 border-t border-white/5">
+      {/* Quick Deposit Action Button */}
+      <div className="mt-6 pt-4 border-t border-white/5 relative z-10">
         <button
-          onClick={() => setIsTopUpOpen(true)}
-          className="w-full h-14 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-black uppercase italic tracking-wider shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 active:scale-[0.98] transition-all flex items-center justify-center space-x-2 text-sm cursor-pointer"
+          onClick={() => setShowTopUpModal(true)}
+          disabled={isLocked}
+          className="w-full h-12 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 border border-emerald-600 disabled:border-transparent text-white font-extrabold text-xs uppercase italic tracking-wider shadow-lg shadow-emerald-500/10 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
         >
-          <Plus className="w-5 h-5" />
+          <Plus className="w-4 h-4 text-white" />
           <span>Add Funds</span>
         </button>
       </div>
 
-      {/* Trigger Secure Popup Modal overlay */}
+      {/* Ledger Statistics Row */}
+      {wallet && (
+        <div className="mt-4 grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider relative z-10">
+          <div>
+            Total Deposited:{' '}
+            <span className="text-slate-300">
+              ${Number(wallet.total_deposited_usd || 0).toFixed(2)}
+            </span>
+          </div>
+          <div className="text-right">
+            Total Withdrawn:{' '}
+            <span className="text-slate-300">
+              ${Number(wallet.total_withdrawn_usd || 0).toFixed(2)}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {!wallet && (
+        <p className="mt-3 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+          Top up your wallet to join paid tournament events.
+        </p>
+      )}
+
+      {/* Nested Flow Modal */}
       <WalletTopUpModal
-        isOpen={isTopUpOpen}
-        onClose={() => setIsTopUpOpen(false)}
-        onSuccess={handleTopUpSuccess}
+        isOpen={showTopUpModal}
+        onClose={() => setShowTopUpModal(false)}
+        onSuccess={(amount) => {
+          onTopUpSuccess?.(amount);
+        }}
       />
     </div>
   );
 }
+
 export default WalletBalanceCard;

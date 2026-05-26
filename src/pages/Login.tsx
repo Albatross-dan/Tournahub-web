@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate, Link } from 'react-router-dom';
 import { Trophy, Mail, Lock, Loader2 } from 'lucide-react';
-import PWAInstallButton from '../components/layout/PWAInstallButton';
 
 const logoUrl = '/android-chrome-512x512.png';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +28,15 @@ export default function Login() {
       if (isSignUp) {
         if (!agreedToTerms || !agreedToPrivacy) {
           throw new Error('Please agree to both the Terms & Conditions and the Privacy Policy by ticking the boxes.');
+        }
+
+        // Verify password length and confirmation
+        if (!password || password.length < 6) {
+          throw new Error('Password must be at least 6 characters long');
+        }
+
+        if (password !== confirmPassword) {
+          throw new Error('Passwords do not match');
         }
 
         // Enforce username requirements
@@ -174,6 +183,24 @@ export default function Login() {
             </div>
 
             {isSignUp && (
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em] ml-1">Confirm Password</label>
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-primary/5 rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-text-muted group-focus-within:text-primary transition-colors pointer-events-none z-20" />
+                  <input
+                    type="password"
+                    required
+                    className="w-full bg-background/40 border border-border-main rounded-2xl pl-12 pr-4 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-text-main font-medium relative z-10"
+                    placeholder="Confirm your password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {isSignUp && (
               <div className="space-y-3 px-1">
                 <div className="flex items-center space-x-3">
                   <input
@@ -314,14 +341,17 @@ export default function Login() {
             <div className="text-center">
               <button
                 type="button"
-                onClick={() => setIsSignUp(!isSignUp)}
+                onClick={() => {
+                  setIsSignUp(!isSignUp);
+                  setConfirmPassword('');
+                  setError(null);
+                  setSuccess(null);
+                }}
                 className="text-[11px] font-black uppercase tracking-widest text-text-muted hover:text-primary transition-all underline underline-offset-8 decoration-border-main hover:decoration-primary/30"
               >
                 {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
               </button>
             </div>
-
-            <PWAInstallButton layout="auth" />
           </div>
         </div>
         

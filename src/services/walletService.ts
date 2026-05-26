@@ -2,7 +2,7 @@ import { ensureAuthenticated, supabase } from '../lib/supabase';
 import { 
   WalletSummary, WalletLimits, TransactionHistory, FinancialActivity, 
   WinnerHistory, PaymentProvider, PaymentRequestStatusResponse, 
-  RequestDepositResponse, RequestWithdrawalResponse, SupportedCurrency,
+  RequestWithdrawalResponse, SupportedCurrency,
   FinancialSummary, WithdrawalRequest
 } from '../types/finance';
 
@@ -79,23 +79,6 @@ export const walletService = {
     return data;
   },
 
-  async requestDeposit(params: {
-    amount: number;
-    currency: SupportedCurrency;
-    provider: string;
-    idempotencyKey: string;
-  }): Promise<RequestDepositResponse> {
-    await ensureAuthenticated();
-    const { data, error } = await (supabase as any).rpc('request_deposit', {
-      p_original_amount: params.amount,
-      p_original_currency: params.currency,
-      p_provider_name: params.provider,
-      p_idempotency_key: params.idempotencyKey
-    });
-    if (error) throw error;
-    return data;
-  },
-
   async requestWithdrawal(params: {
     amount: number;
     currency: SupportedCurrency;
@@ -109,16 +92,6 @@ export const walletService = {
       p_provider_name: params.provider,
       p_destination: params.destination,
       p_idempotency_key: params.idempotencyKey
-    });
-    if (error) throw error;
-    return data;
-  },
-
-  async confirmPaymentRequest(requestId: string, providerResponse: any) {
-    await ensureAuthenticated();
-    const { data, error } = await (supabase as any).rpc('confirm_payment_request', {
-      p_request_id: requestId,
-      p_provider_response: providerResponse
     });
     if (error) throw error;
     return data;

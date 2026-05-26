@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { walletService } from '../services/walletService';
+import { supabase } from '../lib/supabase';
 import Shell from '../components/layout/Shell';
 import { Loader2, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
 
@@ -29,15 +29,21 @@ export function PaymentCallback() {
   const verifyPayment = async () => {
     try {
       setStatus("verifying");
-      console.log(`[Callback Handler] Initiating database confirmation for request ID: ${reference}`);
+      console.log(`[Callback Handler] Verifying with edge function for reference: ${reference}`);
 
-      // Confirm with database RPC
-      await walletService.confirmPaymentRequest(reference, { reference, status: 'success' });
+      const { data, error } = await supabase.functions.invoke('paystack-verify', {
+        body: { reference }
+      });
 
-      // Grab the verified payment request status
-      const statusRes = await walletService.getPaymentRequestStatus(reference);
+      if (error || !data) {
+        throw new Error(error?.message || 'Empty response returned from paystack-verify function.');
+      }
 
-      setCreditedAmount(statusRes.usd_amount || 0);
+      if (!data.success) {
+        throw new Error(data.message || 'Server returned negative transaction verification status.');
+      }
+
+      setCreditedAmount(data.amount_usd || 0);
       setStatus("success");
 
       // Auto redirect to wallet after 3 seconds of showing success Screen

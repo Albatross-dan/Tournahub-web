@@ -19,7 +19,6 @@ import StatusBadge from '../components/ui/StatusBadge';
 import { TournamentStatus } from '../constants';
 
 import { useRealtimeTournaments } from '../hooks/useRealtimeTournaments';
-import PWAInstallButton from '../components/layout/PWAInstallButton';
 
 import VerificationStatusBadge from '../components/match/VerificationStatusBadge';
 import VerificationStatusBanner from '../components/match/VerificationStatusBanner';

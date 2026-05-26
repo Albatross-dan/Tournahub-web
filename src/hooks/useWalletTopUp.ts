@@ -1,150 +1,144 @@
-import { useState, useEffect, useRef } from 'react';
-import { walletService } from '../services/walletService';
-import { TopUpStep, TopUpParams, VerifyPaymentResponse } from '../types/payment';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
+import { loadPaystackScript, openPaystackPopup } from '../lib/paystack';
+import type { TopUpStep, TopUpParams, InitializePaymentResponse, VerifyPaymentResponse } from '../types/payment';
 
-export function useWalletTopUp() {
-  const [step, setStep] = useState<TopUpStep>("idle");
+const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string;
+
+interface UseWalletTopUpReturn {
+  step:          TopUpStep;
+  errorMessage:  string | null;
+  successAmount: number | null;    // USD amount credited
+  reference:     string | null;    // Paystack reference used
+  initiateTopUp: (params: TopUpParams) => Promise<void>;
+  reset:         () => void;
+}
+
+export function useWalletTopUp(): UseWalletTopUpReturn {
+  const [step, setStep] = useState<TopUpStep>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successAmount, setSuccessAmount] = useState<number | null>(null);
   const [reference, setReference] = useState<string | null>(null);
-  const scriptLoaded = useRef(false);
 
-  // Dynamic injection of Paystack script tag
+  const isMountedRef = useRef<boolean>(true);
+
   useEffect(() => {
-    if (scriptLoaded.current) return;
-
-    const existingScript = document.getElementById('paystack-inline-js');
-    if (existingScript) {
-      scriptLoaded.current = true;
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.id = 'paystack-inline-js';
-    script.src = 'https://js.paystack.co/v2/inline.js';
-    script.async = true;
-    script.type = 'text/javascript';
-    script.onload = () => {
-      scriptLoaded.current = true;
-      console.log('[Paystack SDK] Inline popup SDK script successfully loaded.');
-    };
-    script.onerror = (e) => {
-      console.error('[Paystack SDK] Failed to load inline popup SDK script:', e);
-    };
-
-    document.body.appendChild(script);
-
+    isMountedRef.current = true;
     return () => {
-      // Keep it loaded, or clean up if needed. Keeping it is fine, but guard against duplicates using ID check.
+      isMountedRef.current = false;
     };
   }, []);
 
-  const reset = () => {
-    setStep("idle");
+  const reset = useCallback(() => {
+    setStep('idle');
     setErrorMessage(null);
     setSuccessAmount(null);
     setReference(null);
-  };
+  }, []);
 
-  const verifyPayment = async (ref: string): Promise<VerifyPaymentResponse> => {
-    setStep("verifying");
-    console.log(`[Paystack TOP-UP] Actively verifying reference in database via confirmPaymentRequest: ${ref}`);
+  // Internal verification function helper
+  const verifyPayment = async (refStr: string) => {
+    if (!isMountedRef.current) return;
+    setStep('verifying');
 
-    // Confirm that transaction exists and is processed in the database
-    const confirmRes = await walletService.confirmPaymentRequest(ref, {
-      reference: ref,
-      status: 'success'
-    });
-
-    // Obtain the actual credited amounts and details
-    const statusRes = await walletService.getPaymentRequestStatus(ref);
-
-    return {
-      success: statusRes.status === 'completed',
-      already_processed: statusRes.status === 'completed',
-      amount_usd: statusRes.usd_amount || 0,
-      reference: ref,
-      message: statusRes.message || 'Payment successfully verified.'
-    };
-  };
-
-  const initiateTopUp = async (params: TopUpParams): Promise<void> => {
     try {
-      setStep("initializing");
-      setErrorMessage(null);
-
-      // Verify Paystack global object exists
-      if (!window.PaystackPop) {
-        throw new Error('Paystack SDK is currently offline or loading. Please wait a moment and try again.');
-      }
-
-      const paystackPubKey = (import.meta as any).env.VITE_PAYSTACK_PUBLIC_KEY;
-      if (!paystackPubKey) {
-        throw new Error('Paystack configuration is incomplete. Public key not defined.');
-      }
-
-      // 1. Generate unique idempotency key
-      const idempotencyKey = crypto.randomUUID();
-
-      // Calculating original unit amount (e.g. 500 NGN instead of 50000 subunit kobo)
-      const amountUnit = params.amountSubunit / 100;
-
-      // 2. Call secure boundary Database RPC to register and receive signed reference
-      console.log('[Paystack TOP-UP] Registering transaction in database...');
-      const requestRes = await walletService.requestDeposit({
-        amount: amountUnit,
-        currency: params.currency as any,
-        provider: 'paystack',
-        idempotencyKey: idempotencyKey
+      const { data, error } = await supabase.functions.invoke('paystack-verify', {
+        body: { reference: refStr }
       });
 
-      if (!requestRes || !requestRes.success || !requestRes.payment_request_id) {
-        throw new Error(requestRes?.message || requestRes?.error || 'Server refused payment init request.');
+      if (!isMountedRef.current) return;
+
+      if (!error && data && data.success) {
+        setStep('success');
+        setSuccessAmount(data.amount_usd || 0);
+      } else {
+        setStep('error');
+        const errDetail = error?.message || data?.error || data?.message || 'Payment verification failed or was not completed.';
+        setErrorMessage(errDetail);
+      }
+    } catch (err: any) {
+      console.error('[VerifyPayment Error]:', err);
+      if (isMountedRef.current) {
+        setStep('error');
+        setErrorMessage('Failed to connect to verification service. Please contact support.');
+      }
+    }
+  };
+
+  const initiateTopUp = useCallback(async (params: TopUpParams): Promise<void> => {
+    try {
+      setStep('initializing');
+      setErrorMessage(null);
+      setSuccessAmount(null);
+
+      // STEP 2: Load script
+      console.log('[Paystack SDK] Loading inline script...');
+      await loadPaystackScript();
+
+      // STEP 3: Verify session exists
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        if (isMountedRef.current) {
+          setStep('error');
+          setErrorMessage('Please log in again. Your session has expired.');
+        }
+        return;
       }
 
-      const transactionRef = requestRes.payment_request_id;
-      setReference(transactionRef);
-      setStep("awaiting_payment");
-
-      // 3. Setup and open Paystack pop
-      console.log('[Paystack TOP-UP] Opening Paystack Inline Popup screen');
-      const paystack = window.PaystackPop.setup({
-        key: paystackPubKey,
-        email: params.userEmail,
-        amount: params.amountSubunit,
-        currency: params.currency,
-        ref: transactionRef, // Secured and authenticated reference
-        label: params.userName || params.userEmail,
-        callback: async (response: any) => {
-          try {
-            console.log('[Paystack TOP-UP] Payment authorized on pop. Completing reference: ', response.reference);
-            setStep("verifying");
-
-            // Complete deposit locally in DB through SQL schema trigger 
-            await walletService.confirmPaymentRequest(transactionRef, response);
-
-            const creditedUsd = requestRes.usd_equivalent || params.amountUsd;
-            setSuccessAmount(creditedUsd);
-            setStep("success");
-          } catch (verifyErr: any) {
-            console.error('[Paystack TOP-UP] Real-time reference verification failure:', verifyErr);
-            setErrorMessage(verifyErr.message || 'Payment verification failed. Please contact Support with your reference.');
-            setStep("error");
-          }
-        },
-        onClose: () => {
-          console.log('[Paystack TOP-UP] Interactive payment screen closed.');
-          setStep("idle");
+      // STEP 4: Call /paystack-initialize
+      console.log('[Paystack SDK] Initializing payment intent on DB...');
+      const { data: initData, error: initError } = await supabase.functions.invoke('paystack-initialize', {
+        body: {
+          amount_subunit: params.amountSubunit,
+          currency: params.currency,
+          amount_usd: params.amountUsd,
+          idempotency_key: crypto.randomUUID()
         }
       });
 
-      paystack.openIframe();
+      if (!isMountedRef.current) return;
+
+      if (initError || !initData) {
+        setStep('error');
+        const errDetail = initError?.message || initData?.error || initData?.message || 'Initialization failed.';
+        setErrorMessage(errDetail);
+        return;
+      }
+
+      const { reference: checkoutRef } = initData as InitializePaymentResponse;
+      setReference(checkoutRef);
+
+      // STEP 5: Set step and open Paystack popup iframe
+      setStep('awaiting_payment');
+      console.log(`[Paystack SDK] Spawning checkout popup frame with reference: ${checkoutRef}`);
+
+      openPaystackPopup({
+        key: PAYSTACK_PUBLIC_KEY,
+        email: params.userEmail,
+        amount: params.amountSubunit,
+        currency: params.currency,
+        ref: checkoutRef,
+        label: params.username,
+        onSuccess: (transaction) => {
+          console.log('[Paystack SDK] Successful popup payment action. Verifying with API...', transaction);
+          verifyPayment(transaction.reference);
+        },
+        onCancel: () => {
+          console.log('[Paystack SDK] Popup closed prematurely by customer.');
+          if (isMountedRef.current) {
+            setStep('idle');
+          }
+        }
+      });
+
     } catch (err: any) {
-      console.error('[Paystack TOP-UP] Initialization exception caught:', err);
-      setErrorMessage(err.message || 'Failed to initialize secure checkout session.');
-      setStep("error");
+      console.error('[useWalletTopUp] Initialization exception caught:', err);
+      if (isMountedRef.current) {
+        setStep('error');
+        setErrorMessage(err.message || 'Something went wrong. Please try again.');
+      }
     }
-  };
+  }, []);
 
   return {
     step,

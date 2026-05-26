@@ -3,16 +3,13 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
   Trophy, Wallet, RefreshCw, LayoutDashboard, 
-  Calendar, MessageSquare, Shield, Bell, Menu, X, Tv,
-  Download, Smartphone, MoreVertical, ArrowUpFromLine, Sparkles, Check
+  Calendar, MessageSquare, Shield, Bell, Menu, X, Tv
 } from 'lucide-react';
 import NotificationBell from '../notifications/NotificationBell';
 import { walletService } from '../../services/walletService';
 import { formatCurrency, cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../../lib/supabase';
-import { usePWAInstall } from '../../hooks/usePWAInstall';
-import PWAInstallButton from './PWAInstallButton';
 
 const logoUrl = '/android-chrome-512x512.png';
 
@@ -24,8 +21,6 @@ export default function Navbar() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [showPWAInstructions, setShowPWAInstructions] = useState(false);
-  const { isInstallable, installApp } = usePWAInstall();
   const initial = React.useMemo(() => 
     (profile?.username || user?.email || 'U')[0].toUpperCase(), 
   [profile?.username, user?.email]);
@@ -250,132 +245,7 @@ export default function Navbar() {
                     </NavLink>
                   );
                 })}
-
-                {/* Download App/PWA Trigger Button placed exactly in the empty grid slot */}
-                <button
-                  id="pwa-grid-install-action"
-                  onClick={() => setShowPWAInstructions(!showPWAInstructions)}
-                  className="flex items-center space-x-4 px-6 py-5 rounded-2xl transition-all bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/40 cursor-pointer active:scale-95 text-left"
-                >
-                  <Download className="w-5 h-5 text-emerald-400 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <span className="text-xs font-black uppercase tracking-widest italic block leading-none">Download App</span>
-                    <span className="text-[9px] text-emerald-400/75 uppercase tracking-wide block mt-1">PWA Installer</span>
-                  </div>
-                  <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[8px] font-black uppercase rounded border border-emerald-500/30 shrink-0">
-                    PWA
-                  </span>
-                </button>
               </div>
-
-              {/* Seamless instruction overlay if triggered */}
-              <AnimatePresence>
-                {showPWAInstructions && (
-                  <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    {/* Backdrop */}
-                    <div 
-                      className="fixed inset-0 bg-slate-950/80 backdrop-blur-md" 
-                      onClick={() => setShowPWAInstructions(false)} 
-                    />
-                    
-                    {/* Small Instructions Modal */}
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95, y: 15 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                      className="relative w-full max-w-sm bg-slate-950 border border-slate-850 p-6 rounded-3xl shadow-2xl z-[110]"
-                    >
-                      <div className="flex items-center justify-between border-b border-slate-900 pb-3.5 mb-4">
-                        <div className="flex items-center gap-2">
-                          <Download className="w-5 h-5 text-emerald-400 animate-bounce" />
-                          <span className="font-extrabold text-white text-sm uppercase tracking-wider">
-                            Install TournaHub
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => setShowPWAInstructions(false)}
-                          className="px-2.5 py-1 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors cursor-pointer"
-                        >
-                          Close
-                        </button>
-                      </div>
-
-                      <div className="space-y-4 text-slate-300 text-xs">
-                        {isInstallable && (
-                          <div className="p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl space-y-2.5">
-                            <p className="font-bold text-emerald-400 flex items-center gap-1.5">
-                              <Sparkles className="w-3.5 h-3.5" />
-                              App is ready for direct installation!
-                            </p>
-                            <button
-                              onClick={async () => {
-                                const success = await installApp();
-                                if (success) setShowPWAInstructions(false);
-                              }}
-                              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl transition-all shadow-md cursor-pointer uppercase italic tracking-wider active:scale-95"
-                            >
-                              Install Automatically
-                            </button>
-                          </div>
-                        )}
-
-                        <div className="space-y-3">
-                          <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest block">
-                            Installation Guide Steps:
-                          </span>
-
-                          {typeof window !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream ? (
-                            // iOS Instructions
-                            <div className="space-y-3">
-                              <div className="flex items-start gap-3">
-                                <div className="w-6 h-6 flex items-center justify-center bg-slate-900 border border-slate-800 text-emerald-400 rounded-lg font-black text-xs flex-shrink-0">
-                                  1
-                                </div>
-                                <p className="leading-relaxed">
-                                  Tap the browser <span className="text-white font-semibold">Share icon</span> (<ArrowUpFromLine className="w-4 h-4 inline text-emerald-400 mx-1 align-middle" />) in the bottom navigation bar.
-                                </p>
-                              </div>
-                              <div className="flex items-start gap-3">
-                                <div className="w-6 h-6 flex items-center justify-center bg-slate-900 border border-slate-800 text-emerald-400 rounded-lg font-black text-xs flex-shrink-0">
-                                  2
-                                </div>
-                                <p className="leading-relaxed">
-                                  Scroll down and tap <span className="text-white font-black text-emerald-400">"Add to Home Screen"</span>.
-                                </p>
-                              </div>
-                            </div>
-                          ) : (
-                            // General Browser/Android Chrome Instructions
-                            <div className="space-y-3">
-                              <div className="flex items-start gap-3">
-                                <div className="w-6 h-6 flex items-center justify-center bg-slate-900 border border-slate-800 text-emerald-400 rounded-lg font-black text-xs flex-shrink-0">
-                                  1
-                                </div>
-                                <p className="leading-relaxed font-sans">
-                                  Tap the browser's menu option <span className="text-white font-semibold">3 Dots (<MoreVertical className="w-4 h-4 inline text-slate-400 align-middle" />)</span> in the top-right corner.
-                                </p>
-                              </div>
-                              <div className="flex items-start gap-3">
-                                <div className="w-6 h-6 flex items-center justify-center bg-slate-900 border border-slate-800 text-emerald-400 rounded-lg font-black text-xs flex-shrink-0">
-                                  2
-                                </div>
-                                <p className="leading-relaxed font-sans">
-                                  Select <span className="text-white font-black text-emerald-400">"Add to Home screen"</span> or <span className="text-[#d4e157] font-black text-emerald-400">"Install app"</span> from the list.
-                                </p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="pt-3.5 border-t border-slate-900 flex gap-2 items-center text-[10px] text-slate-500 leading-relaxed">
-                          <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                          <span>Provides fully responsive gaming, homescreen shortcuts & zero-delay layout loading.</span>
-                        </div>
-                      </div>
-                    </motion.div>
-                  </div>
-                )}
-              </AnimatePresence>
             </div>
           </motion.div>
         )}
@@ -391,14 +261,6 @@ export default function Navbar() {
             <RefreshCw className="w-2 h-2 mr-1" />
             Sync: {lastUpdated}
           </span>
-          {isInstallable && (
-            <button
-              onClick={installApp}
-              className="px-2 py-0.5 rounded-full bg-primary text-slate-900 border border-primary text-[7px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition-all flex items-center hover:bg-white"
-            >
-              🚀 Install App
-            </button>
-          )}
         </div>
         
         {balance !== null && balance < 5 && (
