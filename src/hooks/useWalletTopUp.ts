@@ -148,6 +148,14 @@ export function useWalletTopUp(): UseWalletTopUpReturn {
       setStep('awaiting_payment');
       console.log('[TopUp] Step 5: opening Paystack popup, ref=', data.reference);
 
+      if (!window.PaystackPop) {
+        setStep('error');
+        setErrorMessage(
+          'Payment window could not open. Please refresh the page and try again.'
+        );
+        return;
+      }
+
       openPaystackPopup({
         key:      import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string,
         email:    params.userEmail,
