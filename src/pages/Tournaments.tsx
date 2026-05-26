@@ -17,7 +17,10 @@ export default function Tournaments() {
   const { tournaments, loading } = useRealtimeTournaments('all', 24); 
   const { userRegistrations } = useUserRegistrations();
 
+  const safeUserRegistrations = userRegistrations instanceof Set ? userRegistrations : new Set<string>();
+
   const filteredTournaments = (tournaments || []).filter(t => {
+    if (!t) return false;
     const matchesSearch = (t.name || '').toLowerCase().includes(search.toLowerCase());
     if (!matchesSearch) return false;
     
@@ -101,7 +104,7 @@ export default function Tournaments() {
                   <TournamentCard 
                     key={tournament.id} 
                     tournament={tournament} 
-                    isJoined={userRegistrations.has(tournament.id)}
+                    isJoined={safeUserRegistrations.has(tournament.id)}
                   />
                 ))}
              </div>
@@ -134,7 +137,7 @@ function TournamentCard({ tournament, isJoined }: { tournament: Tournament; isJo
         
         <div className="absolute top-6 left-6 flex items-center space-x-2">
           <span className="px-4 py-1.5 bg-[#d4e157] text-slate-900 text-[10px] font-black rounded-full uppercase tracking-widest shadow-md">
-            {tournament.type.toUpperCase()}
+            {(tournament.type || '').toUpperCase()}
           </span>
           <StatusBadge status={tournament.status} />
         </div>
