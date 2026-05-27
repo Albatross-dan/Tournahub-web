@@ -2,6 +2,38 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { ensureAuthenticated, supabase } from '../lib/supabase';
 import { Profile } from '../types/database';
+import { queryClient } from '../lib/queryClient';
+
+// Professional fallback timeout engine to prevent hangs and guarantee resolution
+function withTimeout<T>(promise: Promise<T> | PromiseLike<T>, ms: number, fallbackValue: T): Promise<T> {
+  return new Promise<T>((resolve) => {
+    let resolved = false;
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        console.warn(`[Timeout Recovery] Operation exceeded ${ms}ms limit. Proceeding with fallback.`);
+        resolve(fallbackValue);
+      }
+    }, ms);
+
+    Promise.resolve(promise)
+      .then((val) => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timer);
+          resolve(val);
+        }
+      })
+      .catch((err) => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timer);
+          console.error('[Timeout Recovery] Caught rejection:', err);
+          resolve(fallbackValue);
+        }
+      });
+  });
+}
 
 interface AuthContextType {
   user: User | null;
@@ -28,25 +60,30 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
 
   useEffect(() => {
     let isMounted = true;
-    console.log('[AuthContext] Initializing auth provider...');
+    console.log('[AuthContext] Initializing auth provider with robust timeout engine...');
     
     const fetchProfile = async (userId: string) => {
       try {
-        const { data, error } = await supabase
+        const queryPromise = supabase
           .from('profiles')
           .select('*')
           .eq('id', userId)
-          .single();
+          .single()
+          .then(({ data, error }) => {
+            if (error) throw error;
+            return data;
+          });
+
+        const data = await withTimeout(queryPromise, 3000, null);
         
-        if (error) {
-          console.error('Error fetching profile:', error);
-          return null;
-        } else {
+        if (data) {
           if (!isMounted) return null;
           setProfile(data);
           return data;
         }
+        return null;
       } catch (err) {
+        console.error('[AuthContext] Error in fetchProfile:', err);
         return null;
       } finally {
         if (isMounted) {
@@ -128,43 +165,92 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       }
     });
 
-    // Safety timeout
+    // Outer safety timeout to guarantee initialization screen resolves under any conditions
     const timer = setTimeout(() => {
       if (isMounted) {
+        console.warn('[AuthContext] Safety warm start timer fired. Unblocking initialization screen...');
         setLoading(false);
       }
-    }, 1500);
+    }, 2000);
 
-    // When internet comes back, verify session is still alive
-    // and signal all page components to re-fetch their data
-    const handleOnline = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+    // Track the last time a full focus/online reconnect update was performed to prevent spamming
+    const lastFocusTime = { current: 0 };
 
-      if (!session) {
-        // Session died while offline — force re-login
-        setUser(null);
-        setProfile(null);
-        if (onNavigate) {
-          onNavigate('/login');
-        } else {
-          window.location.href = '/login';
-        }
-        return;
+    // Unified auto-reconnection and focus recovery logic
+    const handleSessionAndRealtimeReconnection = async (reason: string) => {
+      const now = Date.now();
+      if (now - lastFocusTime.current < 6000) {
+        return; // Throttled
       }
+      lastFocusTime.current = now;
+      console.log(`[Reconnection] Invoked by [${reason}]. Harmonizing app state...`);
 
-      // Session alive — re-sync and trigger data refetch
-      // on all page components
-      await applySession(session);
-      setRefetchSignal(prev => prev + 1);
+      try {
+        // Safe check session with strict timeout
+        const sessionPromise = supabase.auth.getSession().then(({ data }) => data.session);
+        const session = await withTimeout(sessionPromise, 4000, null);
+
+        if (session) {
+          console.log('[Reconnection] User session is valid. Auto-reviving states...');
+          
+          // Revive Supabase WSS stream
+          if (supabase.realtime) {
+            console.log('[Reconnection] Force-cycling Supabase Realtime Stream...');
+            try {
+              supabase.realtime.disconnect();
+              setTimeout(() => {
+                if (isMounted) {
+                  supabase.realtime.connect();
+                  console.log('[Reconnection] Supabase Realtime Stream cycling complete.');
+                }
+              }, 100);
+            } catch (rErr) {
+              console.warn('[Reconnection] Socket cycle issue:', rErr);
+            }
+          }
+
+          // Invalidate active TanStack queries to fetch fresh rows from tables
+          console.log('[Reconnection] Invalidating cache to fetch fresh database rows...');
+          try {
+            queryClient.invalidateQueries();
+          } catch (qcErr) {
+            console.warn('[Reconnection] QueryClient invalidation error:', qcErr);
+          }
+
+          // Re-sync local profile state
+          await applySession(session);
+
+          // Signal active non-Query components to run their manual fetch routines
+          if (isMounted) {
+            setRefetchSignal(prev => prev + 1);
+          }
+        } else {
+          console.log('[Reconnection] Session session not detected.');
+        }
+      } catch (err) {
+        console.error('[Reconnection] Auto-reconnect flow encountered error:', err);
+      }
     };
 
+    const handleOnline = () => handleSessionAndRealtimeReconnection('online_event');
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        handleSessionAndRealtimeReconnection('visibility_visible');
+      }
+    };
+    const handleFocus = () => handleSessionAndRealtimeReconnection('window_focused');
+
     window.addEventListener('online', handleOnline);
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleFocus);
 
     return () => {
       isMounted = false;
       subscription.unsubscribe();
       clearTimeout(timer);
       window.removeEventListener('online', handleOnline);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleFocus);
     };
   }, [onNavigate]);
 
@@ -175,57 +261,70 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     try {
       const isDevAdmin = user.email === 'danieloguda11221@gmail.com';
       
-      const { data: existingProfile } = await (supabase as any)
+      const profilePromise = (supabase as any)
         .from('profiles')
         .select('id, username, role')
         .eq('id', user.id)
-        .maybeSingle();
+        .maybeSingle()
+        .then((res: any) => {
+          if (res.error) throw res.error;
+          return res.data;
+        });
+
+      const existingProfile = await withTimeout(profilePromise, 3000, null);
 
       if (!existingProfile) {
-        // Prioritize username from metadata (passed during signup) or pending Google signup username
         const pendingUsername = localStorage.getItem('pending_oauth_username');
         const metadataUsername = user.user_metadata?.username;
         const baseUsername = user.email?.split('@')[0] || 'user';
         const finalUsername = pendingUsername || metadataUsername || `${baseUsername}_${user.id.slice(0, 4)}`;
 
-        await (supabase as any).from('profiles').insert({
+        const insertPromise = (supabase as any).from('profiles').insert({
           id: user.id,
           username: finalUsername,
           role: isDevAdmin ? 'admin' : 'user'
         });
+        await withTimeout(insertPromise, 3000, null);
 
         if (pendingUsername) {
           localStorage.removeItem('pending_oauth_username');
         }
       } else {
-        // Migration: If profile exists but username is still a default/missing, try to sync from metadata or pending oauth
         const pendingUsername = localStorage.getItem('pending_oauth_username');
         const metadataUsername = user.user_metadata?.username;
         const targetUsername = pendingUsername || metadataUsername;
         if (targetUsername && (!existingProfile.username || existingProfile.username.includes('_'))) {
-           // Only update if it looks like a generated name or is null
-           await (supabase as any).from('profiles').update({ username: targetUsername }).eq('id', user.id);
+           const updatePromise = (supabase as any).from('profiles').update({ username: targetUsername }).eq('id', user.id);
+           await withTimeout(updatePromise, 3000, null);
            if (pendingUsername) {
              localStorage.removeItem('pending_oauth_username');
            }
         }
         
         if (isDevAdmin && existingProfile.role !== 'admin') {
-          await (supabase as any).from('profiles').update({ role: 'admin' }).eq('id', user.id);
+          const updateRolePromise = (supabase as any).from('profiles').update({ role: 'admin' }).eq('id', user.id);
+          await withTimeout(updateRolePromise, 3000, null);
         }
       }
 
-      const { data: existingWallet } = await (supabase as any)
+      const walletPromise = (supabase as any)
         .from('wallets')
         .select('id')
         .eq('user_id', user.id)
-        .maybeSingle();
+        .maybeSingle()
+        .then((res: any) => {
+          if (res.error) throw res.error;
+          return res.data;
+        });
+
+      const existingWallet = await withTimeout(walletPromise, 3000, null);
 
       if (!existingWallet) {
-        await (supabase as any).from('wallets').insert({
+        const insertWalletPromise = (supabase as any).from('wallets').insert({
           user_id: user.id,
           balance: 0
         });
+        await withTimeout(insertWalletPromise, 3000, null);
       }
     } catch (err) {
       console.error('Provisioning failed:', err);

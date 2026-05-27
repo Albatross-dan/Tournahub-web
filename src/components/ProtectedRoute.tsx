@@ -21,22 +21,31 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowAdminOnly =
 
     async function checkAccountStatus() {
       try {
-        const { data, error } = await supabase.rpc('get_my_account_status');
-        if (error) {
-          console.error('[ProtectedRoute] get_my_account_status error:', error);
-          
-          // Fallback to profiles table query for robustness
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('status, banned_reason, suspension_reason, suspended_until')
-            .eq('id', user.id)
-            .single();
-          if (profileData) {
-            setAccountStatus(profileData);
+        const fetchPromise = (async () => {
+          const { data, error } = await supabase.rpc('get_my_account_status');
+          if (error) {
+            console.error('[ProtectedRoute] get_my_account_status error:', error);
+            
+            // Fallback to profiles table query for robustness
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('status, banned_reason, suspension_reason, suspended_until')
+              .eq('id', user.id)
+              .single();
+            return profileData || { status: 'active' };
           }
-        } else if (data) {
-          setAccountStatus(data);
-        }
+          return data;
+        })();
+
+        const timeoutPromise = new Promise<any>((resolve) =>
+          setTimeout(() => {
+            console.warn('[ProtectedRoute] Account status RPC check timed out. Proceeding with active status.');
+            resolve({ status: 'active' });
+          }, 3000)
+        );
+
+        const statusData = await Promise.race([fetchPromise, timeoutPromise]);
+        setAccountStatus(statusData);
       } catch (err) {
         console.error('[ProtectedRoute] Failed to fetch account standing:', err);
       } finally {

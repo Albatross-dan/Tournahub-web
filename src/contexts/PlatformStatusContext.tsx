@@ -23,6 +23,16 @@ interface PlatformStatusContextType {
 
 const PlatformStatusContext = createContext<PlatformStatusContextType | undefined>(undefined);
 
+const defaultStatus: PlatformStatus = {
+  maintenance_mode: false,
+  is_blocked: false,
+  caller_is_admin: false,
+  maintenance_message: '',
+  maintenance_end_estimate: null,
+  maintenance_scheduled_at: null,
+  upcoming_maintenance: false
+};
+
 export function PlatformStatusProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [status, setStatus] = useState<PlatformStatus | null>(null);
@@ -30,17 +40,26 @@ export function PlatformStatusProvider({ children }: { children: React.ReactNode
   const [unreadAnnouncements, setUnreadAnnouncements] = useState<AnnouncementNotification[]>([]);
   const isFetchingRef = useRef(false);
 
-  // 1. Fetch current status
+  // 1. Fetch current status with fallback timeout unblocker
   const checkStatus = async (): Promise<PlatformStatus | null> => {
     if (isFetchingRef.current) return status;
     isFetchingRef.current = true;
     try {
-      const data = await platformService.getPlatformStatus();
+      const getPromise = platformService.getPlatformStatus();
+      const timeoutPromise = new Promise<PlatformStatus>((resolve) => 
+        setTimeout(() => {
+          console.warn('[PlatformStatusProvider] Status check exceeded 2.5s timeout. Using default unblocked status.');
+          resolve(defaultStatus);
+        }, 2500)
+      );
+
+      const data = await Promise.race([getPromise, timeoutPromise]);
       setStatus(data);
       return data;
     } catch (err) {
       console.error('[PlatformStatusProvider] Error polling status:', err);
-      return null;
+      setStatus(defaultStatus);
+      return defaultStatus;
     } finally {
       isFetchingRef.current = false;
       setLoading(false);
@@ -93,6 +112,13 @@ export function PlatformStatusProvider({ children }: { children: React.ReactNode
   // Initial status fetch on mount
   useEffect(() => {
     checkStatus();
+
+    // Guard against any infinite initializing screens under weak connectivity
+    const unblockTimer = setTimeout(() => {
+      setLoading(false);
+    }, 2500);
+
+    return () => clearTimeout(unblockTimer);
   }, [user]);
 
   // Load announcements and subscribe to real-time notification changes
