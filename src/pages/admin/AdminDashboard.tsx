@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import AdminShell from '../../components/layout/AdminShell';
 import { 
-  Trophy, Users, Activity, Wallet, 
+  Trophy, Users, Activity, Wallet, Coins,
   Plus, Search, MoreVertical, Edit2, 
   Trash2, ExternalLink, ArrowUpRight,
   TrendingUp, Clock, Gamepad2, Radio,
@@ -40,7 +40,8 @@ export default function AdminDashboard() {
     totalPlayers: 0,
     activeTournaments: 0,
     pendingVerifications: 0,
-    totalPrizePool: 0
+    totalPrizePool: 0,
+    totalPlatformRevenue: 0
   });
 
   // Maintenance & Announcement States
@@ -125,18 +126,21 @@ export default function AdminDashboard() {
 
   async function loadAdminData() {
     try {
-      const [players, results] = await Promise.all([
+      const [players, results, platformRev] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('match_results').select('*', { count: 'exact', head: true }).eq('status', 'submitted')
+        supabase.from('match_results').select('*', { count: 'exact', head: true }).eq('status', 'submitted'),
+        supabase.from('platform_revenue').select('amount_usd').eq('status', 'completed')
       ]);
 
       const pool = tournaments.reduce((acc, curr) => acc + (curr.prize_pool || 0), 0);
+      const totalRev = platformRev.data ? (platformRev.data as any[]).reduce((sum, r) => sum + (r.amount_usd || 0), 0) : 0;
 
       setStats({
         totalPlayers: (players as any)?.count || 0,
         activeTournaments: (tournaments || []).filter(t => t?.status === 'ongoing').length,
         pendingVerifications: (results as any)?.count || 0,
-        totalPrizePool: pool || 0
+        totalPrizePool: pool || 0,
+        totalPlatformRevenue: totalRev
       });
     } catch (err) {
       console.error('Error loading admin stats:', err);
@@ -170,7 +174,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
           <AdminStatCard 
             title="Total Contenders" 
             value={(stats.totalPlayers || 0).toLocaleString()} 
@@ -203,6 +207,15 @@ export default function AdminDashboard() {
             color="bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
             trend="Locked & Ready"
           />
+          <Link to="/admin/wallet" className="block h-full">
+            <AdminStatCard 
+              title="Platform Revenue" 
+              value={formatCurrency(stats.totalPlatformRevenue || 0)} 
+              icon={<Coins />} 
+              color="bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+              trend="Oversight Revenue"
+            />
+          </Link>
         </div>
 
         {/* User Moderation Section */}

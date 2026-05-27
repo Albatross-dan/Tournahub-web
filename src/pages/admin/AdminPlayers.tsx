@@ -7,7 +7,7 @@ import {
   Activity, ArrowUpRight, Ban, CheckCircle2,
   Clock, RefreshCw, ChevronLeft, ChevronRight,
   User, ShieldAlert, FileText, Trash2, X, Plus, Copy,
-  Loader2
+  Loader2, History, Lock, Unlock
 } from 'lucide-react';
 import { formatCurrency, cn, getPublicIdentity } from '../../lib/utils';
 import LoadingState from '../../components/ui/LoadingState';
@@ -85,6 +85,41 @@ export default function AdminPlayers() {
   const [activeModal, setActiveModal] = useState<string | null>(null); // 'ban' | 'suspend' | 'restore' | 'soft_delete' | 'permanent_delete' | 'role' | 'note'
   const [modalTargetUser, setModalTargetUser] = useState<any | null>(null);
 
+  // Wallet Lock / Unlock states & controls
+  const [showWalletLockModal, setShowWalletLockModal] = useState<boolean>(false);
+  const [lockExplanation, setLockExplanation] = useState<string>('');
+  const [isUpdatingWallet, setIsUpdatingWallet] = useState<boolean>(false);
+
+  async function handleLockWallet(userId: string, targetState: boolean, reason?: string) {
+    setIsUpdatingWallet(true);
+    try {
+      const updateData: any = {
+        is_locked: targetState,
+        locked_reason: targetState ? reason || 'Administrative lock pending audit' : null,
+        locked_at: targetState ? new Date().toISOString() : null,
+        locked_by: loggedInProfile?.id || null
+      };
+
+      const { error } = await (supabase as any)
+        .from('wallets')
+        .update(updateData)
+        .eq('user_id', userId);
+
+      if (error) {
+        toast.error(`Wallet operation error: ${error.message}`);
+      } else {
+        toast.success(`✓ Wallet is now ${targetState ? 'LOCKED' : 'UNLOCKED'}`);
+        await loadUserDetail(userId);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error occurred handling wallet state');
+    } finally {
+      setIsUpdatingWallet(false);
+      setShowWalletLockModal(false);
+      setLockExplanation('');
+    }
+  }
+
   useEffect(() => {
     fetchUsersList();
   }, [page, statusFilter, roleFilter]);
@@ -134,12 +169,25 @@ export default function AdminPlayers() {
     }
   }
 
-  // Fetch full details of a specific user (including notes & logs/audit history)
+  // Fetch full details of a specific user (including notes, wallet view, transactions & logs/audit history)
   async function loadUserDetail(userId: string) {
     setLoadingDetail(true);
     try {
-      const data = await moderationService.getUser(userId);
-      setSelectedUserFull(data);
+      const [userData, walletAdminData, txData] = await Promise.all([
+        moderationService.getUser(userId),
+        supabase.from('v_wallets_admin').select('*').eq('user_id', userId).maybeSingle(),
+        supabase.from('wallet_transactions')
+          .select('id, type, amount, status, description, created_at, tournament_id, tournament_name')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(50)
+      ]);
+
+      setSelectedUserFull({
+        ...(userData || {}),
+        walletAdmin: walletAdminData?.data || null,
+        transactions: txData?.data || []
+      });
     } catch (err) {
       console.error('Error fetching user detail:', err);
       toast.error('Failed to load user detailed dossier.');
@@ -527,35 +575,153 @@ export default function AdminPlayers() {
                     </div>
                   </div>
 
-                  {/* Wallet audit security */}
-                  <div className="space-y-3">
+                  {/* Wallet audit security & Stats */}
+                  <div className="space-y-4">
                     <div className="flex items-center justify-between border-b border-white/5 pb-1">
                       <h5 className="text-xs font-black uppercase text-white tracking-widest italic flex items-center gap-1.5">
                         <Wallet className="w-4 h-4 text-emerald-400" />
-                        Wallet Restraints
+                        Wallet Direct Oversight
                       </h5>
+                      {selectedUserFull.walletAdmin?.risk_level && (
+                        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border ${
+                          selectedUserFull.walletAdmin.risk_level === 'low' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                          selectedUserFull.walletAdmin.risk_level === 'medium' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                          'bg-red-500/10 text-red-500 border-red-500/20'
+                        }`}>
+                          Risk: {selectedUserFull.walletAdmin.risk_level}
+                        </span>
+                      )}
                     </div>
-                    {['banned', 'suspended', 'deleted'].includes(selectedUserFull.profile?.status) ? (
-                      <div className="p-4 bg-red-950/25 border border-red-900/30 rounded-2xl text-xs text-red-400 font-bold flex gap-3">
-                        <ShieldAlert className="w-5 h-5 shrink-0 text-red-500" />
-                        <div>
-                          <p className="font-extrabold uppercase mb-0.5">Transactions Isolated & Locked</p>
-                          <p className="text-[11px] font-medium leading-relaxed">
-                            Due to user account status '{selectedUserFull.profile?.status}', their connected wallet is fully restricted. Local payout nodes are bypassed.
-                          </p>
+
+                    {/* Mini stats grid */}
+                    {selectedUserFull.walletAdmin && (
+                      <div className="grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        <div className="p-2 bg-slate-950/40 rounded-xl border border-white/[0.02]">
+                          <span>Deposits:</span>
+                          <span className="block text-slate-300 font-black font-mono text-xs mt-0.5">
+                            {formatCurrency(selectedUserFull.walletAdmin.total_deposited_usd || 0)}
+                          </span>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="p-4 bg-emerald-950/15 border border-emerald-900/20 rounded-2xl text-xs text-emerald-400 font-bold flex gap-3">
-                        <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-500 animate-pulse" />
-                        <div>
-                          <p className="font-extrabold uppercase mb-0.5">Cleared Wallet Hub</p>
-                          <p className="text-[11px] font-medium leading-relaxed">
-                            Wallet is actively unlocked. Standard entries, winnings, and checkout transfers are normal.
-                          </p>
+                        <div className="p-2 bg-slate-950/40 rounded-xl border border-white/[0.02]">
+                          <span>Withdrawals:</span>
+                          <span className="block text-slate-300 font-black font-mono text-xs mt-0.5">
+                            {formatCurrency(selectedUserFull.walletAdmin.total_withdrawn_usd || 0)}
+                          </span>
                         </div>
                       </div>
                     )}
+
+                    {/* Locked alert / Controls */}
+                    {selectedUserFull.walletAdmin?.is_locked ? (
+                      <div className="p-4 bg-red-950/25 border border-red-900/30 rounded-2xl space-y-3">
+                        <div className="flex gap-3 text-xs text-red-400 font-bold">
+                          <ShieldAlert className="w-5 h-5 shrink-0 text-red-500" />
+                          <div>
+                            <p className="font-extrabold uppercase mb-0.5">Wallet Restraint Locked</p>
+                            <p className="text-[11px] font-medium leading-relaxed text-red-300/80">
+                              Reason: {selectedUserFull.walletAdmin.locked_reason || 'Administrative restriction.'}
+                            </p>
+                            {selectedUserFull.walletAdmin.locked_at && (
+                              <p className="text-[9px] text-red-400/50 font-mono mt-1">
+                                Restricted at {new Date(selectedUserFull.walletAdmin.locked_at).toLocaleString()}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={isUpdatingWallet}
+                          onClick={() => {
+                            if (window.confirm("Are you sure you want to lift all locks and restraints from this user's wallet?")) {
+                              handleLockWallet(selectedUserId!, false);
+                            }
+                          }}
+                          className="w-full h-9 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 text-[10px] font-black uppercase tracking-widest rounded-xl flex items-center justify-center space-x-1.5 transition-all text-center cursor-pointer"
+                        >
+                          {isUpdatingWallet ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
+                          ) : (
+                            <>
+                              <Unlock className="w-3.5 h-3.5" />
+                              <span>Unlock Wallet Assets</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-slate-950/30 border border-slate-850 rounded-2xl space-y-3">
+                        <div className="flex gap-3 text-xs text-slate-400 font-bold">
+                          <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-500 animate-pulse" />
+                          <div>
+                            <p className="font-extrabold uppercase mb-0.5 text-emerald-400 font-black">cleared wallet active</p>
+                            <p className="text-[11px] font-medium leading-relaxed">
+                              Deposit and payout features are fully open. Transfers settle instantly on user interaction.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={isUpdatingWallet}
+                          onClick={() => setShowWalletLockModal(true)}
+                          className="w-full h-8 bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 text-[10px] font-black uppercase tracking-widest rounded-xl flex items-center justify-center space-x-1.5 transition-all text-center cursor-pointer"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Apply Wallet Restraint</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Transaction History Section */}
+                  <div className="space-y-4 animate-in fade-in duration-300">
+                    <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                      <h5 className="text-xs font-black uppercase text-white tracking-widest italic flex items-center gap-1.5">
+                        <History className="w-4 h-4 text-emerald-400" />
+                        Wallet Transaction Log
+                      </h5>
+                      <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider font-mono">
+                        {selectedUserFull.transactions?.length || 0} items
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                      {selectedUserFull.transactions && selectedUserFull.transactions.length > 0 ? (
+                        selectedUserFull.transactions.map((tx: any) => {
+                          const isCredit = tx.amount > 0;
+                          return (
+                            <div key={tx.id} className="p-3 bg-slate-950 border border-slate-850 rounded-xl flex items-center justify-between text-[11px] font-medium">
+                              <div className="space-y-1">
+                                <p className="font-extrabold uppercase text-slate-300 flex items-center gap-1 text-[9px] tracking-wide leading-none">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${
+                                    tx.type === 'deposit' ? 'bg-blue-500' :
+                                    tx.type === 'prize' ? 'bg-yellow-500' :
+                                    tx.type === 'refund' ? 'bg-emerald-500' :
+                                    tx.type === 'entry_fee' ? 'bg-red-500' :
+                                    'bg-purple-500'
+                                  }`} />
+                                  {tx.type}
+                                </p>
+                                <p className="text-[10px] text-slate-500 font-medium leading-snug">
+                                  {tx.description} {tx.tournament_name ? `(${tx.tournament_name})` : ''}
+                                </p>
+                              </div>
+                              <div className="text-right whitespace-nowrap pl-2">
+                                <span className={`font-black font-mono block ${isCredit ? 'text-emerald-400' : 'text-red-400'}`}>
+                                  {isCredit ? '+' : ''}{formatCurrency(tx.amount)}
+                                </span>
+                                <span className="text-[9px] text-slate-600 font-mono">
+                                  {new Date(tx.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p className="text-center py-6 text-slate-600 font-bold uppercase tracking-widest text-[9px]">
+                          Zero financial activity logged.
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   {/* Notes Tab / Section */}
@@ -752,6 +918,78 @@ export default function AdminPlayers() {
           user={modalTargetUser}
           onSuccess={fetchUsersList}
         />
+      )}
+
+      {showWalletLockModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-white/5 rounded-2xl p-6 shadow-xl relative animate-in fade-in zoom-in duration-200">
+            <button 
+              onClick={() => {
+                setShowWalletLockModal(false);
+                setLockExplanation('');
+              }}
+              className="absolute right-4 top-4 text-slate-500 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black italic uppercase text-white tracking-widest">Restrict Wallet Assets</h3>
+                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Apply immediate lock restraints on user treasury</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-400 font-medium mb-4 leading-relaxed">
+              Locking prevents this player from withdrawing funds, entry fee payments, or receiving direct cash-outs until unlocked by an administrator.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider block mb-1">Reason for Lock Restriction</label>
+                <textarea
+                  value={lockExplanation}
+                  onChange={(e) => setLockExplanation(e.target.value)}
+                  rows={3}
+                  maxLength={250}
+                  placeholder="e.g. Suspected match manipulation, duplicate accounts, pending address verifications..."
+                  className="w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 focus:outline-none focus:ring-1 focus:ring-primary/50 text-white text-xs font-semibold resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3 justify-end items-center text-[10px] font-black uppercase tracking-wider">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowWalletLockModal(false);
+                    setLockExplanation('');
+                  }}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isUpdatingWallet || !lockExplanation.trim()}
+                  onClick={() => handleLockWallet(selectedUserId!, true, lockExplanation.trim())}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white rounded-lg flex items-center space-x-1.5 font-bold"
+                >
+                  {isUpdatingWallet ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Lock className="w-3.5 h-3.5 animate-bounce-short" />
+                      <span>Lock Wallet</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
     </AdminShell>

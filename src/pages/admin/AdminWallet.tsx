@@ -4,6 +4,7 @@ import AdminShell from '../../components/layout/AdminShell';
 import { Wallet, History, Users, ShieldCheck } from 'lucide-react';
 import WithdrawalRequests from '../../components/admin/WithdrawalRequests';
 import UserWalletAudit from '../../components/admin/UserWalletAudit';
+import PlatformRevenueDashboard from '../../components/admin/PlatformRevenueDashboard';
 import { cn } from '../../lib/utils';
 
 type AdminWalletTab = 'withdrawals' | 'audit' | 'logs';
@@ -49,12 +50,7 @@ export default function AdminWallet() {
         <div className="min-h-[500px]">
            {activeTab === 'withdrawals' && <WithdrawalRequests />}
            {activeTab === 'audit' && <UserWalletAudit />}
-           {activeTab === 'logs' && (
-             <div className="py-20 text-center card border-dashed border-2 border-white/5">
-                <p className="text-slate-500 font-black uppercase italic tracking-tighter text-xl">Revenue Engine Offline</p>
-                <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest mt-2">Aggregate revenue reports coming in the next update.</p>
-             </div>
-           )}
+           {activeTab === 'logs' && <PlatformRevenueDashboard />}
         </div>
       </div>
     </AdminShell>

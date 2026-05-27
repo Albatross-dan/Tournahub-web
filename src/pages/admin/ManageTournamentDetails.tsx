@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import AdminShell from '../../components/layout/AdminShell';
 import { tournamentService } from '../../services/tournamentService';
 import { useRealtimeTournament } from '../../hooks/useRealtimeTournaments';
@@ -18,14 +19,20 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import { TournamentStatus } from '../../constants';
 import { useTournamentBadges } from '../../hooks/useTournamentBadges';
 
+import TournamentPrizeConfigComponent from '../../components/admin/TournamentPrizeConfigComponent';
+import TournamentDistributePrizesComponent from '../../components/admin/TournamentDistributePrizesComponent';
+import TournamentLeaderboardComponent from '../../components/admin/TournamentLeaderboardComponent';
+import TournamentLifecycleControlsComponent from '../../components/admin/TournamentLifecycleControlsComponent';
+
 export default function ManageTournamentDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { tournament, loading: tournamentLoading } = useRealtimeTournament(id);
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'players' | 'matches' | 'settings'>('players');
+  const [activeTab, setActiveTab] = useState<'players' | 'matches' | 'leaderboard' | 'settings'>('players');
   const [busy, setBusy] = useState(false);
   const { badges } = useTournamentBadges(id);
 
@@ -70,6 +77,7 @@ export default function ManageTournamentDetails() {
   async function loadData() {
     if (!id) return;
     setLoading(true);
+    queryClient.invalidateQueries({ queryKey: ['tournament', id] });
     await Promise.all([
       loadRegistrations(),
       loadMatches()
@@ -261,6 +269,12 @@ export default function ManageTournamentDetails() {
             label="Operations"
           />
           <TabButton 
+            active={activeTab === 'leaderboard'} 
+            onClick={() => setActiveTab('leaderboard')} 
+            icon={<Trophy className="w-4 h-4 mr-2" />}
+            label="Leaderboard"
+          />
+          <TabButton 
             active={activeTab === 'settings'} 
             onClick={() => setActiveTab('settings')} 
             icon={<ShieldCheck className="w-4 h-4 mr-2" />}
@@ -285,10 +299,28 @@ export default function ManageTournamentDetails() {
             />
           )}
 
+          {activeTab === 'leaderboard' && (
+            <TournamentLeaderboardComponent 
+              tournament={tournament as any}
+            />
+          )}
+
           {activeTab === 'settings' && (
-            <div className="card p-20 text-center border-dashed border-2 border-slate-800">
-              <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">Under Construction</h3>
-              <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mt-2">Protocol configuration is being decrypted.</p>
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <TournamentLifecycleControlsComponent 
+                tournament={tournament as any}
+                onUpdate={loadData}
+              />
+              
+              <TournamentPrizeConfigComponent 
+                tournament={tournament as any}
+                onUpdate={loadData}
+              />
+
+              <TournamentDistributePrizesComponent 
+                tournament={tournament as any}
+                onUpdate={loadData}
+              />
             </div>
           )}
         </div>

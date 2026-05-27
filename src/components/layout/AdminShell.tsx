@@ -1,5 +1,5 @@
-import React from 'react';
-import { NavLink, Link, useLocation } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Trophy, Users, 
   Gamepad2, Wallet, BarChart3, 
@@ -30,9 +30,30 @@ const NAV_ITEMS = [
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const location = useLocation();
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { user, profile, loading } = useAuth();
+
+  useEffect(() => {
+    if (!loading && (!user || profile?.role !== 'admin')) {
+      navigate('/', { replace: true });
+    }
+  }, [user, profile, loading, navigate]);
+
   const { disputedMatches = [], singleSubmissionMatches = [], abandonedMatches = [] } = useAdminDisputes(user?.id || '');
   const totalAlerts = disputedMatches.length + singleSubmissionMatches.length + abandonedMatches.length;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0a0b1e] flex flex-col items-center justify-center space-y-4">
+        <div className="w-8 h-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+        <span className="text-[10px] uppercase font-black tracking-widest text-slate-500 animate-pulse">Running admin credential check...</span>
+      </div>
+    );
+  }
+
+  if (!profile || profile.role !== 'admin') {
+    return null; // Don't show anything during redirect
+  }
 
   return (
     <div className="min-h-screen bg-[#0a0b1e] text-slate-200 font-sans flex">
