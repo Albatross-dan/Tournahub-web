@@ -3,6 +3,7 @@ import { User } from '@supabase/supabase-js';
 import { ensureAuthenticated, supabase } from '../lib/supabase';
 import { Profile } from '../types/database';
 import { queryClient } from '../lib/queryClient';
+import { requestNotificationPermission, listenForForegroundNotifications } from '../lib/notifications';
 
 // Professional fallback timeout engine to prevent hangs and guarantee resolution
 function withTimeout<T>(promise: Promise<T> | PromiseLike<T>, ms: number, fallbackValue: T): Promise<T> {
@@ -57,6 +58,47 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
   const provisioningRef = React.useRef<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [refetchSignal, setRefetchSignal] = useState(0);
+
+  // Initialize FCM Push Notifications once after user is successfully authenticated
+  useEffect(() => {
+    if (!user) return;
+    
+    let isMounted = true;
+    let unsubscribe: (() => void) | null = null;
+    
+    const initNotifications = async () => {
+      try {
+        console.log('[AuthContext] Initializing FCM notifications for user:', user.id);
+        
+        // Request notification permission and sync token to Supabase
+        await requestNotificationPermission(user.id);
+        
+        if (!isMounted) return;
+        
+        // Setup foreground notifications listener
+        const unsub = await listenForForegroundNotifications();
+        if (unsub && isMounted) {
+          unsubscribe = unsub;
+        }
+      } catch (err) {
+        console.warn('[AuthContext] FCM notifications initialization failed safely:', err);
+      }
+    };
+    
+    // Defer initialization slightly to prevent blocking initial load critical path rendering
+    const timer = setTimeout(() => {
+      initNotifications();
+    }, 1000);
+    
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [user?.id]);
+
 
   useEffect(() => {
     let isMounted = true;
