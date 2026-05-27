@@ -44,6 +44,16 @@ const Moderation = lazy(() => import('./pages/admin/Moderation'));
 const ModerationLogs = lazy(() => import('./pages/admin/ModerationLogs'));
 
 function HomeRoute() {
+  const { user } = useAuth();
+
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <Landing />;
+}
+
+function LoginRoute() {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -54,10 +64,10 @@ function HomeRoute() {
     return <Navigate to="/dashboard" replace />;
   }
 
-  return <Landing />;
+  return <Login />;
 }
 
-function LoginRoute() {
+function SignupRoute() {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -85,7 +95,7 @@ function RootPlatformGate({ children }: { children: React.ReactNode }) {
     return <LoadingState fullPage />;
   }
 
-  const isPublicRoute = ['/', '/login', '/forgot-password', '/reset-password', '/terms', '/privacy-policy', '/privacy', '/legal'].includes(location.pathname);
+  const isPublicRoute = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/terms', '/privacy-policy', '/privacy', '/legal'].includes(location.pathname);
 
   if (status?.is_blocked && !isPublicRoute && !isAdmin) {
     return <MaintenanceScreen />;
@@ -111,6 +121,7 @@ function AppRoutes() {
             <Suspense fallback={<LoadingState fullPage />}>
               <Routes>
                 <Route path="/login" element={<LoginRoute />} />
+                <Route path="/signup" element={<SignupRoute />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/terms" element={<Legal />} />

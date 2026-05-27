@@ -29,11 +29,11 @@ export default function Landing() {
   };
 
   const handleJoinNow = () => {
-    navigate('/login', { state: { signUp: true } });
+    navigate('/signup');
   };
 
   const handleLogin = () => {
-    navigate('/login', { state: { signUp: false } });
+    navigate('/login');
   };
 
   return (

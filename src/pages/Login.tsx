@@ -15,7 +15,7 @@ export default function Login() {
   
   const navigate = useNavigate();
   const location = useLocation();
-  const initialIsSignUp = location.state?.signUp || new URLSearchParams(location.search).get('signup') === 'true';
+  const initialIsSignUp = location.pathname === '/signup' || location.state?.signUp || new URLSearchParams(location.search).get('signup') === 'true';
   const [isSignUp, setIsSignUp] = useState(initialIsSignUp);
   
   const [success, setSuccess] = useState<string | null>(null);
@@ -346,10 +346,12 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => {
-                  setIsSignUp(!isSignUp);
+                  const targetSignUp = !isSignUp;
+                  setIsSignUp(targetSignUp);
                   setConfirmPassword('');
                   setError(null);
                   setSuccess(null);
+                  navigate(targetSignUp ? '/signup' : '/login', { replace: true });
                 }}
                 className="text-[11px] font-black uppercase tracking-widest text-text-muted hover:text-primary transition-all underline underline-offset-8 decoration-border-main hover:decoration-primary/30"
               >
