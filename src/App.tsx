@@ -25,6 +25,7 @@ import WinnerHistory from './pages/WinnerHistory';
 import Profile from './pages/Profile';
 import TournamentChampion from './pages/TournamentChampion';
 import PaymentCallback from './pages/PaymentCallback';
+import Landing from './pages/Landing';
 
 // Lazy load admin pages only
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
@@ -43,6 +44,20 @@ const Moderation = lazy(() => import('./pages/admin/Moderation'));
 const ModerationLogs = lazy(() => import('./pages/admin/ModerationLogs'));
 
 function HomeRoute() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <LoadingState fullPage />;
+  }
+
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <Landing />;
+}
+
+function LoginRoute() {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -95,7 +110,7 @@ function AppRoutes() {
           <ThemeProvider>
             <Suspense fallback={<LoadingState fullPage />}>
               <Routes>
-                <Route path="/login" element={<HomeRoute />} />
+                <Route path="/login" element={<LoginRoute />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/terms" element={<Legal />} />

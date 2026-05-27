@@ -39,32 +39,27 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       {/* Sidebar - Desktop */}
       <aside 
         className={cn(
-          "fixed inset-y-0 left-0 z-50 bg-[#0d0f26] border-r border-slate-800/50 transition-all duration-300 ease-in-out",
-          isSidebarOpen ? "w-64" : "w-20"
+          "fixed inset-y-0 left-0 z-50 bg-[#0d0f26] border-r border-slate-800/50 transition-all duration-300 ease-in-out overflow-hidden flex flex-col",
+          isSidebarOpen ? "w-64" : "w-0 border-r-0"
         )}
       >
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full w-64">
           {/* Logo Section */}
           <div className="p-6 flex items-center justify-between">
             <Link to="/admin" className="flex items-center space-x-3 group">
               <img src={logoUrl} alt="Admin" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform" referrerPolicy="no-referrer" />
-              <AnimatePresence>
-                {isSidebarOpen && (
-                  <motion.span 
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -10 }}
-                    className="font-black text-xl italic uppercase tracking-tighter text-white whitespace-nowrap"
-                  >
-                    Admin <span className="text-primary">Hub</span>
-                  </motion.span>
-                )}
-              </AnimatePresence>
+              <motion.span 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="font-black text-xl italic uppercase tracking-tighter text-white whitespace-nowrap"
+              >
+                Admin <span className="text-primary">Hub</span>
+              </motion.span>
             </Link>
           </div>
 
           {/* Navigation Items */}
-          <nav className="flex-1 px-4 space-y-2 mt-4">
+          <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto">
             {NAV_ITEMS.map((item) => (
               <NavLink
                 key={item.path}
@@ -86,27 +81,15 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                       />
                     )}
                     <item.icon className={cn("w-5 h-5 flex-shrink-0", isActive && "text-primary")} />
-                    <AnimatePresence>
-                      {isSidebarOpen && (
-                        <motion.span 
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          className="font-bold text-sm uppercase tracking-widest whitespace-nowrap"
-                        >
-                          {item.name}
-                        </motion.span>
-                      )}
-                    </AnimatePresence>
+                    <span className="font-bold text-sm uppercase tracking-widest whitespace-nowrap">
+                      {item.name}
+                    </span>
                     
                     {item.name === 'Disputes' && totalAlerts > 0 && (
                       <motion.div
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
-                        className={cn(
-                          "absolute right-4 w-5 h-5 rounded-full bg-red-600 flex items-center justify-center border-2 border-[#0d0f26]",
-                          !isSidebarOpen && "-top-1 -right-1"
-                        )}
+                        className="absolute right-4 w-5 h-5 rounded-full bg-red-600 flex items-center justify-center border-2 border-[#0d0f26]"
                       >
                         <span className="text-[10px] font-black text-white">{totalAlerts}</span>
                       </motion.div>
@@ -116,59 +99,49 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               </NavLink>
             ))}
           </nav>
-
-          {/* Footer Actions */}
-          <div className="p-4 space-y-2 mb-4 border-t border-slate-800/50 pt-6">
-            <Link 
-              to="/dashboard"
-              className="flex items-center space-x-4 px-4 py-3 rounded-xl text-slate-500 hover:text-white hover:bg-white/5 transition-all w-full"
-            >
-              <LogOut className="w-5 h-5 flex-shrink-0" />
-              <AnimatePresence>
-                {isSidebarOpen && (
-                  <motion.span 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="font-bold text-sm uppercase tracking-widest whitespace-nowrap"
-                  >
-                    Public App
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </Link>
-
-            <button 
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="w-full flex items-center justify-center p-3 rounded-xl text-slate-600 hover:text-primary hover:bg-primary/5 transition-all hidden md:flex"
-            >
-              <ChevronRight className={cn("w-5 h-5 transition-transform duration-300", isSidebarOpen && "rotate-180")} />
-            </button>
-          </div>
         </div>
       </aside>
 
       {/* Main Content Area */}
       <main className={cn(
-        "flex-1 transition-all duration-300 ease-in-out",
-        isSidebarOpen ? "md:ml-64" : "md:ml-20"
+        "flex-1 transition-all duration-300 ease-in-out flex flex-col min-w-0",
+        isSidebarOpen ? "md:ml-64" : "md:ml-0"
       )}>
-        {/* Top bar for mobile */}
-        <header className="md:hidden flex items-center justify-between p-4 bg-[#0d0f26] border-b border-slate-800/50 mb-6">
+        {/* Unified Header for Desktop & Mobile */}
+        <header className="flex items-center justify-between p-4 bg-[#0d0f26] border-b border-slate-800/50">
           <div className="flex items-center space-x-3">
-             <img src={logoUrl} alt="Admin" className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
-             <span className="font-black italic uppercase text-white tracking-widest">Admin Hub</span>
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
+              className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl border border-slate-800/60 transition-all flex items-center gap-2"
+              title={isSidebarOpen ? "Collapse Side Menu" : "Expand Side Menu"}
+            >
+              <Menu className="w-4 h-4" />
+              <span className="text-[10px] font-black uppercase tracking-widest">
+                {isSidebarOpen ? "Hide Menu" : "Show Menu"}
+              </span>
+            </button>
+            <div className="flex items-center space-x-2">
+              <img src={logoUrl} alt="Admin" className="w-7 h-7 object-contain" referrerPolicy="no-referrer" />
+              <span className="font-black italic uppercase text-white tracking-widest text-xs hidden sm:inline-block">Admin Control</span>
+            </div>
           </div>
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 text-slate-400">
-            {isSidebarOpen ? <X /> : <Menu />}
-          </button>
+          
+          <div className="flex items-center space-x-2">
+            <Link 
+              to="/dashboard"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary hover:text-white rounded-lg text-[10px] font-black uppercase tracking-widest border border-primary/20 transition-all shadow-sm"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Public App</span>
+            </Link>
+          </div>
         </header>
 
         {/* Dynamic warning and alert banners */}
         <UpcomingMaintenanceBanner />
         <AnnouncementBanner />
 
-        <div className="p-6 md:p-10 max-w-7xl mx-auto">
+        <div className="p-6 md:p-10 max-w-7xl w-full mx-auto">
           <motion.div
             key={location.pathname}
             initial={{ opacity: 0, y: 10 }}

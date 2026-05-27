@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Trophy, Mail, Lock, Loader2 } from 'lucide-react';
 
 const logoUrl = '/android-chrome-512x512.png';
@@ -12,11 +12,15 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSignUp, setIsSignUp] = useState(false);
+  
+  const navigate = useNavigate();
+  const location = useLocation();
+  const initialIsSignUp = location.state?.signUp || new URLSearchParams(location.search).get('signup') === 'true';
+  const [isSignUp, setIsSignUp] = useState(initialIsSignUp);
+  
   const [success, setSuccess] = useState<string | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
-  const navigate = useNavigate();
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
