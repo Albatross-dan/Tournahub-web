@@ -214,11 +214,53 @@ export const tournamentService = {
         });
       }
 
-      const { data, error } = await (supabase as any).rpc('register_for_tournament', { 
-        p_tournament_id: tournamentId,
-        p_user_id: user.id,
-        p_badge_id: badgeId
-      });
+      // Attempt 3-parameter RPC first, and fall back to 2-parameter if signature is not found
+      let data = null;
+      let error = null;
+
+      try {
+        const res = await (supabase as any).rpc('register_for_tournament', { 
+          p_tournament_id: tournamentId,
+          p_user_id: user.id,
+          p_badge_id: badgeId
+        });
+        data = res.data;
+        error = res.error;
+      } catch (rpcErr: any) {
+        error = rpcErr;
+      }
+
+      const isSignatureError = error && (
+        (error as any).code === '42883' ||
+        (error as any).code?.includes('PGRST111') ||
+        (error as any).message?.toLowerCase().includes('does not exist') ||
+        (error as any).message?.toLowerCase().includes('could not find') ||
+        (error as any).message?.toLowerCase().includes('signature')
+      );
+
+      if (isSignatureError) {
+        console.log('[tournamentService] 3-parameter register_for_tournament not found in database. Falling back to 1/2-parameter version.');
+        const resFallback = await (supabase as any).rpc('register_for_tournament', { 
+          p_tournament_id: tournamentId,
+          p_user_id: user.id
+        });
+        
+        data = resFallback.data;
+        error = resFallback.error;
+
+        if (!error) {
+          const result = data as any;
+          if (result && result.success !== false) {
+            // Register succeeded with fallback, now select the badge
+            try {
+              console.log('[tournamentService] Fallback registration success, applying selected badge:', badgeId);
+              await this.selectBadge(tournamentId, badgeId, true);
+            } catch (badgeErr) {
+              console.warn('[tournamentService] Optional post-registration badge selection failed (could be already selected/optional):', badgeErr);
+            }
+          }
+        }
+      }
 
       if (error) {
         if (error.message?.toLowerCase().includes('already registered')) {
