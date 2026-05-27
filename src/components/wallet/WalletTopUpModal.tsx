@@ -5,6 +5,7 @@ import { useWalletTopUp } from '../../hooks/useWalletTopUp';
 import { CURRENCIES, formatCurrency, toUsd, toSubunit } from '../../config/currencies';
 import type { SupportedCurrency } from '../../types/payment';
 import { X, Loader2, DollarSign, Wallet } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 interface WalletTopUpModalProps {
   isOpen:    boolean;
@@ -32,36 +33,38 @@ export function WalletTopUpModal({ isOpen, onClose, onSuccess }: WalletTopUpModa
     reset
   } = useWalletTopUp();
 
-  // Pick user's preferred currency, mapping database preferred_currency if valid, otherwise defaulting to NGN
-  const initialCurrency = React.useMemo<SupportedCurrency>(() => {
-    const pref = profile?.preferred_currency as string;
-    if (pref && pref in CURRENCIES) {
-      return pref as SupportedCurrency;
-    }
-    return 'NGN';
-  }, [profile?.preferred_currency]);
-
-  const [currency, setCurrency] = useState<SupportedCurrency>(initialCurrency);
+  // Default Paystack payment currency to KES only
+  const [currency, setCurrency] = useState<SupportedCurrency>('KES');
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState<string>('');
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const autoSuccessTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Set initial state on mount and update with user preference
+  // Set initial state on mount and update with KES
   useEffect(() => {
     if (isOpen) {
       reset();
-      setCurrency(initialCurrency);
-      setSelectedPreset(CURRENCIES[initialCurrency].suggested_amounts[0] || null);
+      setCurrency('KES');
+      setSelectedPreset(CURRENCIES['KES'].suggested_amounts[0] || null);
       setCustomAmount('');
       setValidationError(null);
     }
-  }, [isOpen, initialCurrency, reset]);
+  }, [isOpen, reset]);
 
   // Handle auto-success redirect after 2s
   useEffect(() => {
     if (step === 'success' && successAmount !== null) {
+      toast.success(`Successfully deposited $${successAmount.toFixed(2)} USD to your wallet!`, {
+        duration: 4000,
+        position: 'top-center',
+        style: {
+          background: '#0f172a',
+          color: '#34d399',
+          border: '1px solid rgba(52, 211, 153, 0.2)',
+          fontWeight: 'bold',
+        }
+      });
       autoSuccessTimeoutRef.current = setTimeout(() => {
         onSuccess(successAmount);
         onClose();
@@ -203,26 +206,18 @@ export function WalletTopUpModal({ isOpen, onClose, onSuccess }: WalletTopUpModa
                   transition={{ duration: 0.15 }}
                   className="space-y-5"
                 >
-                  {/* Currency Selector */}
+                  {/* Payment Currency */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
                       Payment Currency
                     </label>
-                    <div className="relative">
-                      <select
-                        value={currency}
-                        onChange={handleCurrencyChange}
-                        className="w-full h-12 pl-4 pr-10 bg-slate-950/85 border border-white/10 rounded-xl text-white font-bold text-sm focus:outline-none focus:border-emerald-500 cursor-pointer appearance-none transition-colors"
-                      >
-                        {Object.values(CURRENCIES).map((curr) => (
-                          <option key={curr.code} value={curr.code} className="bg-slate-900 text-white">
-                            {curr.flag} {curr.code} — {curr.name}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-xs">
-                        ▼
-                      </div>
+                    <div className="w-full h-12 px-4 bg-slate-950/85 border border-white/10 rounded-xl flex items-center justify-between text-white font-bold text-sm">
+                      <span className="flex items-center gap-2">
+                        <span>🇰🇪</span> KES — Kenyan Shilling (Paystack payment)
+                      </span>
+                      <span className="text-[10px] bg-emerald-500/15 text-emerald-400 px-2.5 py-0.5 rounded-md font-black uppercase tracking-wider">
+                        Active
+                      </span>
                     </div>
                   </div>
 
@@ -287,9 +282,17 @@ export function WalletTopUpModal({ isOpen, onClose, onSuccess }: WalletTopUpModa
                     </div>
                   )}
 
-                  <p className="text-[9px] text-center uppercase tracking-wide text-slate-500 leading-normal">
-                    * Exchange rate is approximate. Final rate is processed securely at payment checkout.
-                  </p>
+                  <div className="text-center space-y-1 py-1">
+                    <p className="text-[10px] sm:text-[11px] font-semibold text-slate-300">
+                      International cards supported • Visa & Mastercard accepted
+                    </p>
+                    <p className="text-[9px] sm:text-[10px] font-medium text-slate-400">
+                      Your bank automatically converts your local currency to KES.
+                    </p>
+                    <p className="text-[8px] text-slate-500 uppercase tracking-wider leading-normal">
+                      * Exchange rate is approximate. Final rate is processed securely at payment checkout.
+                    </p>
+                  </div>
 
                   {/* Make Payment Trigger Button */}
                   <button
