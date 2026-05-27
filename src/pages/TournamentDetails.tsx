@@ -233,11 +233,27 @@ export default function TournamentDetails() {
     }
   };
 
-  const handleRegisterClick = () => {
+  const handleRegisterClick = async () => {
     if (!user) {
       navigate('/login', { state: { from: `/tournaments/${id}` } });
       return;
     }
+
+    try {
+      await refreshWallet();
+    } catch (err) {
+      console.warn('[handleRegisterClick] refreshWallet error:', err);
+    }
+
+    if (tournament.entry_fee > 0) {
+      const walletIsLocked = summary?.is_locked === true || limits?.is_locked === true;
+      if (walletIsLocked) {
+        const reason = summary?.locked_reason || limits?.locked_reason;
+        toast.error(`Your wallet is locked. Please contact support.${reason ? ` Reason: ${reason}` : ''}`);
+        return;
+      }
+    }
+
     setShowRegFlow(true);
     setRegStep('picker');
   };
@@ -284,6 +300,11 @@ export default function TournamentDetails() {
   }
 
   if (!tournament) return null;
+
+  const isPaidTournament = (tournament.entry_fee ?? 0) > 0;
+  const currentPrizePool = isPaidTournament 
+    ? ((tournament as any).escrow_balance_usd || 0) 
+    : (tournament.prize_pool || 0);
 
   const isRegistered = !!(
     (regStatus && regStatus.registered) || 
@@ -470,45 +491,135 @@ export default function TournamentDetails() {
                         mode="registration" 
                         onSelect={(badgeId) => {
                           setSelectedBadge(badgeId);
+                          refreshWallet().catch(err => console.warn('[BadgeSelector onSelect] refreshWallet failed:', err));
                           setRegStep('confirm');
                         }} 
                       />
                     </div>
                   </div>
                 ) : (
-                  <div className="p-10 space-y-8">
-                    <div className="text-center space-y-2">
-                        <h2 className="text-3xl font-black text-text-main uppercase italic tracking-tighter">Confirm <span className="text-primary">Engagement</span></h2>
-                        <p className="text-xs font-bold text-text-muted uppercase tracking-widest">Final review before deployment</p>
-                    </div>
-
-                    <div className="flex flex-col items-center py-8 bg-surface rounded-3xl border border-border-main space-y-6">
-                      <div className="w-32 h-32 relative">
-                        <PlayerBadge badgeId={selectedBadge} username="You" size="xl" />
-                        <div className="absolute -top-2 -right-2 bg-emerald-500 text-slate-900 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border-2 border-background">Selected</div>
+                  (tournament.entry_fee ?? 0) > 0 ? (
+                    <div className="p-8 sm:p-10 space-y-6">
+                      <div className="text-center space-y-2">
+                        <h2 className="text-3xl font-black text-text-main uppercase italic tracking-tighter">
+                          Confirm <span className="text-primary">Payment</span>
+                        </h2>
+                        <p className="text-xs font-bold text-text-muted uppercase tracking-widest leading-none">
+                          Entry ticket check for {tournament.name}
+                        </p>
                       </div>
-                      <div className="text-center">
-                        <p className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em] mb-1">Entry Ticket</p>
-                        <p className="text-2xl font-black text-text-main italic">{tournament.entry_fee > 0 ? formatCurrency(tournament.entry_fee) : 'FREE ENTRY'}</p>
+
+                      <div className="space-y-4 bg-surface rounded-3xl border border-border-main p-6 sm:p-8">
+                        <div className="flex items-center gap-4 border-b border-border-main pb-4">
+                          <div className="w-14 h-14 relative shrink-0">
+                            <PlayerBadge badgeId={selectedBadge} username="You" size="md" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black text-text-muted uppercase tracking-wider">Identity Selected</p>
+                            <p className="text-sm font-bold text-text-main">Ready for deployment</p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3 pt-2 text-sm">
+                          <div className="flex justify-between items-center">
+                            <span className="text-text-muted font-bold uppercase text-xs tracking-wider">Entry Fee</span>
+                            <span className="text-text-main font-black italic text-lg">{formatCurrency(tournament.entry_fee)}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-text-muted font-bold uppercase text-xs tracking-wider">Current Balance</span>
+                            <span className={cn(
+                              "font-black italic text-md",
+                              (summary?.balance_usd ?? 0) < tournament.entry_fee ? "text-red-500 font-extrabold" : "text-text-main"
+                            )}>
+                              {formatCurrency(summary?.balance_usd ?? 0)}
+                            </span>
+                          </div>
+                          {(summary?.balance_usd ?? 0) >= tournament.entry_fee && (
+                            <div className="flex justify-between items-center border-t border-border-main pt-3">
+                              <span className="text-text-muted font-bold uppercase text-xs tracking-wider">Balance After Deduction</span>
+                              <span className="text-emerald-500 font-black italic text-md">
+                                {formatCurrency((summary?.balance_usd ?? 0) - tournament.entry_fee)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {(summary?.balance_usd ?? 0) < tournament.entry_fee ? (
+                          <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-center space-y-3">
+                            <p className="text-red-500 font-extrabold uppercase italic tracking-normal text-xs leading-relaxed">
+                              Insufficient balance. Top up your wallet to join.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowRegFlow(false);
+                                navigate('/wallet');
+                              }}
+                              className="px-6 py-2.5 bg-red-500 hover:bg-red-600 text-black text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
+                            >
+                              Top Up Wallet Now
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 text-center">
+                            <p className="text-amber-500 font-extrabold uppercase italic tracking-normal text-[10px] sm:text-xs leading-relaxed">
+                              Warning: {formatCurrency(tournament.entry_fee)} USD will be deducted immediately from your wallet.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 pt-2">
+                        <button 
+                          onClick={() => setShowRegFlow(false)}
+                          className="btn-secondary py-4 font-black uppercase italic tracking-tighter rounded-2xl"
+                        >
+                          Cancel
+                        </button>
+                        <button 
+                          onClick={() => handleRegisterWithBadge(selectedBadge!)}
+                          disabled={registering || (summary?.balance_usd ?? 0) < tournament.entry_fee}
+                          className="btn-primary py-4 font-black uppercase italic tracking-tighter rounded-2xl shadow-lg shadow-primary/20 disabled:grayscale disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {registering ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Confirm & Pay'}
+                        </button>
                       </div>
                     </div>
+                  ) : (
+                    <div className="p-10 space-y-8">
+                      <div className="text-center space-y-2">
+                          <h2 className="text-3xl font-black text-text-main uppercase italic tracking-tighter">Confirm <span className="text-primary">Engagement</span></h2>
+                          <p className="text-xs font-bold text-text-muted uppercase tracking-widest">Final review before deployment</p>
+                      </div>
 
-                    <div className="grid grid-cols-2 gap-4 pt-4">
-                      <button 
-                        onClick={() => setRegStep('picker')}
-                        className="btn-secondary py-4 font-black uppercase italic tracking-tighter rounded-2xl"
-                      >
-                        Change Badge
-                      </button>
-                      <button 
-                        onClick={() => handleRegisterWithBadge(selectedBadge!)}
-                        disabled={registering}
-                        className="btn-primary py-4 font-black uppercase italic tracking-tighter rounded-2xl shadow-lg shadow-primary/20"
-                      >
-                        {registering ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Confirm Join'}
-                      </button>
+                      <div className="flex flex-col items-center py-8 bg-surface rounded-3xl border border-border-main space-y-6">
+                        <div className="w-32 h-32 relative">
+                          <PlayerBadge badgeId={selectedBadge} username="You" size="xl" />
+                          <div className="absolute -top-2 -right-2 bg-emerald-500 text-slate-900 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border-2 border-background">Selected</div>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em] mb-1">Entry Ticket</p>
+                          <p className="text-2xl font-black text-text-main italic">FREE ENTRY</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 pt-4">
+                        <button 
+                          onClick={() => setRegStep('picker')}
+                          className="btn-secondary py-4 font-black uppercase italic tracking-tighter rounded-2xl"
+                        >
+                          Change Badge
+                        </button>
+                        <button 
+                          onClick={() => handleRegisterWithBadge(selectedBadge!)}
+                          disabled={registering}
+                          className="btn-primary py-4 font-black uppercase italic tracking-tighter rounded-2xl shadow-lg shadow-primary/20"
+                        >
+                          {registering ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Confirm Join'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )
                 )}
               </motion.div>
             </div>
@@ -544,12 +655,12 @@ export default function TournamentDetails() {
               <div className="p-6 space-y-4">
                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Prize Pool</h3>
                 <p className="text-4xl font-black text-emerald-500 italic leading-none">
-                  {formatCurrency(tournament.prize_pool || 0)}
+                  {formatCurrency(currentPrizePool)}
                 </p>
                 <div className="space-y-2">
-                  <PrizeRow pos="1st" percent={tournament.prize_1st_percent || 60} pool={tournament.prize_pool || 0} />
-                  <PrizeRow pos="2nd" percent={tournament.prize_2nd_percent || 25} pool={tournament.prize_pool || 0} />
-                  <PrizeRow pos="3rd" percent={tournament.prize_3rd_percent || 15} pool={tournament.prize_pool || 0} />
+                  <PrizeRow pos="1st" percent={tournament.prize_1st_percent || 60} pool={currentPrizePool} />
+                  <PrizeRow pos="2nd" percent={tournament.prize_2nd_percent || 25} pool={currentPrizePool} />
+                  <PrizeRow pos="3rd" percent={tournament.prize_3rd_percent || 15} pool={currentPrizePool} />
                 </div>
               </div>
               
