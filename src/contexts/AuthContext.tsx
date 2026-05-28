@@ -4,6 +4,7 @@ import { ensureAuthenticated, supabase } from '../lib/supabase';
 import { Profile } from '../types/database';
 import { queryClient } from '../lib/queryClient';
 import { requestNotificationPermission, listenForForegroundNotifications } from '../lib/notifications';
+import { Trophy, Zap, Loader2, Sparkles, AlertCircle } from 'lucide-react';
 
 // Professional fallback timeout engine to prevent hangs and guarantee resolution
 function withTimeout<T>(promise: Promise<T> | PromiseLike<T>, ms: number, fallbackValue: T): Promise<T> {
@@ -47,6 +48,158 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function UsernameSetup({ userId, onComplete }: { userId: string; onComplete: (newUsername: string) => void }) {
+  const [username, setUsername] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isSuccess, setIsSuccess] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setChecking(true);
+
+    const val = username.trim().toLowerCase();
+    if (val.length < 3) {
+      setError('Username must be at least 3 characters.');
+      setChecking(false);
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(val)) {
+      setError('Username can only contain letters, numbers, and underscores.');
+      setChecking(false);
+      return;
+    }
+
+    try {
+      // 1. Check uniqueness
+      const { data: existing, error: checkError } = await (supabase as any)
+        .from('profiles')
+        .select('username')
+        .eq('username', val)
+        .maybeSingle();
+
+      if (checkError) {
+        console.error('Check failed:', checkError);
+      }
+
+      if (existing) {
+        setError('This username is already taken. Try another unique codename.');
+        setChecking(false);
+        return;
+      }
+
+      // 2. Perform database update
+      const { error: updateError } = await (supabase as any)
+        .from('profiles')
+        .update({ username: val })
+        .eq('id', userId);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      setIsSuccess(true);
+      setTimeout(() => {
+        onComplete(val);
+      }, 1000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to update username. Please retry.');
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-[#05060b] z-[9999] flex items-center justify-center p-4 overflow-y-auto">
+      {/* Background glow accents */}
+      <div className="absolute top-[10%] left-[20%] w-[350px] h-[350px] bg-amber-500/5 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute bottom-[20%] right-[10%] w-[400px] h-[400px] bg-zinc-800/10 rounded-full blur-[160px] pointer-events-none" />
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:5rem_5rem] pointer-events-none" />
+
+      <div className="w-full max-w-md bg-[#0b0c11]/95 backdrop-blur-2xl border border-zinc-800/80 rounded-[2.5rem] p-8 sm:p-10 shadow-[0_20px_50px_rgba(212,175,55,0.05)] relative z-10 text-center">
+        
+        {/* Header Icon */}
+        <div className="relative inline-flex items-center justify-center mb-6">
+          <div className="absolute inset-0 bg-amber-500/15 blur-xl rounded-full" />
+          <div className="relative w-16 h-16 rounded-full bg-gradient-to-tr from-[#1c1d24] to-[#12131a] border border-[#d4af37]/40 shadow-xl flex items-center justify-center">
+            <Trophy className="w-8 h-8 text-[#d4af37]" />
+          </div>
+        </div>
+
+        {/* Headings */}
+        <div className="space-y-2 mb-8">
+          <h2 className="text-3xl font-black italic text-[#ededef] uppercase tracking-tight leading-none">
+            CHOOSE YOUR CODENAME
+          </h2>
+          <p className="text-slate-400 text-xs font-semibold leading-relaxed uppercase tracking-wider">
+            Setup your eFootball gamer ID to access tournaments.
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2 text-left">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] ml-1">
+              Tournaments Username
+            </label>
+            <div className="relative group">
+              <div className="absolute inset-0 bg-amber-500/5 rounded-2xl opacity-100 pointer-events-none" />
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
+                <span className="text-[#d4af37] font-black italic text-lg leading-none">@</span>
+              </div>
+              <input
+                type="text"
+                required
+                disabled={checking || isSuccess}
+                className="w-full bg-[#111218]/80 border border-zinc-800 rounded-2xl pl-12 pr-4 py-4 focus:ring-1 focus:ring-[#d4af37]/50 focus:border-[#d4af37]/50 outline-none transition-all text-white font-medium relative z-10"
+                placeholder="Unique codename"
+                value={username}
+                onChange={(e) => {
+                  setError(null);
+                  setUsername(e.target.value.trim().toLowerCase());
+                }}
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="bg-red-500/5 border border-red-500/10 text-red-500 text-[11px] font-bold p-3 rounded-xl flex items-center space-x-2 text-left">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {isSuccess && (
+            <div className="bg-emerald-500/5 border border-emerald-500/10 text-emerald-400 text-[11px] font-bold p-3 rounded-xl flex items-center space-x-2 text-left">
+              <Sparkles className="w-4 h-4 shrink-0 text-emerald-400" />
+              <span>Username chosen! Entering arena...</span>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={checking || isSuccess || !username}
+            className="w-full relative group overflow-hidden rounded-2xl h-14 flex items-center justify-center cursor-pointer transition-all duration-200"
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-[#ffd700] via-[#dfb021] to-[#b8860b] transition-transform group-hover:scale-105" />
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+            <span className="relative z-10 text-black text-sm font-black uppercase italic tracking-wider flex items-center gap-1.5">
+              {checking ? (
+                <>Verifying ID... <Loader2 className="w-4 h-4 animate-spin text-black" /></>
+              ) : isSuccess ? (
+                <>Profile Configured</>
+              ) : (
+                <>Launch My Career <Zap className="w-4 h-4 fill-current text-black animate-pulse" /></>
+              )}
+            </span>
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 interface AuthProviderProps {
   children: React.ReactNode;
   onNavigate?: (path: string) => void;
@@ -58,6 +211,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
   const provisioningRef = React.useRef<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [refetchSignal, setRefetchSignal] = useState(0);
+  const [needsUsernameSetup, setNeedsUsernameSetup] = useState(false);
 
   // Initialize FCM Push Notifications once after user is successfully authenticated
   useEffect(() => {
@@ -121,6 +275,11 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         if (data) {
           if (!isMounted) return null;
           setProfile(data);
+          if (!data.username || data.username.startsWith('temp_user_') || data.username === '') {
+            setNeedsUsernameSetup(true);
+          } else {
+            setNeedsUsernameSetup(false);
+          }
           return data;
         }
         return null;
@@ -318,8 +477,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       if (!existingProfile) {
         const pendingUsername = localStorage.getItem('pending_oauth_username');
         const metadataUsername = user.user_metadata?.username;
-        const baseUsername = user.email?.split('@')[0] || 'user';
-        const finalUsername = pendingUsername || metadataUsername || `${baseUsername}_${user.id.slice(0, 4)}`;
+        const finalUsername = pendingUsername || metadataUsername || `temp_user_${user.id.slice(0, 8)}`;
 
         const insertPromise = (supabase as any).from('profiles').insert({
           id: user.id,
@@ -335,7 +493,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         const pendingUsername = localStorage.getItem('pending_oauth_username');
         const metadataUsername = user.user_metadata?.username;
         const targetUsername = pendingUsername || metadataUsername;
-        if (targetUsername && (!existingProfile.username || existingProfile.username.includes('_'))) {
+        if (targetUsername && (!existingProfile.username || existingProfile.username.includes('_') || existingProfile.username.startsWith('temp_user_'))) {
            const updatePromise = (supabase as any).from('profiles').update({ username: targetUsername }).eq('id', user.id);
            await withTimeout(updatePromise, 3000, null);
            if (pendingUsername) {
@@ -381,6 +539,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     // 1. Clear state immediately to update UI
     setUser(null);
     setProfile(null);
+    setNeedsUsernameSetup(false);
     
     try {
       // 2. Attempt Supabase sign out with a timeout to prevent hanging
@@ -438,7 +597,20 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     refetchSignal,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {needsUsernameSetup && user && (
+        <UsernameSetup 
+          userId={user.id} 
+          onComplete={(newUsername) => {
+            setProfile(p => p ? { ...p, username: newUsername } : null);
+            setNeedsUsernameSetup(false);
+          }} 
+        />
+      )}
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useRefetchOnFocus(callback: () => void) {
