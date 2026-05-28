@@ -173,91 +173,295 @@ export default function Landing() {
 
 
       {/* 2. HERO SECTION */}
-      <section className="relative min-h-[90vh] flex items-center justify-center py-20 px-6 md:px-12 overflow-hidden border-b border-white/5">
-        {/* Futurisic Neon esports background elements */}
-        <div className="absolute inset-0 bg-[#040511]" />
+      <section className="relative min-h-[95vh] lg:min-h-screen flex items-center justify-center py-24 px-4 sm:px-6 md:px-12 overflow-hidden border-b border-white/5">
+        {/* Cinematic deep dark obsidian graphite pitch background */}
+        <div className="absolute inset-0 bg-[#05060b]" />
         
-        {/* Cyber Neon Glows */}
-        <div className="absolute top-[10%] left-[20%] w-[350px] h-[350px] bg-[#00f0ff]/10 rounded-full blur-[140px] pointer-events-none" />
-        <div className="absolute bottom-[20%] right-[10%] w-[400px] h-[400px] bg-[#22c55e]/10 rounded-full blur-[160px] pointer-events-none" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(16,185,129,0.04)_0%,transparent_70%)] pointer-events-none" />
+        {/* Layered Golden & Obsidian Lighting system */}
+        <div className="absolute top-[5%] left-[10%] w-[450px] h-[450px] bg-amber-500/5 rounded-full blur-[160px] pointer-events-none" />
+        <div className="absolute bottom-[10%] right-[15%] w-[500px] h-[500px] bg-[#d4af37]/5 rounded-full blur-[180px] pointer-events-none" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-zinc-800/10 rounded-full blur-[200px] pointer-events-none" />
         
-        {/* Background Grid Accent */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:4rem_4rem] pointer-events-none" />
+        {/* Background Grey Esports Grid Aspect */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:5rem_5rem] pointer-events-none" />
 
-        {/* Diagonal lightning speed lines inside the container visually referencing eFootball VS energy */}
-        <div className="absolute inset-x-0 top-0 h-full overflow-hidden opacity-20 pointer-events-none">
-          <div className="absolute top-1/2 left-1/4 w-[1px] h-32 bg-gradient-to-b from-transparent via-cyan-400 to-transparent skew-x-30 transform -translate-y-1/2 animate-pulse" />
-          <div className="absolute top-1/3 right-1/4 w-[1px] h-48 bg-gradient-to-b from-transparent via-emerald-400 to-transparent -skew-x-30 transform -translate-y-1/2 animate-pulse" />
+        {/* Dynamic Stadium Line Vector pitch diagram (Fluorescent SVG lines in perspective) styled with gold and platinum accents */}
+        <div className="absolute inset-x-0 bottom-0 h-[45%] md:h-[55%] pointer-events-none opacity-25 overflow-hidden">
+          <svg className="w-full h-full" viewBox="0 0 1200 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {/* Perspectival grid pitch rendering */}
+            <g transform="translate(600, 450) scale(1, 0.45) rotate(0)">
+              {/* Outer boundary of pitch */}
+              <rect x="-550" y="-400" width="1100" height="800" rx="4" stroke="url(#pitchGlow)" strokeWidth="2.5" />
+              {/* Center Circle */}
+              <circle cx="0" cy="0" r="160" stroke="#d4af37" strokeWidth="2" strokeOpacity="0.4" />
+              <circle cx="0" cy="0" r="4" fill="#d4af37" />
+              {/* Center Line */}
+              <line x1="-550" y1="0" x2="550" y2="0" stroke="url(#centerLineGlow)" strokeWidth="2" />
+              {/* Penalty Boxes & Goal Areas */}
+              <rect x="-550" y="-180" width="160" height="360" stroke="#a3a3c2" strokeWidth="1.5" strokeOpacity="0.25" />
+              <rect x="390" y="-180" width="160" height="360" stroke="#a3a3c2" strokeWidth="1.5" strokeOpacity="0.25" />
+              {/* Corner Arcs */}
+              <path d="M -550 -370 A 30 30 0 0 1 -520 -400" stroke="#d4af37" strokeWidth="2" strokeOpacity="0.3" />
+              <path d="M 550 -370 A 30 30 0 0 0 520 -400" stroke="#d4af37" strokeWidth="2" strokeOpacity="0.3" />
+              <path d="M -550 370 A 30 30 0 0 0 -520 400" stroke="#d4af37" strokeWidth="2" strokeOpacity="0.3" />
+              <path d="M 550 370 A 30 30 0 0 1 520 400" stroke="#d4af37" strokeWidth="2" strokeOpacity="0.3" />
+            </g>
+            <defs>
+              <linearGradient id="pitchGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#8a8a8a" />
+                <stop offset="50%" stopColor="#d4af37" />
+                <stop offset="100%" stopColor="#4a4a4a" />
+              </linearGradient>
+              <linearGradient id="centerLineGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#333333" stopOpacity="0.1" />
+                <stop offset="50%" stopColor="#d4af37" stopOpacity="0.5" />
+                <stop offset="100%" stopColor="#333333" stopOpacity="0.1" />
+              </linearGradient>
+            </defs>
+          </svg>
         </div>
 
-        <div className="max-w-5xl mx-auto text-center relative z-10 space-y-8">
-          {/* Badge indicator */}
-          <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-primary/20 to-cyan-500/10 border border-primary/30 rounded-full px-5 py-2">
-            <Flame className="w-4 h-4 text-primary animate-bounce" />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Global Gaming Aggregation Active</span>
+        {/* Stadium Golden Spotlight Sweep Effects */}
+        <motion.div 
+          animate={{ rotate: [-6, 12, -12, -6], opacity: [0.08, 0.18, 0.08] }}
+          transition={{ repeat: Infinity, duration: 10, ease: "easeInOut" }}
+          className="absolute top-0 left-[15%] w-[1.5px] h-[800px] bg-gradient-to-b from-[#d4af37] via-[#d4af37]/20 to-transparent origin-top blur-[1px] pointer-events-none"
+        />
+        <motion.div 
+          animate={{ rotate: [8, -10, 10, 8], opacity: [0.07, 0.15, 0.07] }}
+          transition={{ repeat: Infinity, duration: 12, ease: "easeInOut" }}
+          className="absolute top-0 right-[15%] w-[1.5px] h-[800px] bg-gradient-to-b from-amber-500 via-amber-500/20 to-transparent origin-top blur-[1px] pointer-events-none"
+        />
+        <motion.div 
+          animate={{ scaleX: [1, 1.3, 0.9, 1], opacity: [0.05, 0.12, 0.05] }}
+          transition={{ repeat: Infinity, duration: 7, ease: "easeInOut" }}
+          className="absolute top-0 left-1/2 -translate-x-1/2 w-[380px] h-[600px] bg-gradient-to-b from-amber-400/10 via-transparent to-transparent origin-top blur-3xl pointer-events-none"
+        />
+
+        {/* Micro Floating Golden Dust Particles */}
+        {typeof window !== 'undefined' && [...Array(14)].map((_, i) => {
+          const delay = i * 0.7;
+          const duration = 12 + (i % 5) * 2;
+          const leftVal = 5 + (i * 7) % 90;
+          return (
+            <motion.div
+              key={i}
+              initial={{ y: "110%", opacity: 0, scale: 0.5 }}
+              animate={{ 
+                y: "-10%", 
+                opacity: [0, 0.35, 0.35, 0],
+                scale: [0.5, 1, 1, 0.5] 
+              }}
+              transition={{ 
+                repeat: Infinity, 
+                duration, 
+                delay, 
+                ease: "linear" 
+              }}
+              className="absolute w-1 h-1 rounded-full bg-amber-400/60 pointer-events-none"
+              style={{ left: `${leftVal}%` }}
+            />
+          );
+        })}
+
+        <div className="max-w-6xl mx-auto text-center relative z-10 space-y-10 px-2">
+          {/* Gold & Carbon Marquee Indicator Badge */}
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            className="inline-flex items-center space-x-2.5 bg-[#12131a] border border-[#d4af37]/30 backdrop-blur-md rounded-full px-5 py-2.5 shadow-[0_0_20px_rgba(212,175,55,0.08)]"
+          >
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#d4af37] opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#d4af37]"></span>
+            </span>
+            <span className="text-[10px] sm:text-xs font-mono font-bold uppercase tracking-[0.2em] text-[#d4af37]">
+              CHAMPION DIVISION S1 ACTIVE • <span className="text-slate-300 font-extrabold font-sans">15,480 PLAYERS ONLINE</span>
+            </span>
+          </motion.div>
+
+          {/* Epic Sports Typography Header / Gold & Grey Gradient */}
+          <div className="space-y-4">
+            <motion.h1 
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1, delay: 0.15 }}
+              className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black italic uppercase tracking-tighter leading-[0.85] text-[#ededef]"
+            >
+              PLAY CRAZY <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#e5c158] via-[#f7e09a] to-[#bfa141] filter drop-shadow-[0_0_15px_rgba(212,175,55,0.25)] font-black">
+                eFOOTBALL
+              </span> <br />
+              TOURNAMENTS WORLDWIDE
+            </motion.h1>
           </div>
 
-          {/* Headline */}
-          <h1 className="text-4xl sm:text-6xl md:text-8xl font-black italic uppercase tracking-tighter leading-[0.9] text-white">
-            PLAY CRAZY <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-emerald-400 to-cyan-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]">eFOOTBALL</span> TOURNAMENTS WORLDWIDE
-          </h1>
+          {/* Graphite border accented subtext */}
+          <motion.p 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1, delay: 0.3 }}
+            className="text-sm md:text-lg text-slate-300 max-w-2xl mx-auto font-medium tracking-wide leading-relaxed border-x-0 sm:border-y border-zinc-700/30 sm:py-4 px-4 sm:px-0"
+          >
+            Join competitive escrow tournaments, win gold prize tokens, showcase your validated gamer statistics, and compete with elite football players globally.
+          </motion.p>
 
-          {/* Subtext */}
-          <p className="text-sm md:text-xl text-[#a3a3c2] max-w-2xl mx-auto font-bold uppercase tracking-wider leading-relaxed">
-            Join competitive tournaments, win prizes, showcase your skills, and compete with players globally.
-          </p>
-
-          {/* Buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+          {/* Actions - Graphite & Golden Buttons */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1, delay: 0.4 }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-3 max-w-sm sm:max-w-none mx-auto"
+          >
             <button 
               onClick={handleJoinNow}
-              className="w-full sm:w-auto px-8 py-5 bg-primary hover:bg-primary-hover text-black font-black uppercase italic tracking-tighter rounded-2xl shadow-xl shadow-primary/20 hover:scale-105 transition-all text-base cursor-pointer flex items-center justify-center gap-2"
+              className="group relative w-full sm:w-auto px-10 py-5 bg-gradient-to-r from-[#ffd700] via-[#dfb021] to-[#b8860b] text-black font-black uppercase italic tracking-wider rounded-2xl shadow-[0_0_30px_rgba(212,175,55,0.2)] hover:shadow-[0_0_40px_rgba(212,175,55,0.4)] hover:scale-[1.03] active:scale-95 transition-all text-base cursor-pointer overflow-hidden flex items-center justify-center gap-2.5 duration-200"
             >
-              Join Now <Zap className="w-5 h-5 fill-current" />
+              <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out" />
+              <span className="relative z-10 flex items-center gap-2 font-black">
+                Join Now <Zap className="w-5 h-5 fill-current animate-pulse text-black" />
+              </span>
             </button>
             <button 
               onClick={() => scrollToSection('tournament-types')}
-              className="w-full sm:w-auto px-8 py-5 bg-white/5 border border-white/10 hover:border-[#a3a3c2]/50 hover:bg-white/10 text-white font-black uppercase italic tracking-tighter rounded-2xl transition-all text-base cursor-pointer"
+              className="group relative w-full sm:w-auto px-10 py-5 bg-[#171821]/80 border border-zinc-700 hover:border-[#d4af37]/50 hover:bg-[#d4af37]/5 text-slate-200 font-black uppercase italic tracking-wider rounded-2xl hover:scale-[1.03] active:scale-95 transition-all text-base cursor-pointer overflow-hidden flex items-center justify-center gap-2 duration-200"
             >
-              Explore Tournaments
+              <span className="relative z-10 flex items-center gap-1.5">
+                Explore Tournaments <ChevronRight className="w-5 h-5 text-[#d4af37] group-hover:translate-x-1 transition-transform" />
+              </span>
             </button>
-          </div>
+          </motion.div>
 
-          {/* Render mock visual of football stadium perspective / VS Arena */}
-          <div className="pt-12 max-w-4xl mx-auto">
-            <div className="relative rounded-[2.5rem] bg-gradient-to-b from-white/10 to-[#040511] p-1 border border-white/10 overflow-hidden shadow-2xl">
-              <div className="bg-[#0c0e22] rounded-[2.3rem] overflow-hidden p-8 sm:p-12 relative min-h-[300px] flex flex-col justify-end">
-                {/* Stadium neon lighting effect inside */}
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,#22c55e10_0%,transparent_70%)] pointer-events-none" />
-                <div className="absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-cyan-500/10 to-transparent pointer-events-none" />
+          {/* eFootball Broadcast Match HUD Deck Overlay in grey and gold */}
+          <motion.div 
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1.2, delay: 0.55 }}
+            className="pt-14 max-w-4xl mx-auto"
+          >
+            <div className="relative rounded-[2rem] bg-gradient-to-b from-zinc-700/30 via-amber-500/5 to-[#05060b] p-1 border border-zinc-800 overflow-hidden shadow-[0_20px_50px_rgba(212,175,55,0.05)]">
+              {/* Gold glow halo behind dashboard */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[85%] h-[85%] bg-amber-500/5 rounded-full blur-[80px] pointer-events-none" />
+              
+              <div className="bg-[#0b0c11]/95 rounded-[1.8rem] overflow-hidden relative min-h-[380px] sm:min-h-[420px] flex flex-col justify-between p-4 sm:p-6 md:p-8">
+                {/* Stadium aura gold atmosphere filters */}
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,rgba(212,175,55,0.08)_0%,transparent_65%)] pointer-events-none" />
+                <div className="absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-amber-500/5 to-transparent pointer-events-none" />
                 
-                {/* Visual Placeholder for Image */}
-                <div className="absolute inset-0 flex items-center justify-center">
+                {/* Background stadium image with low visibility grey mask */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
                   <img 
                     src="/assets/homepage/hero-banner/file_00000000d8b071fda6b369cae5becea2.png" 
                     alt="eFootball Esports Stadium Arena" 
-                    className="w-full h-full object-cover opacity-50"
+                    className="w-full h-full object-cover opacity-20 filter grayscale"
                     referrerPolicy="no-referrer"
                   />
                 </div>
-
-                <div className="relative z-10 grid grid-cols-3 items-center gap-2 max-w-2xl mx-auto border-t border-white/10 pt-6">
-                  <div className="text-left">
-                    <p className="text-lg sm:text-2xl font-black italic text-cyan-400">CHAMPION</p>
-                    <p className="text-[9px] font-black text-text-muted uppercase tracking-widest">Global Elite</p>
+                
+                {/* 1. LOBBY HEADER BAR OF HUD DISPLAY */}
+                <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-3 text-white border-b border-zinc-800 pb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                    <span className="text-[10px] font-mono tracking-widest text-slate-400 uppercase font-black">
+                      VIRTUAL LOBBY // SERVER: GOLD-CENTRAL // ROOM #1209
+                    </span>
                   </div>
-                  <div className="text-center bg-[#22c55e]/10 border border-emerald-500/20 py-2 rounded-xl">
-                    <span className="text-xs sm:text-sm font-black text-emerald-400 uppercase tracking-widest">VS MATCH</span>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg sm:text-2xl font-black italic text-[#fe2c55]">CHALLENGER</p>
-                    <p className="text-[9px] font-black text-text-muted uppercase tracking-widest">Rising Star</p>
+                  <div className="bg-[#171821] border border-[#d4af37]/20 px-3 py-1 rounded-md">
+                    <span className="text-[9px] font-mono tracking-widest text-[#d4af37] font-extrabold">
+                      MATCHMAKING PING: 12ms
+                    </span>
                   </div>
                 </div>
+
+                {/* 2. MATCHUP CONTENT */}
+                <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 items-center gap-6 py-6 md:py-10">
+                  
+                  {/* Participant Left: Champion */}
+                  <div className="flex flex-col items-center md:items-end text-center md:text-right space-y-3">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-amber-400/10 blur-md rounded-full" />
+                      <div className="relative w-16 h-16 rounded-full bg-gradient-to-tr from-[#1c1d24] to-[#12131a] border border-[#d4af37]/50 p-0.5 shadow-lg flex items-center justify-center">
+                        <Trophy className="w-8 h-8 text-[#d4af37]" />
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-black tracking-tight text-white mb-0.5">KINGSLEY_FC</h4>
+                      <p className="text-[10px] uppercase font-mono tracking-widest text-[#d4af37] font-black">
+                        Rank: Grandmaster S1
+                      </p>
+                      <div className="flex items-center gap-1 justify-center md:justify-end mt-1 text-[9px] font-bold text-slate-400">
+                        <span>Win-rate: 76.5%</span> • <span>Streak: 7W</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* VS Middle Circle Deck */}
+                  <div className="flex flex-col items-center justify-center space-y-3">
+                    <div className="relative flex items-center justify-center h-20 w-20">
+                      {/* Interactive glowing spinning ring */}
+                      <motion.div 
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+                        className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4af37]/30"
+                      />
+                      <div className="absolute inset-2 bg-[#05060b] border border-zinc-800 rounded-full flex items-center justify-center shadow-inner">
+                        <span className="text-xl sm:text-2xl font-black italic text-transparent bg-clip-text bg-gradient-to-r from-[#ffd700] to-slate-400">
+                          VS
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-center space-y-1">
+                      <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-[10px] tracking-widest text-amber-400 font-mono font-black uppercase">
+                        $500 PRIZE POOL
+                      </span>
+                      <p className="text-[9px] text-slate-400 uppercase tracking-wider font-bold">
+                        ESTIMATED START: IMMEDIATE
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Participant Right: Challenger */}
+                  <div className="flex flex-col items-center md:items-start text-center md:text-left space-y-3">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-zinc-600/10 blur-md rounded-full" />
+                      <div className="relative w-16 h-16 rounded-full bg-gradient-to-tr from-[#1c1d24] to-[#12131a] border border-zinc-600 p-0.5 shadow-lg flex items-center justify-center">
+                        <Activity className="w-8 h-8 text-slate-300" />
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-black tracking-tight text-white mb-0.5">NEXT_GEN_PRO</h4>
+                      <p className="text-[10px] uppercase font-mono tracking-widest text-slate-400 font-black">
+                        Rank: Challenger V
+                      </p>
+                      <div className="flex items-center gap-1 justify-center md:justify-start mt-1 text-[9px] font-bold text-slate-400">
+                        <span>Win-rate: 71.2%</span> • <span>Streak: 4W</span>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* 3. LOWER FOOTER OF SPECTATOR MATCH INFO */}
+                <div className="relative z-10 grid grid-cols-3 items-center gap-3 border-t border-zinc-800 pt-4 text-center">
+                  <div className="text-left">
+                    <p className="text-xs sm:text-sm font-black italic text-[#d4af37]">CHAMPION DECK</p>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Global Elite Group</p>
+                  </div>
+                  <div className="flex justify-center">
+                    <span className="px-4 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-[9px] sm:text-xs font-black text-white uppercase tracking-widest">
+                      EFOOTBALL MOBILE & CONSOLE
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs sm:text-sm font-black italic text-slate-300">CHALLENGER DECK</p>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Rising Division Star</p>
+                  </div>
+                </div>
+
               </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       </section>
 

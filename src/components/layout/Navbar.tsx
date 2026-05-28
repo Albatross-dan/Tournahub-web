@@ -263,7 +263,7 @@ export default function Navbar() {
           </span>
         </div>
         
-        {balance !== null && balance < 5 && (
+        {balance !== null && balance === 0 && (
           <motion.div 
             initial={{ opacity: 0 }} 
             animate={{ opacity: 1 }}
