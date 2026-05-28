@@ -53,12 +53,23 @@ export async function requestNotificationPermission(userId: string): Promise<str
     // 4. Custom registration of the Service Worker to guarantee it resolves correctly in Vite/Vercel
     let swRegistration: ServiceWorkerRegistration | undefined;
     try {
-      swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+      const config = {
+        apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY || '',
+        authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN || '',
+        projectId: (import.meta as any).env.VITE_FIREBASE_PROJECT_ID || '',
+        storageBucket: (import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET || '',
+        messagingSenderId: (import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+        appId: (import.meta as any).env.VITE_FIREBASE_APP_ID || '',
+      };
+
+      const swUrl = `/firebase-messaging-sw.js?apiKey=${encodeURIComponent(config.apiKey)}&authDomain=${encodeURIComponent(config.authDomain)}&projectId=${encodeURIComponent(config.projectId)}&storageBucket=${encodeURIComponent(config.storageBucket)}&messagingSenderId=${encodeURIComponent(config.messagingSenderId)}&appId=${encodeURIComponent(config.appId)}`;
+
+      swRegistration = await navigator.serviceWorker.register(swUrl);
       // Wait for service worker to finish activating if needed
       await navigator.serviceWorker.ready;
       console.log('[Notifications] Service Worker registered successfully:', swRegistration.scope);
     } catch (swErr) {
-      console.warn('[Notifications] Custom Service Worker registration failed (falling back to automatic default):', swErr);
+      console.warn('[Notifications] Custom Service Worker registration failed:', swErr);
     }
 
     // 5. Generate FCM token
@@ -73,9 +84,28 @@ export async function requestNotificationPermission(userId: string): Promise<str
     }
 
     console.log('[Notifications] FCM token successfully generated.');
+    localStorage.setItem('fcm_token', token);
 
     // 6. Save and Sync to Supabase table: 'notification_tokens'
     await syncTokenToSupabase(userId, token);
+
+    // 7. Handle token refresh inside callback if supported
+    if (typeof (messaging as any).onTokenRefresh === 'function') {
+      (messaging as any).onTokenRefresh(async () => {
+        try {
+          const newToken = await getToken(messaging, { vapidKey });
+          if (newToken) {
+            console.log('[Notifications] FCM Token refreshed.');
+            localStorage.setItem('fcm_token', newToken);
+            await syncTokenToSupabase(userId, newToken);
+          }
+        } catch (err) {
+          console.warn('[Notifications] Token refresh handling failed:', err);
+        }
+      });
+    } else {
+      console.log('[Notifications] FCM onTokenRefresh is not natively present on this messaging version. Auto-refresh relies on getToken callbacks.');
+    }
 
     return token;
   } catch (error: any) {
@@ -92,60 +122,54 @@ async function syncTokenToSupabase(userId: string, token: string): Promise<void>
   try {
     const supabaseAny = supabase as any;
     
-    // Check if the token already exists in database
-    const { data: existing, error: fetchError } = await supabaseAny
-      .from('notification_tokens')
-      .select('*')
-      .eq('token', token)
-      .maybeSingle();
+    const { error } = await supabaseAny.from('notification_tokens').upsert(
+      {
+        user_id:     userId,
+        token:       token,
+        platform:    'web',
+        device_name: navigator.userAgent.slice(0, 100),
+        app_version: '1.0.0',
+        updated_at:  new Date().toISOString()
+      },
+      { onConflict: 'user_id,token' }
+    );
 
-    if (fetchError) {
-      // Fallback: simple upsert on generic database error (permission or table exist checks)
-      console.log('[Notifications] Query error during token checking. Attempting fallback upsert...', fetchError.message);
-      await supabaseAny
-        .from('notification_tokens')
-        .upsert({ user_id: userId, token, updated_at: new Date().toISOString() });
+    if (error) {
+      throw error;
+    }
+    console.log('[Notifications] FCM token successfully registered/synced to Supabase.');
+  } catch (syncErr) {
+    console.error('[Notifications] Supabase token sync operation failed safely:', syncErr);
+  }
+}
+
+/**
+ * Disposes of the FCM token registration on logout to prevent subsequent invalid deliveries.
+ */
+export async function deleteFcmTokenOnLogout(userId: string): Promise<void> {
+  try {
+    const token = localStorage.getItem('fcm_token');
+    if (!token) {
+      console.log('[Notifications] No local FCM token stored. Skipping logout token cleanup.');
       return;
     }
 
-    if (!existing) {
-      // Insert new token
-      const { error: insertError } = await supabaseAny
-        .from('notification_tokens')
-        .insert({
-          user_id: userId,
-          token,
-          updated_at: new Date().toISOString()
-        });
+    console.log('[Notifications] Deleting FCM token registration for user', userId);
+    const { error } = await (supabase as any)
+      .from('notification_tokens')
+      .delete()
+      .eq('user_id', userId)
+      .eq('token', token);
 
-      if (insertError) {
-        console.warn('[Notifications] Insert failed. Attempting fallback upsert...', insertError.message);
-        await supabaseAny
-          .from('notification_tokens')
-          .upsert({ user_id: userId, token, updated_at: new Date().toISOString() });
-      } else {
-        console.log('[Notifications] New token and user mapping saved successfully.');
-      }
-    } else if (existing.user_id !== userId) {
-      // Unlink and update to new user identifier if another user is current on this browser key
-      const { error: updateError } = await supabaseAny
-        .from('notification_tokens')
-        .update({
-          user_id: userId,
-          updated_at: new Date().toISOString()
-        })
-        .eq('token', token);
-
-      if (updateError) {
-        console.warn('[Notifications] Token owner update failed:', updateError.message);
-      } else {
-        console.log('[Notifications] Updated token user mapping successfully.');
-      }
+    if (error) {
+      console.warn('[Notifications] Refusal response during FCM Token database deletion:', error.message);
     } else {
-      console.log('[Notifications] Token is already up-to-date in database.');
+      console.log('[Notifications] FCM token successfully removed from Supabase backend storage.');
     }
-  } catch (syncErr) {
-    console.error('[Notifications] Supabase token sync operation failed safely:', syncErr);
+  } catch (cleanupErr) {
+    console.warn('[Notifications] Safely caught error during FCM token cleanup:', cleanupErr);
+  } finally {
+    localStorage.removeItem('fcm_token');
   }
 }
 

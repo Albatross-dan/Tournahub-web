@@ -3,7 +3,7 @@ import { User } from '@supabase/supabase-js';
 import { ensureAuthenticated, supabase } from '../lib/supabase';
 import { Profile } from '../types/database';
 import { queryClient } from '../lib/queryClient';
-import { requestNotificationPermission, listenForForegroundNotifications } from '../lib/notifications';
+import { requestNotificationPermission, listenForForegroundNotifications, deleteFcmTokenOnLogout } from '../lib/notifications';
 import { Trophy, Zap, Loader2, Sparkles, AlertCircle } from 'lucide-react';
 
 // Professional fallback timeout engine to prevent hangs and guarantee resolution
@@ -340,6 +340,14 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         return;
       }
 
+      if (event === 'SIGNED_IN') {
+        if (session?.user) {
+          requestNotificationPermission(session.user.id).catch(err => {
+            console.warn('[AuthContext] Triggering FCM permission setup on SIGNED_IN failed safely:', err);
+          });
+        }
+      }
+
       if (event === 'SIGNED_OUT') {
         if (!isMounted) return;
         setUser(null);
@@ -536,11 +544,18 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
 
   const signOut = async () => {
     console.log('[Auth] Initiating sign out sequence...');
+    const currentUserId = user?.id;
     
     // 1. Clear state immediately to update UI
     setUser(null);
     setProfile(null);
     setNeedsUsernameSetup(false);
+    
+    if (currentUserId) {
+      deleteFcmTokenOnLogout(currentUserId).catch(err => {
+        console.warn('[AuthContext] FCM token cleanup on logout failed safely:', err);
+      });
+    }
     
     try {
       // 2. Attempt Supabase sign out with a timeout to prevent hanging
@@ -591,13 +606,13 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
 
   const refreshAuth = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setUser(session.user);
+      const { data: { user: freshUser } } = await supabase.auth.getUser();
+      if (freshUser) {
+        setUser(freshUser);
         const { data: rawData } = await (supabase as any)
           .from('profiles')
           .select('*')
-          .eq('id', session.user.id)
+          .eq('id', freshUser.id)
           .single();
         const profileData = rawData as any;
         if (profileData) {

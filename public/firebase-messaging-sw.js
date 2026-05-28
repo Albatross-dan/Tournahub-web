@@ -10,22 +10,24 @@ importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
 /**
- * FIREBASE CONFIGURATION PLACEHOLDERS
- * 
- * Replace these placeholders with your real Firebase Web App configuration.
- * For production, configure these keys in your deployment scripting or replace them directly.
+ * Configure Firebase app context.
+ * Parses query parameters first for dynamic runtime setups, or falls back to placeholders.
  */
+const params = new URLSearchParams(self.location.search);
+
 const firebaseConfig = {
-  apiKey: "PLACEHOLDER_VITE_FIREBASE_API_KEY",
-  authDomain: "PLACEHOLDER_VITE_FIREBASE_AUTH_DOMAIN",
-  projectId: "PLACEHOLDER_VITE_FIREBASE_PROJECT_ID",
-  storageBucket: "PLACEHOLDER_VITE_FIREBASE_STORAGE_BUCKET",
-  messagingSenderId: "PLACEHOLDER_VITE_FIREBASE_MESSAGING_SENDER_ID",
-  appId: "PLACEHOLDER_VITE_FIREBASE_APP_ID"
+  apiKey: params.get('apiKey') || "PLACEHOLDER_VITE_FIREBASE_API_KEY",
+  authDomain: params.get('authDomain') || "PLACEHOLDER_VITE_FIREBASE_AUTH_DOMAIN",
+  projectId: params.get('projectId') || "PLACEHOLDER_VITE_FIREBASE_PROJECT_ID",
+  storageBucket: params.get('storageBucket') || "PLACEHOLDER_VITE_FIREBASE_STORAGE_BUCKET",
+  messagingSenderId: params.get('messagingSenderId') || "PLACEHOLDER_VITE_FIREBASE_MESSAGING_SENDER_ID",
+  appId: params.get('appId') || "PLACEHOLDER_VITE_FIREBASE_APP_ID"
 };
 
-// Check if configurator has replaced placeholder keys
-const isValidConfig = firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('PLACEHOLDER_');
+// Check if configurator has replaced placeholder keys or if we received real keys from query parameters
+const isValidConfig = firebaseConfig.apiKey && 
+                      !firebaseConfig.apiKey.startsWith('PLACEHOLDER_') && 
+                      firebaseConfig.apiKey !== "";
 
 if (isValidConfig) {
   try {
@@ -37,19 +39,25 @@ if (isValidConfig) {
     messaging.onBackgroundMessage((payload) => {
       console.log('[firebase-messaging-sw.js] Background message payload:', payload);
 
-      if (!payload || !payload.notification) {
-        return;
-      }
+      if (!payload) return;
 
-      const { title, body, image } = payload.notification;
-      
-      const notificationTitle = title || 'Tournahub Announcement';
+      const { title, body, image } = payload.notification ?? {};
+      const data = payload.data ?? {};
+
+      const notificationTitle = title || data.title || 'Tournahub Announcement';
       const notificationOptions = {
-        body: body || '',
-        icon: image || '/favicon.ico',
-        badge: '/favicon.ico',
+        body: body || data.body || '',
+        icon: image || data.image || '/icons/icon-192x192.png',
+        badge: '/icons/badge-72x72.png',
+        vibrate: [200, 100, 200],
         // Preserve all incoming payload data for click action matching
-        data: payload.data || {}
+        data: {
+          url: data.url || data.click_action || '/',
+          notification_id: data.notification_id,
+          type: data.type,
+          priority: data.priority,
+        },
+        requireInteraction: ['high', 'critical'].includes(data.priority),
       };
 
       return self.registration.showNotification(notificationTitle, notificationOptions);
@@ -60,7 +68,7 @@ if (isValidConfig) {
     console.error('[firebase-messaging-sw.js] Initialization crashed:', error);
   }
 } else {
-  console.warn('[firebase-messaging-sw.js] Placeholders detected. Waiting for Firebase credentials to be provisioned.');
+  console.warn('[firebase-messaging-sw.js] Placeholders/empty configuration detected. Waiting for credentials via script query registration params.');
 }
 
 /**
