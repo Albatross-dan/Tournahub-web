@@ -342,8 +342,36 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
 
       if (event === 'SIGNED_IN') {
         if (session?.user) {
-          requestNotificationPermission(session.user.id).catch(err => {
-            console.warn('[AuthContext] Triggering FCM permission setup on SIGNED_IN failed safely:', err);
+          const userId = session.user.id;
+          console.log('[AuthContext] SIGNED_IN event detected. Requesting FCM token and syncing with database user:', userId);
+          requestNotificationPermission(userId).then(async (token) => {
+            if (token) {
+              console.log('[AuthContext] Retrieved FCM Token on SIGNED_IN event:', token);
+              // Ensure we perform the upsert directly inside the SIGNED_IN listener
+              const { error: upsertError } = await (supabase as any)
+                .from('notification_tokens')
+                .upsert(
+                  {
+                    user_id: userId,
+                    token: token,
+                    platform: 'web',
+                    device_name: navigator.userAgent.slice(0, 100),
+                    app_version: '1.0.0',
+                    updated_at: new Date().toISOString()
+                  },
+                  { onConflict: 'user_id,token' }
+                );
+
+              if (upsertError) {
+                console.error('[AuthContext] Failed to upsert token into notification_tokens inside SIGNED_IN event:', upsertError.message);
+              } else {
+                console.log('[AuthContext] Successfully upserted token into notification_tokens inside SIGNED_IN event!');
+              }
+            } else {
+              console.warn('[AuthContext] No FCM token returned during SIGNED_IN event. Verify permissions and configuration.');
+            }
+          }).catch(err => {
+            console.error('[AuthContext] Error in requestNotificationPermission during SIGNED_IN:', err);
           });
         }
       }
