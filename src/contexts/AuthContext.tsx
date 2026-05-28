@@ -44,6 +44,7 @@ interface AuthContextType {
   isAdmin: boolean;
   signOut: () => Promise<void>;
   refetchSignal: number;
+  refreshAuth: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -588,6 +589,31 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     }
   };
 
+  const refreshAuth = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setUser(session.user);
+        const { data: rawData } = await (supabase as any)
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        const profileData = rawData as any;
+        if (profileData) {
+          setProfile(profileData as Profile);
+          if (!profileData.username || profileData.username.startsWith('temp_user_') || profileData.username === '') {
+            setNeedsUsernameSetup(true);
+          } else {
+            setNeedsUsernameSetup(false);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[AuthContext] Failed to refresh auth state:', err);
+    }
+  };
+
   const value = {
     user,
     profile,
@@ -595,6 +621,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     isAdmin: profile?.role === 'admin' || user?.email === 'danieloguda11221@gmail.com',
     signOut,
     refetchSignal,
+    refreshAuth,
   };
 
   return (
