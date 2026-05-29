@@ -24,6 +24,7 @@ import { PlayerBadge } from '../components/ui/PlayerBadge';
 import { useWallet } from '../hooks/useWallet';
 import toast from 'react-hot-toast';
 import StorageImage from '../components/common/StorageImage';
+import SEO from '../components/common/SEO';
 
 export default function TournamentDetails() {
   const { id } = useParams<{ id: string }>();
@@ -338,8 +339,33 @@ export default function TournamentDetails() {
   const isActuallyFull = spotsLeft <= 0 && !isRegistered;
   const isActionDisabled = registering || isRegStatusLoading || !user || isRegistered;
 
+  const pageTitle = tournament ? `${tournament.name} Tournament Details` : "Tournament Bracket & Standings";
+  const pageDescription = tournament 
+    ? `Register and compete in ${tournament.name} on Tournahub. Format: ${(tournament as any).format || tournament.type}, Mode: ${(tournament as any).game_mode || 'eFootball'}, Prize Pool: ${formatCurrency(tournament.prize_pool || 0)}. View updated fixtures, standings, and results.`
+    : "Track active tournament brackets, live status updates, match rankings, and standings on Tournahub.";
+
+  const dynamicSchema = tournament ? {
+    "@context": "https://schema.org",
+    "@type": "SportsEvent",
+    "name": tournament.name,
+    "startDate": tournament.start_date || new Date().toISOString(),
+    "description": `Football/eFootball tournament ${tournament.name} on Tournahub. Format: ${(tournament as any).format || tournament.type}. Game Mode: ${(tournament as any).game_mode || 'eFootball'}. Status: ${tournament.status}.`,
+    "sport": "Soccer / eFootball",
+    "organizer": {
+      "@type": "SportsOrganization",
+      "name": "Tournahub",
+      "url": "https://tournahub.me"
+    }
+  } : undefined;
+
   return (
     <Shell>
+      <SEO 
+        title={pageTitle}
+        description={pageDescription}
+        path={`/tournaments/${id}`}
+        schemaData={dynamicSchema}
+      />
       <div className="space-y-8">
         <button 
           onClick={() => navigate('/tournaments')}

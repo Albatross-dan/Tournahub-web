@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+Allow: /rules
+Allow: /privacy-policy
+Allow: /terms
+Allow: /tournaments
+Disallow: /admin/
+Disallow: /dashboard/
+Disallow: /wallet/
+Disallow: /chat/
+Disallow: /profile/
+Disallow: /notifications/
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /payment/
+
+Sitemap: https://tournahub.me/sitemap.xml

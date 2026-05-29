@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Trophy, Mail, Lock, Loader2 } from 'lucide-react';
+import SEO from '../components/common/SEO';
 
 const logoUrl = '/android-chrome-512x512.png';
 
@@ -96,6 +97,13 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden transition-colors duration-500">
+      <SEO 
+        title={isSignUp ? "Register Account" : "Sign In to your Account"}
+        description={isSignUp 
+          ? "Create your Tournahub credentials. Join football & eFootball brackets, maintain professional standings, and enter dynamic league stages with secure match transactions."
+          : "Sign in to access your Tournahub dashboard. Check active tournament lists, your local wallet balances, and pending game fixtures."}
+        path={isSignUp ? "/signup" : "/login"}
+      />
       {/* Background Decorative Elements */}
       <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,209,255,0.05)_0%,transparent_100%)] pointer-events-none" />
       <div className="absolute -top-[20%] -left-[10%] w-[60%] h-[60%] bg-primary/5 blur-[120px] rounded-full pointer-events-none" />

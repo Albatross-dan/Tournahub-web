@@ -8,6 +8,7 @@ import {
   List, CheckCircle, Smartphone, Sliders, PlayCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import SEO from '../components/common/SEO';
 
 export default function Rules() {
   const { user } = useAuth();
@@ -24,6 +25,11 @@ export default function Rules() {
 
   const PageHeader = () => (
     <div className="space-y-4 text-center max-w-3xl mx-auto mb-10 pt-4 px-4">
+      <SEO 
+        title="Official Rules & Platform Policies"
+        description="Read Tournahub live tournament fair-play regulations, dispute settlement protocols, matchmaking structure, wallet rules, and community guidelines."
+        path="/rules"
+      />
       <motion.div 
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}

@@ -6,6 +6,7 @@ import {
   Gamepad2, UserCheck, Star, ArrowUpRight, Award, HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import SEO from '../components/common/SEO';
 
 // Existing assets & routes
 const logoUrl = '/android-chrome-512x512.png';
@@ -38,6 +39,25 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-[#040511] text-text-main font-sans overflow-x-hidden selection:bg-primary selection:text-black">
+      <SEO 
+        title="Tournahub – Football & eFootball Tournament Management Platform"
+        description="Create and manage professional football and eFootball tournaments with dynamic matches, league standings, brackets, automated reward pipelines, local wallets, and tourney moderation logs."
+        path="/"
+        schemaData={{
+          "@context": "https://schema.org",
+          "@type": "SportsOrganization",
+          "name": "Tournahub",
+          "url": "https://tournahub.me",
+          "logo": "https://tournahub.me/android-chrome-512x512.png",
+          "description": "Create and manage professional football and eFootball tournaments with automated match, standings, league brackets and systems.",
+          "sameAs": [
+            "https://www.facebook.com/profile.php?id=61590368578569",
+            "https://tiktok.com/@tournahub",
+            "https://www.instagram.com/tournahub.me",
+            "https://whatsapp.com/channel/0029Vb7nKTkK5cDClzvMYT1Z"
+          ]
+        }}
+      />
       {/* 1. HEADER / NAVIGATION */}
       <header className="sticky top-0 z-50 bg-[#040511]/80 backdrop-blur-xl border-b border-white/5 py-4 px-6 md:px-12 transition-all">
         <div className="max-w-7xl mx-auto flex items-center justify-between">

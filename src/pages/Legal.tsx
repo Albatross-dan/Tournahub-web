@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
+import SEO from "../components/common/SEO";
 
 const BRAND = {
   name: "Tournahub",
@@ -303,6 +304,14 @@ export default function Legal() {
         .glow { box-shadow: 0 0 30px rgba(110,231,247,0.12); }
         .header-sticky { position: sticky; top: 0; z-index: 100; backdrop-filter: blur(18px); transition: all 0.3s; }
       `}</style>
+
+      <SEO 
+        title={activeTab === "terms" ? "Terms & Conditions" : "Privacy Policy"}
+        description={activeTab === "terms" 
+          ? "Read our official tournament system terms and service conditions. Ensure fair play, see payment guidelines, eligibility prerequisites, and dispute management rules."
+          : "Tournahub privacy framework and details. Read about user cookies, data handling protections, secure database layers, and account credentials."}
+        path={activeTab === "terms" ? "/terms" : "/privacy-policy"}
+      />
 
       {/* Header */}
       <div className="header-sticky" style={{ background: scrolled ? "rgba(11,14,26,0.95)" : "rgba(11,14,26,0.7)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>

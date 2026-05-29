@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import LoadingState from '../components/ui/LoadingState';
 import StatusBadge from '../components/ui/StatusBadge';
 import { TournamentStatus } from '../constants';
+import SEO from '../components/common/SEO';
 
 export default function Tournaments() {
   const [search, setSearch] = useState('');
@@ -42,6 +43,11 @@ export default function Tournaments() {
 
   return (
     <Shell>
+      <SEO 
+        title="Active Football & eFootball Tournaments"
+        description="Explore the Tournahub tournaments matrix. Filter by open registrations, dynamic ongoing match brackets, or historic finalized results."
+        path="/tournaments"
+      />
       <div className="space-y-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <h1 className="text-3xl font-black text-text-main uppercase italic tracking-tighter">Tournaments</h1>
