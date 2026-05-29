@@ -210,7 +210,14 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const provisioningRef = React.useRef<Record<string, boolean>>({});
+  const lastUserIdRef = React.useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      lastUserIdRef.current = user.id;
+    }
+  }, [user]);
   const [refetchSignal, setRefetchSignal] = useState(0);
   const [needsUsernameSetup, setNeedsUsernameSetup] = useState(false);
 
@@ -343,21 +350,21 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       if (event === 'SIGNED_IN') {
         if (session?.user) {
           const userId = session.user.id;
+          lastUserIdRef.current = userId;
           console.log('[AuthContext] SIGNED_IN event detected. Requesting FCM token and syncing with database user:', userId);
           requestNotificationPermission(userId).then(async (token) => {
             if (token) {
-              console.log('[AuthContext] Retrieved FCM Token on SIGNED_IN event:', token);
+              const fcmToken = token;
+              console.log('[AuthContext] Retrieved FCM Token on SIGNED_IN event:', fcmToken);
               // Ensure we perform the upsert directly inside the SIGNED_IN listener
               const { error: upsertError } = await (supabase as any)
                 .from('notification_tokens')
                 .upsert(
                   {
-                    user_id: userId,
-                    token: token,
+                    user_id: session.user.id,
+                    token: fcmToken,
                     platform: 'web',
                     device_name: navigator.userAgent.slice(0, 100),
-                    app_version: '1.0.0',
-                    updated_at: new Date().toISOString()
                   },
                   { onConflict: 'user_id,token' }
                 );
@@ -377,6 +384,26 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       }
 
       if (event === 'SIGNED_OUT') {
+        const userId = lastUserIdRef.current;
+        const currentToken = localStorage.getItem('fcm_token');
+        if (userId && currentToken) {
+          console.log('[AuthContext] SIGNED_OUT event detected. Deleting notification token for user:', userId);
+          try {
+            const { error: deleteError } = await (supabase as any).from('notification_tokens')
+              .delete()
+              .eq('user_id', userId)
+              .eq('token', currentToken);
+            if (deleteError) {
+              console.error('[AuthContext] Failed to delete token on SIGNED_OUT:', deleteError.message);
+            } else {
+              console.log('[AuthContext] Successfully deleted notification token on SIGNED_OUT.');
+            }
+          } catch (deleteErr) {
+            console.error('[AuthContext] Exception while deleting token on SIGNED_OUT:', deleteErr);
+          }
+        }
+        localStorage.removeItem('fcm_token');
+
         if (!isMounted) return;
         setUser(null);
         setProfile(null);
