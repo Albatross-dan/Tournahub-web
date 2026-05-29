@@ -3,7 +3,7 @@ import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { 
   Trophy, Users, Wallet, 
   ArrowUpRight, Gamepad2, Timer,
-  Loader2, Tv
+  Loader2, Tv, Shield
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatCurrency, cn, getPublicIdentity, formatFixtureTime } from '../lib/utils';
@@ -150,6 +150,30 @@ export default function Dashboard() {
         animate="show"
         className="space-y-8"
       >
+        {isAdmin && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-primary/10 border border-primary/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4"
+          >
+            <div className="flex items-center space-x-3">
+              <span className="p-2 bg-primary/20 rounded-xl text-primary block">
+                <Shield className="w-5 h-5" />
+              </span>
+              <div>
+                <h4 className="text-sm font-black text-white uppercase italic tracking-wider">Admin Control Active</h4>
+                <p className="text-[10px] text-primary/80 font-bold uppercase tracking-widest mt-0.5">Full administrative privilege mode enabled.</p>
+              </div>
+            </div>
+            <Link 
+              to="/admin" 
+              className="w-full sm:w-auto px-6 py-2.5 bg-primary hover:bg-white text-black font-black text-xs uppercase italic tracking-widest rounded-xl text-center transition-all shadow-md active:scale-95 duration-250 cursor-pointer"
+            >
+              Enter Admin Panel
+            </Link>
+          </motion.div>
+        )}
+
         {/* Tournament Auto-Slider (Available Tournaments) */}
         <div className="space-y-4">
           <div>
@@ -570,7 +594,7 @@ function MatchCard({ match }: { match: any }) {
               <Timer className="w-3.5 h-3.5 mr-1.5 text-primary" />
               {((match as any).scheduled_date && (match as any).scheduled_time) 
                 ? formatFixtureTime((match as any).scheduled_date, (match as any).scheduled_time, (match as any).timezone)
-                : (match.scheduled_at ? new Date(match.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Time TBD')}
+                : (match.scheduled_at ? new Date(match.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : 'Time TBD')}
             </p>
           </div>
           {getActionButton()}

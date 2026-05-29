@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { profileService } from '../../services/profileService';
+import { requestNotificationPermission } from '../../lib/notifications';
+import { toast } from 'react-hot-toast';
 import { 
   Moon, Sun, Monitor, Globe, Bell, 
   Languages, Clock, Check, ChevronDown,
@@ -243,7 +245,28 @@ export default function SettingsMenu() {
           ].map((pref) => (
             <button
               key={pref.id}
-              onClick={() => updatePreference({ [pref.id]: !preferences?.[pref.id] })}
+              onClick={async () => {
+                if (!user) return;
+                const nextValue = !preferences?.[pref.id];
+                
+                if (pref.id === 'in_app_enabled' && nextValue) {
+                  // Prompt browsner permission popup
+                  const token = await requestNotificationPermission(user!.id);
+                  if (!token) {
+                    if ('Notification' in window && Notification.permission === 'denied') {
+                      toast.error('Notification access is blocked in this browser. Please enable notifications in your browser settings to allow updates.');
+                      return;
+                    } else if (!('serviceWorker' in navigator) || !('Notification' in window)) {
+                      toast.error('System notifications are not supported in this environment.');
+                      return;
+                    }
+                  } else {
+                    toast.success('System notifications successfully authorized!');
+                  }
+                }
+                
+                updatePreference({ [pref.id]: nextValue });
+              }}
               disabled={saving}
               className={cn(
                 "w-full card p-5 text-left border-2 transition-all flex items-center justify-between group",

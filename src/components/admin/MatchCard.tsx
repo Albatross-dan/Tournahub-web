@@ -75,7 +75,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match, onAction }) => {
                   <Clock className="w-3 h-3 mr-1 text-primary" />
                   {match.scheduled_date && match.scheduled_time 
                     ? formatFixtureTime(match.scheduled_date, match.scheduled_time, match.timezone)
-                    : new Date(match.scheduled_at!).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+                    : new Date(match.scheduled_at!).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: true })
                   }
                </>
             ) : (

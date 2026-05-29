@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Check, AlertCircle, Loader2, Trophy, Users } from 'lucide-react';
+import { Upload, Check, AlertCircle, Loader2, Trophy, Users, Clock } from 'lucide-react';
 import { useMatchVerificationState } from '../../hooks/useMatchVerificationState';
 import { useSubmitResult } from '../../hooks/useSubmitResult';
 import { storageService } from '../../services/storageService';
-import { MatchCountdown } from './MatchCountdown';
 import { WaitingForOpponent } from './WaitingForOpponent';
 import { AutoVerifiedResult } from './AutoVerifiedResult';
 import { DisputedResult } from './DisputedResult';
@@ -16,9 +15,10 @@ interface SubmitResultPanelProps {
   matchId: string;
   currentUserId: string;
   playerName?: string;
+  match?: any;
 }
 
-export function SubmitResultPanel({ matchId, currentUserId, playerName }: SubmitResultPanelProps) {
+export function SubmitResultPanel({ matchId, currentUserId, playerName, match }: SubmitResultPanelProps) {
   const { state, isLoading, error, refetch, serverTimeOffsetMs } = useMatchVerificationState(matchId);
   const { submit, isSubmitting, submitError } = useSubmitResult(matchId);
 
@@ -27,6 +27,54 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName }: Submit
   const [screenshotPath, setScreenshotPath] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const scheduledAt = match?.scheduled_at;
+  const playWindowMinutes = match?.play_window_minutes ?? 30;
+  const submissionGraceMinutes = match?.submission_grace_minutes ?? 10;
+  const matchStatus = match?.status;
+
+  const matchStart = scheduledAt ? new Date(scheduledAt) : null;
+  const playWindowEndObj = matchStart ? new Date(matchStart.getTime() + playWindowMinutes * 60000) : null;
+  const submissionCloseObj = playWindowEndObj ? new Date(playWindowEndObj.getTime() + submissionGraceMinutes * 60000) : null;
+
+  const [currentNow, setCurrentNow] = useState(() => new Date(Date.now() + (serverTimeOffsetMs || 0)));
+
+  useEffect(() => {
+    setCurrentNow(new Date(Date.now() + (serverTimeOffsetMs || 0)));
+  }, [serverTimeOffsetMs]);
+
+  useEffect(() => {
+    if (!matchStart) return;
+
+    const interval = setInterval(() => {
+      const updatedNow = new Date(Date.now() + (serverTimeOffsetMs || 0));
+      setCurrentNow(updatedNow);
+
+      const isPhaseD = playWindowEndObj && submissionCloseObj && updatedNow >= submissionCloseObj;
+      if (isPhaseD) {
+        clearInterval(interval);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [scheduledAt, playWindowMinutes, submissionGraceMinutes, serverTimeOffsetMs]);
+
+  const phase = (() => {
+    if (!matchStart || !playWindowEndObj || !submissionCloseObj) return 'UNKNOWN';
+    if (currentNow < matchStart) return 'PHASE_A';
+    if (currentNow >= matchStart && currentNow < playWindowEndObj) return 'PHASE_B';
+    if (currentNow >= playWindowEndObj && currentNow < submissionCloseObj) return 'PHASE_C';
+    return 'PHASE_D';
+  })();
+
+  // Trigger refetch on boundary crossing to ensure backend state updates are fetched
+  const prevPhaseRef = React.useRef(phase);
+  useEffect(() => {
+    if (prevPhaseRef.current !== phase) {
+      refetch();
+      prevPhaseRef.current = phase;
+    }
+  }, [phase, refetch]);
 
   if (isLoading) {
     return (
@@ -128,14 +176,84 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName }: Submit
 
   const isFormValid = score1 !== '' && score2 !== '' && screenshotPath !== null;
 
+  const formatHHMMSS = (totalSecs: number) => {
+    const h = Math.floor(totalSecs / 3600);
+    const m = Math.floor((totalSecs % 3600) / 60);
+    const s = totalSecs % 60;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  };
+
+  const formatMMSS = (totalSecs: number) => {
+    const m = Math.floor(totalSecs / 60);
+    const s = totalSecs % 60;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(m)}:${pad(s)}`;
+  };
+
+  let leftLabel = "Result Submission";
+  let clockText = "";
+  let clockColorClass = "";
+  let showClock = false;
+
+  if (phase === 'PHASE_A') {
+    leftLabel = "MATCH STARTS IN";
+    const diffSecs = Math.max(0, Math.floor((matchStart!.getTime() - currentNow.getTime()) / 1000));
+    clockText = formatHHMMSS(diffSecs);
+    clockColorClass = "text-slate-400";
+    showClock = true;
+  } else if (phase === 'PHASE_B') {
+    leftLabel = "PLAY NOW  •  SUBMITS OPEN IN";
+    const diffSecs = Math.max(0, Math.floor((playWindowEndObj!.getTime() - currentNow.getTime()) / 1000));
+    clockText = formatMMSS(diffSecs);
+    clockColorClass = "text-slate-400";
+    showClock = true;
+  } else if (phase === 'PHASE_C') {
+    leftLabel = "RESULT SUBMISSION  •  CLOSES IN";
+    const diffSecs = Math.max(0, Math.floor((submissionCloseObj!.getTime() - currentNow.getTime()) / 1000));
+    clockText = formatMMSS(diffSecs);
+    clockColorClass = "text-amber-500 animate-pulse";
+    showClock = true;
+  } else if (phase === 'PHASE_D') {
+    leftLabel = "SUBMISSION CLOSED";
+    clockText = "";
+    clockColorClass = "";
+    showClock = false;
+  }
+
+  const getSubmitButtonLabel = () => {
+    if (isSubmitting) {
+      return "Transmitting...";
+    }
+    if (phase === 'PHASE_D') {
+      return "SUBMISSION CLOSED";
+    }
+    if (phase === 'PHASE_C') {
+      return "SUBMIT FINAL RESULT ✓";
+    }
+    return "SUBMIT FINAL RESULT";
+  };
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
       <div className="p-6 border-b border-slate-800 flex items-center justify-between">
-        <h3 className="text-sm font-black text-white uppercase italic tracking-widest flex items-center">
+        <h3 className="text-sm font-black text-white uppercase italic tracking-widest flex items-center text-xs">
           <Trophy className="w-4 h-4 mr-2 text-primary" />
-          Result Submission
+          {leftLabel}
         </h3>
-        <MatchCountdown state={state} onExpired={refetch} serverTimeOffsetMs={serverTimeOffsetMs} />
+        <div className="text-right flex flex-col items-end">
+          {showClock && (
+            <div className={cn("flex items-center space-x-2 font-mono text-base font-black italic tracking-tighter sm:text-lg", clockColorClass)}>
+              <Clock className="w-4 h-4" />
+              <span>{clockText}</span>
+            </div>
+          )}
+          {phase === 'PHASE_B' && (
+            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">
+              Submit your result once the play window closes
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="p-8 space-y-8">
@@ -149,7 +267,7 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName }: Submit
               max="99"
               value={score1}
               onChange={(e) => setScore1(e.target.value)}
-              disabled={!can_submit || isSubmitting}
+              disabled={phase !== 'PHASE_C' || isSubmitting}
               aria-label="Your score"
               className="w-full h-16 bg-slate-950 border-2 border-slate-800 rounded-2xl text-3xl font-black text-center text-white focus:border-primary focus:ring-0 transition-all disabled:opacity-50"
               placeholder="0"
@@ -163,7 +281,7 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName }: Submit
               max="99"
               value={score2}
               onChange={(e) => setScore2(e.target.value)}
-              disabled={!can_submit || isSubmitting}
+              disabled={phase !== 'PHASE_C' || isSubmitting}
               aria-label="Opponent score"
               className="w-full h-16 bg-slate-950 border-2 border-slate-800 rounded-2xl text-3xl font-black text-center text-white focus:border-primary focus:ring-0 transition-all disabled:opacity-50"
               placeholder="0"
@@ -186,6 +304,7 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName }: Submit
               <button 
                 onClick={() => { setScreenshotPath(null); }}
                 className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                disabled={phase !== 'PHASE_C'}
               >
                 <div className="bg-red-600 p-2 rounded-lg text-white text-[10px] font-black uppercase tracking-widest">Remove</div>
               </button>
@@ -193,13 +312,13 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName }: Submit
           ) : (
             <div className={cn(
               "relative border-2 border-dashed border-slate-800 rounded-2xl p-12 transition-all group",
-              can_submit ? "hover:border-primary/50 cursor-pointer" : "opacity-50 cursor-not-allowed"
+              phase === 'PHASE_C' ? "hover:border-primary/50 cursor-pointer" : "opacity-50 cursor-not-allowed"
             )}>
               <input 
                 type="file"
                 accept="image/*"
                 onChange={handleFileUpload}
-                disabled={!can_submit || uploading || isSubmitting}
+                disabled={phase !== 'PHASE_C' || uploading || isSubmitting}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
               />
               <div className="flex flex-col items-center justify-center text-center">
@@ -232,10 +351,10 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName }: Submit
         {/* Submit Button */}
         <button 
           onClick={handleSubmit}
-          disabled={!can_submit || !isFormValid || isSubmitting || uploading}
+          disabled={phase !== 'PHASE_C' || !isFormValid || isSubmitting || uploading}
           className={cn(
             "w-full h-16 flex items-center justify-center space-x-3 rounded-2xl font-black uppercase italic tracking-widest transition-all",
-            can_submit && isFormValid
+            phase === 'PHASE_C' && isFormValid
               ? "bg-primary text-black hover:bg-white hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-primary/20"
               : "bg-slate-800 text-slate-600 cursor-not-allowed"
           )}
@@ -247,15 +366,15 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName }: Submit
             </>
           ) : (
             <>
-              <span>Submit Final Result</span>
-              <Check className="w-5 h-5" />
+              <span>{getSubmitButtonLabel()}</span>
+              {phase === 'PHASE_C' && <Check className="w-5 h-5" />}
             </>
           )}
         </button>
 
-        {!can_submit && (
+        {phase !== 'PHASE_C' && (
           <p className="text-center text-slate-600 text-[10px] font-black uppercase tracking-widest italic animate-pulse">
-            {ui_state === 'awaiting_submissions' ? 'Submissions window is not yet active' : 'Submissions have been locked for this deployment'}
+            {phase === 'PHASE_D' ? 'Submissions have been locked for this deployment' : 'Submissions window is not yet active'}
           </p>
         )}
       </div>

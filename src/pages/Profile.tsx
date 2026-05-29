@@ -16,7 +16,7 @@ import TrophyWall from '../components/profile/TrophyWall';
 import SettingsMenu from '../components/profile/SettingsMenu';
 
 export default function Profile() {
-  const { profile, user, signOut, refetchSignal, refreshAuth } = useAuth();
+  const { profile, user, signOut, refetchSignal, refreshAuth, isAdmin } = useAuth();
   useRefetchOnFocus(loadStats);
   const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
   const [username, setUsername] = useState(profile?.username || '');
@@ -220,7 +220,7 @@ export default function Profile() {
             <div className="space-y-4">
               <h3 className="text-xl font-black text-text-main uppercase italic tracking-tighter">Operations</h3>
               
-              {profile?.role === 'admin' && (
+              {isAdmin && (
                 <Link to="/admin" className="card p-6 bg-primary/10 border-primary/20 flex items-center justify-between group hover:bg-primary/20 transition-all cursor-pointer mb-4">
                   <div className="flex items-center space-x-6">
                     <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30">

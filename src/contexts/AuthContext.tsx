@@ -315,7 +315,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         setUser(user);
 
         const profileData = (await fetchProfile(user.id)) as Profile | null;
-        const isDevAdmin = user.email === 'danieloguda11221@gmail.com';
+        const isDevAdmin = user.email?.toLowerCase().trim() === 'danieloguda11221@gmail.com';
 
         if (!profileData || (isDevAdmin && (profileData as Profile).role !== 'admin')) {
           await ensureProfile(user);
@@ -524,7 +524,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     provisioningRef.current[user.id] = true;
 
     try {
-      const isDevAdmin = user.email === 'danieloguda11221@gmail.com';
+      const isDevAdmin = user.email?.toLowerCase().trim() === 'danieloguda11221@gmail.com';
       
       const profilePromise = (supabase as any)
         .from('profiles')
@@ -688,7 +688,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     user,
     profile,
     loading,
-    isAdmin: profile?.role === 'admin' || user?.email === 'danieloguda11221@gmail.com',
+    isAdmin: profile?.role === 'admin' || user?.email?.toLowerCase().trim() === 'danieloguda11221@gmail.com',
     signOut,
     refetchSignal,
     refreshAuth,

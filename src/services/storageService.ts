@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, ensureAuthenticated } from '../lib/supabase';
 import { cleanStoragePath } from '../lib/utils';
 
 export const storageService = {
@@ -55,6 +55,9 @@ export const storageService = {
   },
 
   async uploadScreenshot(file: File, matchId: string, userId: string) {
+    // Force session hydration for RLS propagation in storage and fix token race conditions
+    await ensureAuthenticated();
+
     const extension = file.name.split('.').pop();
     const path = `results/${matchId}_${userId}_${Date.now()}.${extension}`;
     

@@ -396,6 +396,7 @@ export default function MatchDetails() {
                   matchId={match.id}
                   currentUserId={user.id}
                   playerName={getPublicIdentity({ id: user.id, username: user.user_metadata?.username })}
+                  match={match}
                 />
                 
                 <MatchChat 

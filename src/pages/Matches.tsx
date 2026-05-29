@@ -354,7 +354,20 @@ function MatchCard({ match }: { match: any; key?: string }) {
                  <div className="flex items-center space-x-2 pt-1">
                    <Calendar className="w-3 h-3 text-slate-600" />
                    <span className="text-[10px] font-bold text-slate-400 border border-slate-800 px-2 rounded-full uppercase tracking-tighter">
-                     {(match as any).scheduled_date && (match as any).scheduled_time ? formatFixtureTime((match as any).scheduled_date, (match as any).scheduled_time, (match as any).timezone) : (match.scheduled_at ? formatDate(match.scheduled_at) : 'Time TBD')}
+                     {match.scheduled_at ? (
+                      new Intl.DateTimeFormat(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true
+                      }).format(new Date(match.scheduled_at))
+                    ) : (
+                      (match as any).scheduled_date && (match as any).scheduled_time 
+                        ? formatFixtureTime((match as any).scheduled_date, (match as any).scheduled_time, (match as any).timezone)
+                        : 'Time TBD'
+                    )}
                    </span>
                  </div>
                )}
