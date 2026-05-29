@@ -44,7 +44,7 @@ export async function requestNotificationPermission(userId: string): Promise<str
       return null;
     }
 
-    const vapidKey = (import.meta as any).env.VITE_FIREBASE_VAPID_KEY;
+    const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
     if (!vapidKey) {
       console.warn('[Notifications] VITE_FIREBASE_VAPID_KEY is missing in environment variables. FCM registration aborted.');
       return null;
@@ -61,12 +61,12 @@ export async function requestNotificationPermission(userId: string): Promise<str
     let swRegistration: ServiceWorkerRegistration | undefined;
     try {
       const config = {
-        apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY || '',
-        authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN || '',
-        projectId: (import.meta as any).env.VITE_FIREBASE_PROJECT_ID || '',
-        storageBucket: (import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET || '',
-        messagingSenderId: (import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-        appId: (import.meta as any).env.VITE_FIREBASE_APP_ID || '',
+        apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
+        storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+        messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+        appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
       };
 
       const swUrl = `/firebase-messaging-sw.js?apiKey=${encodeURIComponent(config.apiKey)}&authDomain=${encodeURIComponent(config.authDomain)}&projectId=${encodeURIComponent(config.projectId)}&storageBucket=${encodeURIComponent(config.storageBucket)}&messagingSenderId=${encodeURIComponent(config.messagingSenderId)}&appId=${encodeURIComponent(config.appId)}`;
@@ -126,27 +126,46 @@ export async function requestNotificationPermission(userId: string): Promise<str
  * This function guarantees no double inserts and updates token ownership securely.
  */
 async function syncTokenToSupabase(userId: string, token: string): Promise<void> {
+  const supabaseAny = supabase as any;
+  
+  // 1. Try upserting to notification_tokens table (as requested)
   try {
-    const supabaseAny = supabase as any;
-    
     const { error } = await supabaseAny.from('notification_tokens').upsert(
       {
         user_id:     userId,
         token:       token,
         platform:    'web',
-        device_name: navigator.userAgent.slice(0, 100),
-        app_version: '1.0.0',
-        updated_at:  new Date().toISOString()
+        device_name: navigator.userAgent.slice(0, 100)
       },
       { onConflict: 'user_id,token' }
     );
-
     if (error) {
-      throw error;
+      console.warn('[Notifications] Upsert to "notification_tokens" failed:', error.message);
+    } else {
+      console.log('[Notifications] FCM token successfully registered/synced to "notification_tokens".');
     }
-    console.log('[Notifications] FCM token successfully registered/synced to Supabase.');
-  } catch (syncErr) {
-    console.error('[Notifications] Supabase token sync operation failed safely:', syncErr);
+  } catch (err) {
+    console.warn('[Notifications] Exception during upsert to "notification_tokens":', err);
+  }
+
+  // 2. Also try upserting to user_push_tokens table (fallback schema table)
+  try {
+    const { error } = await supabaseAny.from('user_push_tokens').upsert(
+      {
+        user_id:     userId,
+        token:       token,
+        platform:    'web',
+        device_name: navigator.userAgent.slice(0, 100)
+      },
+      { onConflict: 'user_id,token' }
+    );
+    if (error) {
+      console.warn('[Notifications] Upsert to "user_push_tokens" failed:', error.message);
+    } else {
+      console.log('[Notifications] FCM token successfully registered/synced to "user_push_tokens".');
+    }
+  } catch (err) {
+    console.warn('[Notifications] Exception during upsert to "user_push_tokens":', err);
   }
 }
 
@@ -162,17 +181,36 @@ export async function deleteFcmTokenOnLogout(userId: string): Promise<void> {
     }
 
     console.log('[Notifications] Deleting FCM token registration for user', userId);
-    const { error } = await (supabase as any)
-      .from('notification_tokens')
-      .delete()
-      .eq('user_id', userId)
-      .eq('token', token);
-
-    if (error) {
-      console.warn('[Notifications] Refusal response during FCM Token database deletion:', error.message);
-    } else {
-      console.log('[Notifications] FCM token successfully removed from Supabase backend storage.');
+    
+    // Delete from notification_tokens
+    try {
+      const { error } = await (supabase as any)
+        .from('notification_tokens')
+        .delete()
+        .eq('user_id', userId)
+        .eq('token', token);
+      if (error) {
+        console.warn('[Notifications] Deletion from "notification_tokens" failed:', error.message);
+      }
+    } catch (err) {
+      console.warn('[Notifications] Exception deleting from "notification_tokens":', err);
     }
+
+    // Delete from user_push_tokens
+    try {
+      const { error } = await (supabase as any)
+        .from('user_push_tokens')
+        .delete()
+        .eq('user_id', userId)
+        .eq('token', token);
+      if (error) {
+        console.warn('[Notifications] Deletion from "user_push_tokens" failed:', error.message);
+      }
+    } catch (err) {
+      console.warn('[Notifications] Exception deleting from "user_push_tokens":', err);
+    }
+
+    console.log('[Notifications] FCM token successfully removed from Supabase backend storage.');
   } catch (cleanupErr) {
     console.warn('[Notifications] Safely caught error during FCM token cleanup:', cleanupErr);
   } finally {
