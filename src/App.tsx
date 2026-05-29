@@ -26,6 +26,7 @@ import Profile from './pages/Profile';
 import TournamentChampion from './pages/TournamentChampion';
 import PaymentCallback from './pages/PaymentCallback';
 import Landing from './pages/Landing';
+import Rules from './pages/Rules';
 
 // Lazy load admin pages only
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
@@ -95,7 +96,7 @@ function RootPlatformGate({ children }: { children: React.ReactNode }) {
     return <LoadingState fullPage />;
   }
 
-  const isPublicRoute = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/terms', '/privacy-policy', '/privacy', '/legal'].includes(location.pathname);
+  const isPublicRoute = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/terms', '/privacy-policy', '/privacy', '/legal', '/rules'].includes(location.pathname);
 
   if (status?.is_blocked && !isPublicRoute && !isAdmin) {
     return <MaintenanceScreen />;
@@ -128,6 +129,7 @@ function AppRoutes() {
                 <Route path="/privacy-policy" element={<Legal />} />
                 <Route path="/privacy" element={<Navigate to="/privacy-policy" replace />} />
                 <Route path="/legal" element={<Navigate to="/privacy-policy" replace />} />
+                <Route path="/rules" element={<Rules />} />
                 
                 <Route element={<ProtectedRoute />}>
                   <Route path="/dashboard" element={<Dashboard />} />

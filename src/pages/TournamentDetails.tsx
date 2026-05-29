@@ -7,7 +7,8 @@ import { useRealtimeTournament } from '../hooks/useRealtimeTournaments';
 import Shell from '../components/layout/Shell';
 import { 
   Trophy, Users, Calendar, Info, 
-  ChevronRight, ArrowLeft, CheckCircle2, Shield, Loader2
+  ChevronRight, ArrowLeft, CheckCircle2, Shield, Loader2,
+  Clock, Wifi, Ban, Scale, X, ExternalLink, ShieldAlert
 } from 'lucide-react';
 import { formatCurrency, formatDate, cn, getStorageUrl } from '../lib/utils';
 import { supabase } from '../lib/supabase';
@@ -62,6 +63,10 @@ export default function TournamentDetails() {
   const [showRegFlow, setShowRegFlow] = useState(false);
   const [regStep, setRegStep] = useState<'picker' | 'confirm'>('picker');
   const [selectedBadge, setSelectedBadge] = useState<string | null>(null);
+
+  // Pre-registration Rules Overlay state
+  const [showRulesPopup, setShowRulesPopup] = useState(false);
+  const [acceptedRulesCheck, setAcceptedRulesCheck] = useState(false);
 
   useEffect(() => {
     isInitialLoad.current = true;
@@ -239,10 +244,17 @@ export default function TournamentDetails() {
       return;
     }
 
+    setAcceptedRulesCheck(false);
+    setShowRulesPopup(true);
+  };
+
+  const handleConfirmRulesAndProceed = async () => {
+    setShowRulesPopup(false);
+
     try {
       await refreshWallet();
     } catch (err) {
-      console.warn('[handleRegisterClick] refreshWallet error:', err);
+      console.warn('[handleConfirmRulesAndProceed] refreshWallet error:', err);
     }
 
     if (tournament.entry_fee > 0) {
@@ -460,6 +472,175 @@ export default function TournamentDetails() {
         </motion.div>
 
         <AnimatePresence>
+          {showRulesPopup && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              {/* Backdrop */}
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowRulesPopup(false)}
+                className="absolute inset-0 bg-black/80 backdrop-blur-md"
+              />
+              
+              {/* Modal Card */}
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="relative bg-[#090b16] border border-white/10 rounded-[2rem] w-full max-w-lg overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.8)] flex flex-col max-h-[90vh] z-10"
+              >
+                {/* Header panel */}
+                <div className="p-6 pb-4 shrink-0 flex items-start justify-between border-b border-white/5 bg-[#0b0e1e]/60">
+                  <div className="space-y-1">
+                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-amber-400/10 border border-amber-400/20 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400">
+                      <Shield className="w-3 h-3" /> Mandatory
+                    </div>
+                    <h3 className="text-xl sm:text-2xl font-black italic uppercase tracking-tight text-white flex items-center gap-2">
+                      🏆 Before You Join
+                    </h3>
+                    <p className="text-xs text-zinc-400 font-medium">
+                      Please review these important tournament rules.
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setShowRulesPopup(false)}
+                    className="p-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-zinc-400 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Rules List Container */}
+                <div className="p-6 space-y-3.5 overflow-y-auto custom-scrollbar flex-1">
+                  
+                  {/* 1. Match Availability */}
+                  <div className="flex gap-3 p-3 bg-white/2 hover:bg-white/4 border border-white/5 rounded-xl transition-all">
+                    <div className="p-2 h-fit bg-amber-400/10 border border-amber-400/20 rounded-lg text-amber-400 shrink-0">
+                      <Clock className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-white">⏰ Match Availability</h4>
+                      <p className="text-[11px] text-zinc-400 font-medium leading-relaxed">
+                        Be available at the scheduled match time. Failure to play may result in automatic loss.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 2. Result Submission */}
+                  <div className="flex gap-3 p-3 bg-white/2 hover:bg-white/4 border border-white/5 rounded-xl transition-all">
+                    <div className="p-2 h-fit bg-sky-400/10 border border-sky-400/20 rounded-lg text-sky-400 shrink-0">
+                      <ShieldAlert className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-white">📤 Result Submission</h4>
+                      <p className="text-[11px] text-zinc-400 font-medium leading-relaxed">
+                        Submit your results before the deadline. Fake results lead to permanent account banning.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 3. Stable Internet Required */}
+                  <div className="flex gap-3 p-3 bg-[#090b16] border border-white/5 rounded-xl transition-all">
+                    <div className="p-2 h-fit bg-emerald-400/10 border border-emerald-400/20 rounded-lg text-emerald-400 shrink-0">
+                      <Wifi className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-white">🌐 Stable Internet Required</h4>
+                      <p className="text-[11px] text-zinc-400 font-medium leading-relaxed">
+                        Poor connection or intentional disconnection may lead to match loss.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 4. No Match Cancellation */}
+                  <div className="flex gap-3 p-3 bg-white/2 hover:bg-white/4 border border-white/5 rounded-xl transition-all">
+                    <div className="p-2 h-fit bg-rose-400/10 border border-rose-400/20 rounded-lg text-rose-400 shrink-0">
+                      <Ban className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-white">🚫 No Match Cancellation</h4>
+                      <p className="text-[11px] text-zinc-400 font-medium leading-relaxed">
+                        Once you join a tournament, cancellation is not allowed.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 5. Fair Play */}
+                  <div className="flex gap-3 p-3 bg-[#090b16] border border-white/5 rounded-xl transition-all">
+                    <div className="p-2 h-fit bg-purple-400/10 border border-purple-400/20 rounded-lg text-purple-400 shrink-0">
+                      <Scale className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-white">⚖️ Fair Play</h4>
+                      <p className="text-[11px] text-zinc-400 font-medium leading-relaxed">
+                        Respect opponents and follow tournament guidelines.
+                      </p>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Footer Agreement & Actions */}
+                <div className="p-6 border-t border-white/5 bg-[#0b0e1e]/60 space-y-4 shrink-0">
+                  {/* Agreement checkbox */}
+                  <label className="flex items-start gap-3 cursor-pointer group">
+                    <div className="relative flex items-center h-5 mt-0.5 shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={acceptedRulesCheck}
+                        onChange={(e) => setAcceptedRulesCheck(e.target.checked)}
+                        className="peer sr-only"
+                      />
+                      <div className="w-5 h-5 rounded-md border border-white/20 bg-white/5 group-hover:border-[#d4af37]/50 peer-checked:border-[#d4af37] peer-checked:bg-[#d4af37] transition-all flex items-center justify-center text-black">
+                        <CheckCircle2 className="w-3.5 h-3.5 stroke-[3] hidden peer-checked:block text-[#040511]" />
+                      </div>
+                    </div>
+                    <span className="text-[11.5px] font-semibold text-zinc-300 leading-normal select-none group-hover:text-white transition-colors">
+                      I have read and agree to the <span className="text-[#d4af37] font-bold">Tournament Rules & Guidelines</span>.
+                    </span>
+                  </label>
+
+                  {/* Buttons group */}
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowRulesPopup(false);
+                        navigate('/rules');
+                      }}
+                      className="flex items-center justify-center gap-1.5 p-3.5 border border-white/10 hover:bg-white/5 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-300 hover:text-white transition-all"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-[#d4af37]" /> View Full Rules
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleConfirmRulesAndProceed}
+                      disabled={!acceptedRulesCheck}
+                      className="relative overflow-hidden p-3.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed group/btn"
+                    >
+                      {acceptedRulesCheck ? (
+                        <>
+                          <div className="absolute inset-0 bg-gradient-to-r from-amber-500 to-[#d4af37] hover:brightness-110 active:brightness-90 transition-all" />
+                          <div className="absolute inset-0 opacity-0 group-hover/btn:opacity-100 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.2)_0%,transparent_70%)] transition-opacity" />
+                          <span className="relative text-black flex items-center justify-center gap-1">
+                            Join Tournament
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="absolute inset-0 bg-white/5 border border-white/10" />
+                          <span className="relative text-zinc-500">Join Tournament</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+              </motion.div>
+            </div>
+          )}
+
           {showRegFlow && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <motion.div 

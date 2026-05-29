@@ -1007,6 +1007,9 @@ export default function Landing() {
           <div className="space-y-4">
             <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Compliances</h4>
             <div className="flex flex-col space-y-2 text-xs">
+              <Link to="/rules" className="text-primary hover:text-primary-hover transition-all uppercase tracking-widest font-black flex items-center gap-1">
+                Tournahub Rules & Policies
+              </Link>
               <Link to="/privacy-policy" className="text-text-muted hover:text-primary transition-all uppercase tracking-widest font-bold">Privacy Policy</Link>
               <Link to="/terms" className="text-text-muted hover:text-primary transition-all uppercase tracking-widest font-bold">Terms & Conditions</Link>
               <a href={SUPPORT_EMAIL} className="text-text-muted hover:text-primary transition-all uppercase tracking-widest font-bold">Direct Support</a>
