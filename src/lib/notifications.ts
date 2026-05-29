@@ -25,21 +25,28 @@ export async function requestNotificationPermission(userId: string): Promise<str
     return null;
   }
 
-  const vapidKey = (import.meta as any).env.VITE_FIREBASE_VAPID_KEY;
-  if (!vapidKey) {
-    console.warn('[Notifications] VITE_FIREBASE_VAPID_KEY is missing in environment variables. FCM registration aborted.');
-    return null;
-  }
-
   try {
-    // 2. Request / Check Notification Permission
+    // 2. Request / Check Notification Permission First
     let permission = Notification.permission;
     if (permission === 'default') {
-      permission = await Notification.requestPermission();
+      try {
+        permission = await Notification.requestPermission();
+      } catch (permErr) {
+        console.warn('[Notifications] Notification.requestPermission promise form failed, trying callback:', permErr);
+        permission = await new Promise<NotificationPermission>((resolve) => {
+          Notification.requestPermission(resolve);
+        });
+      }
     }
 
     if (permission !== 'granted') {
       console.log(`[Notifications] Permission state: ${permission}. Cannot obtain FCM token.`);
+      return null;
+    }
+
+    const vapidKey = (import.meta as any).env.VITE_FIREBASE_VAPID_KEY;
+    if (!vapidKey) {
+      console.warn('[Notifications] VITE_FIREBASE_VAPID_KEY is missing in environment variables. FCM registration aborted.');
       return null;
     }
 
