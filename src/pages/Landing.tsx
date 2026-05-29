@@ -3,7 +3,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { 
   Trophy, Flame, Zap, Shield, Activity, Menu, X, 
   ChevronRight, Coins, Mail, Sparkles, MessageSquare, 
-  Gamepad2, UserCheck, Star, ArrowUpRight, Award, HelpCircle
+  Gamepad2, UserCheck, Star, ArrowUpRight, Award, HelpCircle,
+  BookOpen
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import SEO from '../components/common/SEO';
@@ -79,6 +80,8 @@ export default function Landing() {
             <button onClick={() => scrollToSection('about')} className="text-xs font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary transition-colors cursor-pointer">About</button>
             <button onClick={() => scrollToSection('tournament-types')} className="text-xs font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary transition-colors cursor-pointer">Tournaments</button>
             <button onClick={() => scrollToSection('prizes')} className="text-xs font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary transition-colors cursor-pointer text-nowrap">Prize Pool</button>
+            <Link to="/rules" className="text-xs font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary transition-colors cursor-pointer">Rules</Link>
+            <Link to="/help" className="text-xs font-black uppercase tracking-widest text-primary hover:text-primary-hover transition-colors cursor-pointer">Help Center</Link>
             <a href={COMMUNITY_WHATSAPP} target="_blank" rel="noopener noreferrer" className="text-xs font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary transition-colors cursor-pointer">Community</a>
             <a href={SUPPORT_EMAIL} className="text-xs font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary transition-colors cursor-pointer">Support</a>
           </nav>
@@ -157,6 +160,22 @@ export default function Landing() {
                 <span>Support Link</span>
                 <Mail className="w-4 h-4 text-primary" />
               </a>
+              <Link 
+                to="/rules" 
+                onClick={() => setIsHamburgerOpen(false)}
+                className="w-full text-left py-3 border-b border-white/5 text-sm font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary flex items-center justify-between"
+              >
+                <span>Tournament Rules</span>
+                <HelpCircle className="w-4 h-4 text-primary" />
+              </Link>
+              <Link 
+                to="/help" 
+                onClick={() => setIsHamburgerOpen(false)}
+                className="w-full text-left py-3 border-b border-white/5 text-sm font-black uppercase tracking-widest text-primary hover:text-primary-hover flex items-center justify-between"
+              >
+                <span>Help Center & FAQ</span>
+                <BookOpen className="w-4 h-4 text-primary" />
+              </Link>
               <Link 
                 to="/privacy-policy" 
                 onClick={() => setIsHamburgerOpen(false)}
@@ -1027,12 +1046,11 @@ export default function Landing() {
           <div className="space-y-4">
             <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Compliances</h4>
             <div className="flex flex-col space-y-2 text-xs">
-              <Link to="/rules" className="text-primary hover:text-primary-hover transition-all uppercase tracking-widest font-black flex items-center gap-1">
-                Tournahub Rules & Policies
-              </Link>
-              <Link to="/privacy-policy" className="text-text-muted hover:text-primary transition-all uppercase tracking-widest font-bold">Privacy Policy</Link>
+              <Link to="/help" className="text-white hover:text-primary transition-all uppercase tracking-widest font-bold">Help Center</Link>
+              <Link to="/rules" className="text-text-muted hover:text-primary transition-all uppercase tracking-widest font-bold">Tournament Rules</Link>
               <Link to="/terms" className="text-text-muted hover:text-primary transition-all uppercase tracking-widest font-bold">Terms & Conditions</Link>
-              <a href={SUPPORT_EMAIL} className="text-text-muted hover:text-primary transition-all uppercase tracking-widest font-bold">Direct Support</a>
+              <Link to="/privacy-policy" className="text-text-muted hover:text-primary transition-all uppercase tracking-widest font-bold">Privacy Policy</Link>
+              <a href={SUPPORT_EMAIL} className="text-text-muted hover:text-primary transition-all uppercase tracking-widest font-bold">Contact Support</a>
             </div>
           </div>
         </div>

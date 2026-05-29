@@ -53,7 +53,7 @@ export default function SubmitResultForm({
 
     try {
       const ext = file.name.split('.').pop();
-      const fileName = `${matchId}/${submitterId}_${Date.now()}.${ext}`;
+      const fileName = `${submitterId}/${matchId}/screenshot_${Date.now()}.${ext}`;
       
       const { data, error } = await (supabase.storage
         .from('result-screenshots') as any)

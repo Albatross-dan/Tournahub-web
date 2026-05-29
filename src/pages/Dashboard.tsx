@@ -3,7 +3,7 @@ import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { 
   Trophy, Users, Wallet, 
   ArrowUpRight, Gamepad2, Timer,
-  Loader2, Tv, Shield
+  Loader2, Tv, Shield, HelpCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatCurrency, cn, getPublicIdentity, formatFixtureTime } from '../lib/utils';
@@ -408,6 +408,17 @@ export default function Dashboard() {
                 className="text-[10px] font-black uppercase tracking-widest text-text-muted hover:text-primary transition-all underline underline-offset-4 decoration-border-main"
               >
                 Privacy Policy
+              </Link>
+            </div>
+
+            {/* Help Center CTA */}
+            <div className="pt-4 pb-2">
+              <Link
+                to="/help"
+                className="inline-flex items-center gap-1.5 px-6 py-2.5 bg-primary/15 hover:bg-primary/25 border border-primary/25 hover:border-primary/50 rounded-full text-[11px] font-black uppercase tracking-widest text-primary transition-all duration-300 shadow-lg shadow-primary/5 hover:scale-[1.02]"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-primary" />
+                <span>Help Center & FAQs</span>
               </Link>
             </div>
           </div>

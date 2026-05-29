@@ -59,7 +59,7 @@ export const storageService = {
     await ensureAuthenticated();
 
     const extension = file.name.split('.').pop();
-    const path = `results/${matchId}_${userId}_${Date.now()}.${extension}`;
+    const path = `${userId}/${matchId}/screenshot_${Date.now()}.${extension}`;
     
     const { data, error } = await supabase.storage
       .from('result-screenshots')

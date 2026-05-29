@@ -4,7 +4,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { 
   Trophy, LayoutDashboard, Calendar, 
   Wallet, User, Settings, ShieldCheck, 
-  MessageSquare, Bell, LogOut, ChevronLeft, ChevronRight, X
+  MessageSquare, Bell, LogOut, ChevronLeft, ChevronRight, X,
+  HelpCircle
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -42,6 +43,7 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
     { name: 'Tournaments', path: '/tournaments', icon: Trophy },
     { name: 'Matches', path: '/matches', icon: Calendar },
     { name: 'Wallet', path: '/wallet', icon: Wallet },
+    { name: 'Rules', path: '/rules', icon: HelpCircle },
     { name: 'Chat', path: '/chat', icon: MessageSquare },
     { name: 'Notifications', path: '/notifications', icon: Bell },
   ];

@@ -3,7 +3,8 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
   Trophy, Wallet, RefreshCw, LayoutDashboard, 
-  Calendar, MessageSquare, Shield, Bell, Menu, X, Tv
+  Calendar, MessageSquare, Shield, Bell, Menu, X, Tv,
+  HelpCircle
 } from 'lucide-react';
 import NotificationBell from '../notifications/NotificationBell';
 import { walletService } from '../../services/walletService';
@@ -32,6 +33,7 @@ export default function Navbar() {
       { name: 'Tournaments', path: '/tournaments', icon: Trophy },
       { name: 'Chat', path: '/chat', icon: MessageSquare },
       { name: 'Wallet', path: '/wallet', icon: Wallet },
+      { name: 'Rules', path: '/rules', icon: HelpCircle },
       { name: 'Live Streams', path: '/streams', icon: Tv },
     ];
     if (isAdmin) {
