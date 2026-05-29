@@ -44,8 +44,12 @@ export default function LiveStreams() {
         console.error('[Streams] Error fetching streams from Supabase:', error);
       } else {
         const rawStreams = data || [];
-        // Only keep if the relationship matches properly
-        setStreams(rawStreams.filter((s: any) => s.matches));
+        // Only keep if the relationship matches properly and the match has not fully ended (completed or verified status)
+        setStreams(rawStreams.filter((s: any) => 
+          s.matches && 
+          s.matches.status !== 'completed' && 
+          s.matches.status !== 'verified'
+        ));
       }
     } catch (err) {
       console.error('[Streams] Unexpected exception retrieving streams:', err);
