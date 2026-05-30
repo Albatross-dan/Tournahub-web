@@ -16,11 +16,6 @@ export function useSubmitResult(matchId: string) {
       return;
     }
 
-    if (!screenshotPath) {
-      setSubmitError('Screenshot is required');
-      return;
-    }
-
     submittingRef.current = true;
     setIsSubmitting(true);
     setSubmitError(null);

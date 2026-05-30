@@ -3,7 +3,7 @@ import { User } from '@supabase/supabase-js';
 import { ensureAuthenticated, supabase } from '../lib/supabase';
 import { Profile } from '../types/database';
 import { queryClient } from '../lib/queryClient';
-import { requestNotificationPermission, listenForForegroundNotifications, deleteFcmTokenOnLogout } from '../lib/notifications';
+import { requestNotificationPermission, listenForForegroundNotifications, deleteFcmTokenOnLogout, syncTokenToSupabase } from '../lib/notifications';
 import { Trophy, Zap, Loader2, Sparkles, AlertCircle } from 'lucide-react';
 
 // Professional fallback timeout engine to prevent hangs and guarantee resolution
@@ -356,24 +356,8 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
             if (token) {
               const fcmToken = token;
               console.log('[AuthContext] Retrieved FCM Token on SIGNED_IN event:', fcmToken);
-              // Ensure we perform the upsert directly inside the SIGNED_IN listener
-              const { error: upsertError } = await (supabase as any)
-                .from('notification_tokens')
-                .upsert(
-                  {
-                    user_id: session.user.id,
-                    token: fcmToken,
-                    platform: 'web',
-                    device_name: navigator.userAgent.slice(0, 100),
-                  },
-                  { onConflict: 'user_id,token' }
-                );
-
-              if (upsertError) {
-                console.error('[AuthContext] Failed to upsert token into notification_tokens inside SIGNED_IN event:', upsertError.message);
-              } else {
-                console.log('[AuthContext] Successfully upserted token into notification_tokens inside SIGNED_IN event!');
-              }
+              // Call the centralized sync function
+              await syncTokenToSupabase(userId, fcmToken);
             } else {
               console.warn('[AuthContext] No FCM token returned during SIGNED_IN event. Verify permissions and configuration.');
             }

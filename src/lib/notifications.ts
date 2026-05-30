@@ -125,47 +125,97 @@ export async function requestNotificationPermission(userId: string): Promise<str
  * Handles syncing of FCM token to Supabase using optimal checking and upsert fallbacks.
  * This function guarantees no double inserts and updates token ownership securely.
  */
-async function syncTokenToSupabase(userId: string, token: string): Promise<void> {
+export async function syncTokenToSupabase(userId: string, token: string): Promise<void> {
   const supabaseAny = supabase as any;
   
-  // 1. Try upserting to notification_tokens table (as requested)
+  // 1. Try syncing to "notification_tokens"
   try {
-    const { error } = await supabaseAny.from('notification_tokens').upsert(
-      {
-        user_id:     userId,
-        token:       token,
-        platform:    'web',
-        device_name: navigator.userAgent.slice(0, 100)
-      },
-      { onConflict: 'user_id,token' }
-    );
-    if (error) {
-      console.warn('[Notifications] Upsert to "notification_tokens" failed:', error.message);
+    const { data: existing, error: selectErr } = await supabaseAny
+      .from('notification_tokens')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('token', token)
+      .maybeSingle();
+
+    if (!selectErr && existing) {
+      console.log('[Notifications] Token already exists in "notification_tokens". Skipping insert.');
     } else {
-      console.log('[Notifications] FCM token successfully registered/synced to "notification_tokens".');
+      const { error: insertErr } = await supabaseAny.from('notification_tokens').insert({
+        user_id: userId,
+        token: token,
+        platform: 'web',
+        device_name: navigator.userAgent.slice(0, 100)
+      });
+      
+      if (insertErr) {
+        // Fallback to standard upsert with onConflict in case of race condition
+        const { error: upsertErr } = await supabaseAny.from('notification_tokens').upsert(
+          {
+            user_id: userId,
+            token: token,
+            platform: 'web',
+            device_name: navigator.userAgent.slice(0, 100)
+          },
+          { onConflict: 'user_id,token' }
+        );
+        if (upsertErr) {
+          console.warn('[Notifications] Both insert and upsert failed for "notification_tokens":', upsertErr.message);
+        } else {
+          console.log('[Notifications] FCM token successfully upserted to "notification_tokens" after insert block.');
+        }
+      } else {
+        console.log('[Notifications] FCM token successfully inserted to "notification_tokens".');
+      }
     }
   } catch (err) {
-    console.warn('[Notifications] Exception during upsert to "notification_tokens":', err);
+    console.warn('[Notifications] Exception syncing to "notification_tokens":', err);
   }
 
-  // 2. Also try upserting to user_push_tokens table (fallback schema table)
+  // 2. Try syncing to "user_push_tokens" (fallback schema table)
   try {
-    const { error } = await supabaseAny.from('user_push_tokens').upsert(
-      {
-        user_id:     userId,
-        token:       token,
-        platform:    'web',
-        device_name: navigator.userAgent.slice(0, 100)
-      },
-      { onConflict: 'user_id,token' }
-    );
-    if (error) {
-      console.warn('[Notifications] Upsert to "user_push_tokens" failed:', error.message);
+    const { data: existing, error: selectErr } = await supabaseAny
+      .from('user_push_tokens')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('token', token)
+      .maybeSingle();
+
+    if (!selectErr && existing) {
+      console.log('[Notifications] Token already exists in "user_push_tokens". Updating last seen.');
+      await supabaseAny.from('user_push_tokens').update({
+        last_seen_at: new Date().toISOString()
+      }).eq('id', existing.id);
     } else {
-      console.log('[Notifications] FCM token successfully registered/synced to "user_push_tokens".');
+      const { error: insertErr } = await supabaseAny.from('user_push_tokens').insert({
+        user_id: userId,
+        token: token,
+        platform: 'web',
+        device_name: navigator.userAgent.slice(0, 100),
+        last_seen_at: new Date().toISOString()
+      });
+      
+      if (insertErr) {
+        const { error: upsertErr } = await supabaseAny.from('user_push_tokens').upsert(
+          {
+            user_id: userId,
+            token: token,
+            platform: 'web',
+            device_name: navigator.userAgent.slice(0, 100),
+            last_seen_at: new Date().toISOString()
+          },
+          { onConflict: 'user_id,token' }
+        );
+        if (upsertErr) {
+          console.warn('[Notifications] Both insert and upsert failed for "user_push_tokens":', upsertErr.message);
+        } else {
+          console.log('[Notifications] FCM token successfully upserted to "user_push_tokens" after insert block.');
+        }
+      } else {
+        console.log('[Notifications] FCM token successfully inserted to "user_push_tokens".');
+      }
     }
   } catch (err) {
-    console.warn('[Notifications] Exception during upsert to "user_push_tokens":', err);
+    console.warn('[Notifications] Exception syncing to "user_push_tokens":', err);
   }
 }
 

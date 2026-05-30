@@ -104,11 +104,11 @@ export function WalletBalanceCard({
       <div className="mt-6 pt-4 border-t border-white/5 relative z-10">
         <button
           onClick={() => setShowTopUpModal(true)}
-          disabled={isLocked}
-          className="w-full h-12 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 border border-emerald-600 disabled:border-transparent text-white font-extrabold text-xs uppercase italic tracking-wider shadow-lg shadow-emerald-500/10 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+          disabled={true}
+          className="w-full h-12 rounded-xl bg-slate-800/80 border border-white/5 text-slate-500 font-extrabold text-xs uppercase italic tracking-wider flex items-center justify-center gap-2 cursor-not-allowed transition-all"
         >
-          <Plus className="w-4 h-4 text-white" />
-          <span>Add Funds</span>
+          <Plus className="w-4 h-4 text-slate-500" />
+          <span>Add Funds (Coming Soon)</span>
         </button>
       </div>
 

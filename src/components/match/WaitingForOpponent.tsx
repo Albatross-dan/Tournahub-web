@@ -29,9 +29,9 @@ export function WaitingForOpponent({ submission, deadline, opponentUsername, ser
           </div>
           
           <div className="space-y-1">
-            <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">Waiting for Intel</h3>
-            <p className="text-slate-500 font-bold tracking-tight text-sm">
-              Waiting for <span className="text-white">{opponentUsername}</span> to upload their verification.
+            <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">Result Submitted!</h3>
+            <p className="text-slate-400 font-bold tracking-tight text-sm">
+              Waiting for <span className="text-white font-extrabold">{opponentUsername}</span> to confirm.
             </p>
           </div>
         </div>

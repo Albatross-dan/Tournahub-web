@@ -1,23 +1,30 @@
 import React from 'react';
 import { AlertTriangle, ShieldAlert, Users, Info } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import StorageImage from '../common/StorageImage';
 
 interface DisputedResultProps {
   submissions: any[];
   matchId: string;
+  tournamentId?: string;
 }
 
-export function DisputedResult({ submissions, matchId }: DisputedResultProps) {
+export function DisputedResult({ submissions, matchId, tournamentId }: DisputedResultProps) {
   return (
     <div className="bg-slate-900 border border-red-500/30 rounded-3xl overflow-hidden shadow-2xl animate-in fade-in duration-500">
       <div className="bg-red-600 p-8 flex flex-col items-center justify-center text-center space-y-3">
         <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center animate-bounce">
-          <ShieldAlert className="w-10 h-10 text-white" />
+          <AlertTriangle className="w-10 h-10 text-white" />
         </div>
         <div>
-          <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter leading-none mb-1">Conflict Detected</h3>
-          <p className="text-white/80 font-bold uppercase tracking-widest text-[10px]">Signal Collision • Result Discrepancy Found</p>
+          <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter leading-none mb-1">Score Conflict</h3>
+          <p className="text-white font-bold uppercase tracking-widest text-[11px] mt-1">
+            An admin will review both submissions.
+          </p>
+          <p className="text-white/80 font-bold uppercase tracking-widest text-[9px] mt-1">
+            Your screenshot is safely saved and recorded.
+          </p>
         </div>
       </div>
 
@@ -27,9 +34,9 @@ export function DisputedResult({ submissions, matchId }: DisputedResultProps) {
             <Info className="w-5 h-5 text-orange-500" />
           </div>
           <div className="space-y-1">
-            <h4 className="text-sm font-black text-white uppercase italic tracking-widest">Admin Extraction Required</h4>
+            <h4 className="text-sm font-black text-white uppercase italic tracking-widest">Protocol Alert</h4>
             <p className="text-[10px] font-bold text-slate-400 leading-relaxed uppercase tracking-tight">
-              Scores submitted by both operators do not match. An automated dispute ticket has been generated for admin review.
+              Scores submitted by both combatants do not match. An automated dispute ticket has been generated for admin review.
             </p>
           </div>
         </div>
@@ -76,6 +83,16 @@ export function DisputedResult({ submissions, matchId }: DisputedResultProps) {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Footer Actions */}
+        <div className="flex flex-col sm:flex-row items-center gap-3 pt-4 border-t border-slate-800">
+          <Link 
+            to={tournamentId ? `/tournaments/${tournamentId}` : "/tournaments"}
+            className="w-full h-14 bg-white text-black rounded-2xl flex items-center justify-center font-black uppercase italic tracking-widest hover:bg-primary transition-all active:scale-95 text-xs"
+          >
+            Back to Tournament
+          </Link>
         </div>
 
         <div className="text-center">

@@ -83,60 +83,90 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
   const [error, setError] = useState<string | null>(null);
   const [activeGroupTab, setActiveGroupTab] = useState<string>('');
   const [flashedMatches, setFlashedMatches] = useState<Record<string, boolean>>({});
+  const [syncing, setSyncing] = useState(false);
+  const [view, setView] = useState<'standings' | 'bracket'>('standings');
+  const [badgeSelectionsMap, setBadgeSelectionsMap] = useState<Record<string, string>>({});
 
   const matchesRef = useRef<GroupMatch[]>([]);
   const navigate = useNavigate();
 
+  const refetchStandings = () => {
+    fetchStandings();
+  };
+
+  const refetchMatches = () => {
+    fetchBracketMatches();
+  };
+
   useEffect(() => {
     fetchData();
 
-    // 5. Supabase Realtime Subscriptions
+    // 10-second fallback polling interval to ensure reliable backend updates
+    const pollingInterval = setInterval(() => {
+      fetchStandings();
+      fetchGroupMatches();
+      fetchBracketMatches();
+    }, 10000);
+
+    // Real-time standings updates
     const standingsChannel = supabase
-      .channel(`group-standings-${tournamentId}`)
+      .channel('standings-' + tournamentId)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'standings',
+        filter: `tournament_id=eq.${tournamentId}`
+      }, () => refetchStandings())
+      .subscribe();
+
+    // Real-time bracket updates
+    const bracketChannel = supabase
+      .channel('bracket-' + tournamentId)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'matches',
+        filter: `tournament_id=eq.${tournamentId}`
+      }, (payload) => {
+        // Replace the updated match in local state
+        setBracketMatches(prev => prev.map(m =>
+          m.id === payload.new.id ? { ...m, ...payload.new } : m
+        ));
+        // Also fetch to obtain full profiles as fallback safeguard
+        fetchBracketMatches();
+      })
+      .subscribe();
+
+    // Stage transition awareness
+    const stageChannel = supabase
+      .channel('tournament-stage-' + tournamentId)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'tournaments',
+        filter: `id=eq.${tournamentId}`
+      }, (payload) => {
+        if (payload.new.current_stage === 'playoffs') {
+          // Switch UI from standings view to bracket view
+          setView('bracket');
+          refetchMatches();
+        }
+      })
+      .subscribe();
+
+    // Standard group matches updates
+    const groupMatchesChannel = supabase
+      .channel(`group-matches-${tournamentId}`)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
-        table: 'standings',
-        filter: `tournament_id=eq.${tournamentId}`
-      }, () => {
-        fetchStandings();
-      })
-      .subscribe();
-
-    const matchesChannel = supabase
-      .channel(`group-matches-${tournamentId}`)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
         table: 'matches',
         filter: `tournament_id=eq.${tournamentId}`
-      }, (payload) => {
-        if (payload.new.stage === 'group_stage') {
-          fetchGroupMatches();
-        } else {
-          fetchBracketMatches();
-        }
-      })
-      .subscribe();
-
-    const tournamentChannel = supabase
-      .channel(`group-tournaments-${tournamentId}`)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'tournaments',
-        filter: `id=eq.${tournamentId}`
-      }, (payload) => {
-        if (payload?.new) {
-          setTournament(payload.new);
-        }
+      }, () => {
+        fetchGroupMatches();
       })
       .subscribe();
 
     return () => {
+      clearInterval(pollingInterval);
       supabase.removeChannel(standingsChannel);
-      supabase.removeChannel(matchesChannel);
-      supabase.removeChannel(tournamentChannel);
+      supabase.removeChannel(bracketChannel);
+      supabase.removeChannel(stageChannel);
+      supabase.removeChannel(groupMatchesChannel);
     };
   }, [tournamentId]);
 
@@ -199,6 +229,14 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
       if (tErr) throw tErr;
       setTournament(tData);
 
+      // Auto-switch view state based on current_stage of the loaded tournament
+      const tDataAny = tData as any;
+      if (tDataAny && (tDataAny.current_stage === 'playoffs' || tDataAny.current_stage === 'knockout')) {
+        setView('bracket');
+      } else {
+        setView('standings');
+      }
+
       // 3.1 Fetch all groups for a tournament
       const { data: gData, error: gErr } = await supabase
         .from('tournament_groups')
@@ -243,24 +281,39 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
   // 3.2 Fetch standings for ALL groups (join profile + badge selections)
   async function fetchStandings() {
     try {
-      const { data: stData, error: stErr } = await supabase
-        .from('standings')
-        .select(`
-          player_id, group_name,
-          played, wins, draws, losses,
-          goals_for, goals_against, goal_difference,
-          points, group_rank,
-          profiles:player_id ( username, avatar_url ),
-          tournament_badge_selections (
-            badge_id
-          )
-        `)
-        .eq('tournament_id', tournamentId)
-        .not('group_name', 'is', null)
-        .order('group_name', { ascending: true })
-        .order('group_rank', { ascending: true, nullsFirst: false });
+      const [{ data: stData, error: stErr }, { data: badgeData }] = await Promise.all([
+        supabase
+          .from('standings')
+          .select(`
+            player_id,
+            group_name,
+            group_rank,
+            played, wins, draws, losses,
+            goals_for, goals_against, goal_difference, points,
+            profiles!standings_player_id_fkey (
+              username,
+              avatar_url
+            )
+          `)
+          .eq('tournament_id', tournamentId)
+          .not('group_name', 'is', null)
+          .order('group_name', { ascending: true })
+          .order('group_rank', { ascending: true, nullsFirst: false }),
+        supabase
+          .from('tournament_badge_selections')
+          .select('user_id, badge_id')
+          .eq('tournament_id', tournamentId)
+      ]);
 
       if (stErr) throw stErr;
+
+      const badgesMap: Record<string, string> = {};
+      if (badgeData) {
+        for (const b of (badgeData as any[])) {
+          badgesMap[b.user_id] = b.badge_id;
+        }
+      }
+      setBadgeSelectionsMap(badgesMap);
 
       // Deduplicate standings to prevent RLS duplication issues
       const seenStandingKeys = new Set();
@@ -270,7 +323,18 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
         const key = `${st.group_name}-${st.player_id}`;
         if (!seenStandingKeys.has(key)) {
           seenStandingKeys.add(key);
-          uniqueStandings.push(st);
+
+          // Support multiple potential shapes of the joined profile info
+          let profileInfo = st.profiles;
+          if (!profileInfo && st['profiles!standings_player_id_fkey']) {
+            profileInfo = st['profiles!standings_player_id_fkey'];
+          }
+
+          const standingObj: Standing = {
+            ...st,
+            profiles: profileInfo || null
+          };
+          uniqueStandings.push(standingObj);
         }
       }
       setStandings(uniqueStandings);
@@ -324,28 +388,247 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
   // Fetch bracket matches if playsoffs are active or completed
   async function fetchBracketMatches() {
     try {
-      const { data, error } = await supabase
+      // Fetch all matches that do not belong to the group stage (e.g., playoffs, knockout, etc.)
+      const { data: matches, error } = await supabase
         .from('matches')
         .select(`
-          id, group_name, round, match_order, stage, bracket_slot,
-          player1, player2, score1, score2,
-          winner, status, scheduled_at, locked,
+          id, round, bracket_slot, stage, status,
+          player1, player2, score1, score2, winner,
+          next_match_id, scheduled_at,
           player1_profile:profiles!matches_player1_fkey ( id, username, avatar_url ),
           player2_profile:profiles!matches_player2_fkey ( id, username, avatar_url ),
           winner_profile:profiles!matches_winner_fkey ( id, username, avatar_url )
         `)
         .eq('tournament_id', tournamentId)
         .neq('stage', 'group_stage')
-        .order('stage')
-        .order('round')
-        .order('match_order');
+        .order('round', { ascending: true })
+        .order('bracket_slot', { ascending: true });
 
-      if (error) throw error;
-      setBracketMatches(data || []);
+      if (error) {
+        // Fallback if strict full profile joins have schema or relationship name discrepancies
+        const { data: fallbackMatches, error: fallbackError } = await supabase
+          .from('matches')
+          .select(`
+            id, round, bracket_slot, stage, status,
+            player1, player2, score1, score2, winner,
+            next_match_id, scheduled_at,
+            p1_profile:profiles!matches_player1_fkey ( id, username, avatar_url ),
+            p2_profile:profiles!matches_player2_fkey ( id, username, avatar_url )
+          `)
+          .eq('tournament_id', tournamentId)
+          .neq('stage', 'group_stage')
+          .order('round', { ascending: true })
+          .order('bracket_slot', { ascending: true });
+
+        if (fallbackError) throw fallbackError;
+        setBracketMatches(fallbackMatches || []);
+      } else {
+        setBracketMatches(matches || []);
+      }
     } catch (err) {
        console.warn('Could not load bracket matches: ', err);
     }
   }
+
+  const isCompleted = tournament?.status === 'completed' || tournament?.current_stage === 'completed';
+  const qualifyCount = settings?.qualify_count || 2;
+  const showKnockoutBracket = tournament?.current_stage === 'playoffs' || tournament?.current_stage === 'knockout' || isCompleted || bracketMatches.length > 0;
+
+  // Memoized dynamically computed & merged standings
+  const resolvedStandings = React.useMemo(() => {
+    // We will build a unified map of standings by player_id
+    const statsMap: Record<string, Standing> = {};
+
+    // 1. Base initialize from database standings (so we preserve any official entries)
+    for (const s of standings) {
+      if (s.player_id) {
+        let profileInfo = s.profiles;
+        if (!profileInfo && (s as any).profiles) {
+          profileInfo = (s as any).profiles;
+        }
+        statsMap[s.player_id] = {
+          ...s,
+          profiles: profileInfo
+        };
+      }
+    }
+
+    // 2. Discover all players participating in the tournament's group stages
+    for (const m of groupMatches) {
+      const gName = m.group_name;
+      if (!gName) continue;
+
+      if (m.player1 && m.player1 !== '00000000-0000-0000-0000-000000000000') {
+        if (!statsMap[m.player1]) {
+          statsMap[m.player1] = {
+            player_id: m.player1,
+            group_name: gName,
+            played: 0,
+            wins: 0,
+            draws: 0,
+            losses: 0,
+            goals_for: 0,
+            goals_against: 0,
+            goal_difference: 0,
+            points: 0,
+            group_rank: 999,
+            profiles: m.p1 ? { username: m.p1.username, avatar_url: m.p1.avatar_url } : { username: 'Anonymous', avatar_url: null }
+          };
+        } else if (!statsMap[m.player1].profiles && m.p1) {
+          statsMap[m.player1].profiles = { username: m.p1.username, avatar_url: m.p1.avatar_url };
+        }
+      }
+
+      if (m.player2 && m.player2 !== '00000000-0000-0000-0000-000000000000') {
+        if (!statsMap[m.player2]) {
+          statsMap[m.player2] = {
+            player_id: m.player2,
+            group_name: gName,
+            played: 0,
+            wins: 0,
+            draws: 0,
+            losses: 0,
+            goals_for: 0,
+            goals_against: 0,
+            goal_difference: 0,
+            points: 0,
+            group_rank: 999,
+            profiles: m.p2 ? { username: m.p2.username, avatar_url: m.p2.avatar_url } : { username: 'Anonymous', avatar_url: null }
+          };
+        } else if (!statsMap[m.player2].profiles && m.p2) {
+          statsMap[m.player2].profiles = { username: m.p2.username, avatar_url: m.p2.avatar_url };
+        }
+      }
+    }
+
+    // 3. Determine if the database's standing entries are either completely empty or entirely untracked (all show 0 matches played while there are completed matches).
+    const dbStandingsEmpty = standings.length === 0 || standings.every(s => s.played === 0 && s.points === 0);
+    const hasCompletedMatches = groupMatches.some(m => m.status === 'completed');
+
+    if (dbStandingsEmpty || hasCompletedMatches) {
+      // If we are fully computing dynamically, reset everyone's stats to avoid double counting DB 0s
+      if (dbStandingsEmpty) {
+        for (const pid in statsMap) {
+          statsMap[pid].played = 0;
+          statsMap[pid].wins = 0;
+          statsMap[pid].draws = 0;
+          statsMap[pid].losses = 0;
+          statsMap[pid].goals_for = 0;
+          statsMap[pid].goals_against = 0;
+          statsMap[pid].goal_difference = 0;
+          statsMap[pid].points = 0;
+        }
+      }
+
+      const pointsWin = settings?.points_win ?? 3;
+      const pointsDraw = settings?.points_draw ?? 1;
+      const pointsLoss = settings?.points_loss ?? 0;
+
+      for (const m of groupMatches) {
+        if (m.status !== 'completed') continue;
+        const p1Id = m.player1;
+        const p2Id = m.player2;
+        const s1 = m.score1 ?? 0;
+        const s2 = m.score2 ?? 0;
+
+        if (p1Id && statsMap[p1Id]) {
+          const stats = statsMap[p1Id];
+          stats.played += 1;
+          stats.goals_for += s1;
+          stats.goals_against += s2;
+          stats.goal_difference = stats.goals_for - stats.goals_against;
+          if (s1 > s2) {
+            stats.wins += 1;
+            stats.points += pointsWin;
+          } else if (s1 < s2) {
+            stats.losses += 1;
+            stats.points += pointsLoss;
+          } else {
+            stats.draws += 1;
+            stats.points += pointsDraw;
+          }
+        }
+
+        if (p2Id && statsMap[p2Id]) {
+          const stats = statsMap[p2Id];
+          stats.played += 1;
+          stats.goals_for += s2;
+          stats.goals_against += s1;
+          stats.goal_difference = stats.goals_for - stats.goals_against;
+          if (s2 > s1) {
+            stats.wins += 1;
+            stats.points += pointsWin;
+          } else if (s2 < s1) {
+            stats.losses += 1;
+            stats.points += pointsLoss;
+          } else {
+            stats.draws += 1;
+            stats.points += pointsDraw;
+          }
+        }
+      }
+    }
+
+    // 4. Organize standings into sorted lists per group, assigning dynamic rank
+    const standingsList = Object.values(statsMap);
+    const groupsMap: Record<string, Standing[]> = {};
+    for (const s of standingsList) {
+      if (!groupsMap[s.group_name]) {
+        groupsMap[s.group_name] = [];
+      }
+      groupsMap[s.group_name].push(s);
+    }
+
+    const finalStandings: Standing[] = [];
+    for (const gName in groupsMap) {
+      const list = groupsMap[gName];
+      list.sort((a, b) => {
+        // If not relying on full dynamic ranking recalculation
+        if (!dbStandingsEmpty && a.group_rank !== 999 && b.group_rank !== 999) {
+          const rA = a.group_rank ?? 999;
+          const rB = b.group_rank ?? 999;
+          if (rA !== rB) return rA - rB;
+        }
+        // Fallback or dynamic sort
+        if (b.points !== a.points) return b.points - a.points;
+        if (b.goal_difference !== a.goal_difference) return b.goal_difference - a.goal_difference;
+        if (b.goals_for !== a.goals_for) return b.goals_for - a.goals_for;
+        return (a.profiles?.username || '').localeCompare(b.profiles?.username || '');
+      });
+
+      list.forEach((s, idx) => {
+        // Only assign dynamic rank if DB rank isn't populated or if standings are empty in DB
+        if (dbStandingsEmpty || s.group_rank === 999) {
+          s.group_rank = idx + 1;
+        }
+        finalStandings.push(s);
+      });
+    }
+
+    return finalStandings;
+  }, [standings, groupMatches, settings]);
+
+  // Memoized resolved groups (with dynamic extraction from matches as fallback)
+  const resolvedGroups = React.useMemo(() => {
+    if (groups.length > 0) return groups;
+
+    const uniqueGroupNames = Array.from(new Set([
+      ...standings.map(s => s.group_name),
+      ...groupMatches.map(m => m.group_name)
+    ].filter(Boolean))).sort();
+
+    return uniqueGroupNames.map(name => ({
+      id: `fallback-${name}`,
+      group_name: name
+    }));
+  }, [groups, standings, groupMatches]);
+
+  // Automatically sync activeGroupTab with resolvedGroups
+  useEffect(() => {
+    if (resolvedGroups.length > 0 && !activeGroupTab) {
+      setActiveGroupTab(resolvedGroups[0].group_name);
+    }
+  }, [resolvedGroups, activeGroupTab]);
 
   if (loading) {
     return (
@@ -372,12 +655,8 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
     );
   }
 
-  const isCompleted = tournament.status === 'completed' || tournament.current_stage === 'completed';
-  const qualifyCount = settings?.qualify_count || 2;
-  const showKnockoutBracket = tournament.current_stage === 'playoffs' || tournament.current_stage === 'knockout' || isCompleted || bracketMatches.length > 0;
-
   // Render a lovely warning if groups have not been generated yet
-  if (groups.length === 0) {
+  if (resolvedGroups.length === 0) {
     return (
       <div className="py-16 text-center border-2 border-dashed border-border-main rounded-[2.5rem] bg-surface/30 space-y-4 max-w-xl mx-auto px-6">
         <Users className="w-12 h-12 mx-auto text-primary animate-pulse" />
@@ -390,7 +669,7 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
   }
 
   // Filter current active group context
-  const activeGroupStandings = standings
+  const activeGroupStandings = resolvedStandings
     .filter(s => s.group_name === activeGroupTab)
     .sort((a, b) => {
       const rA = a.group_rank ?? 999;
@@ -414,224 +693,275 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
   return (
     <div className={cn("space-y-12", isCompleted && "opacity-95")}>
       
-      {/* 4.3 Group Selector Tabs */}
-      <div className="space-y-6">
-        <div className="flex bg-surface/50 p-1.5 rounded-2xl border border-white/5 space-x-1 overflow-x-auto scrollbar-hide">
-          {groups.map(g => (
-            <button
-              key={g.id}
-              onClick={() => setActiveGroupTab(g.group_name)}
-              className={cn(
-                "px-6 py-3 rounded-xl text-xs font-black uppercase tracking-[0.1em] transition-all relative shrink-0",
-                activeGroupTab === g.group_name 
-                  ? "bg-primary text-black font-extrabold shadow-lg shadow-primary/20" 
-                  : "text-text-muted hover:text-text-main hover:bg-white/5"
-              )}
-            >
-              Group {g.group_name}
-            </button>
-          ))}
-        </div>
-
-        {/* ── main Group Stage Side-by-Side Presentation ───────────────────────────── */}
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
-          
-          {/* Left Block: Standings Table */}
-          <div className="xl:col-span-7 space-y-6">
-            <div className="flex items-center space-x-2.5">
-              <AlignLeft className="w-5 h-5 text-zinc-500" />
-              <h3 className="text-xs font-extrabold uppercase tracking-widest text-zinc-400">
-                Group {activeGroupTab} Standings Table
-              </h3>
-            </div>
-
-            <div className="card rounded-[1.8rem] bg-surface border-border-main p-4 sm:p-6 space-y-4 shadow-xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left min-w-[500px]">
-                  <thead>
-                    <tr className="text-[10px] font-bold text-text-muted uppercase tracking-widest border-b border-white/5 pb-2">
-                      <th className="py-2.5 pl-2 select-none">Pos</th>
-                      <th className="py-2.5">Player</th>
-                      <th className="py-2.5 text-center">P</th>
-                      <th className="py-2.5 text-center">W</th>
-                      <th className="py-2.5 text-center">D</th>
-                      <th className="py-2.5 text-center">L</th>
-                      <th className="py-2.5 text-center text-zinc-600">GF:GA</th>
-                      <th className="py-2.5 text-center">GD</th>
-                      <th className="py-2.5 text-center text-primary pr-2">Pts</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {activeGroupStandings.map((row) => {
-                      const pos = row.group_rank;
-                      // Highlight top qualify_count rows with a beautiful visual indicator
-                      const isQualified = pos <= qualifyCount;
-                      const profileInfo = row.profiles || { username: 'Anonymous', avatar_url: null };
-
-                      // Extract badge selection safely
-                      const badgeSelections = row.tournament_badge_selections;
-                      const badgeId = Array.isArray(badgeSelections) 
-                        ? badgeSelections[0]?.badge_id 
-                        : (badgeSelections as any)?.badge_id;
-
-                      return (
-                        <tr 
-                          key={row.player_id}
-                          className={cn(
-                            "text-xs transition-colors hover:bg-white/5 border-l-4",
-                            isQualified 
-                              ? "border-l-emerald-500/80 bg-emerald-500/5 hover:bg-emerald-500/10" 
-                              : "border-l-zinc-800 bg-transparent"
-                          )}
-                        >
-                          {/* Pos */}
-                          <td className="py-3 px-2">
-                            <span className={cn(
-                              "font-black italic px-2 py-0.5 rounded text-[10px] select-none",
-                              isQualified ? "text-emerald-400 bg-emerald-500/20" : "text-zinc-500 bg-zinc-800/50"
-                            )}>
-                              {pos}
-                            </span>
-                          </td>
-
-                          {/* Player info (avatar + username + badge) */}
-                          <td className="py-3">
-                            <div className="flex items-center gap-2.5">
-                              {/* Player Selected Badge */}
-                              <PlayerBadge 
-                                badgeId={badgeId} 
-                                username={profileInfo.username} 
-                                size="sm" 
-                              />
-                              
-                              <div className="w-5 h-5 rounded-full overflow-hidden bg-zinc-950 flex items-center justify-center text-[9px] font-black uppercase text-zinc-500 shrink-0 border border-white/5">
-                                {profileInfo.avatar_url ? (
-                                  <img src={profileInfo.avatar_url} alt={profileInfo.username} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                                ) : (
-                                  profileInfo.username?.substring(0, 2)
-                                )}
-                              </div>
-                              <span className="font-extrabold uppercase italic truncate tracking-tight text-text-main max-w-[150px]">
-                                {profileInfo.username}
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* P */}
-                          <td className="py-3 text-center font-bold text-text-muted">{row.played}</td>
-                          
-                          {/* W */}
-                          <td className="py-3 text-center font-bold text-zinc-400">{row.wins}</td>
-                          
-                          {/* D */}
-                          <td className="py-3 text-center font-bold text-zinc-400">{row.draws}</td>
-                          
-                          {/* L */}
-                          <td className="py-3 text-center font-bold text-zinc-400">{row.losses}</td>
-                          
-                          {/* GF:GA */}
-                          <td className="py-3 text-center font-bold text-zinc-600 select-none">
-                            {row.goals_for}:{row.goals_against}
-                          </td>
-                          
-                          {/* GD */}
-                          <td className={cn(
-                            "py-3 text-center font-bold italic font-mono select-none", 
-                            row.goal_difference > 0 ? "text-emerald-400" : row.goal_difference < 0 ? "text-red-400" : "text-zinc-500"
-                          )}>
-                            {row.goal_difference > 0 ? `+${row.goal_difference}` : row.goal_difference}
-                          </td>
-
-                          {/* Pts */}
-                          <td className="py-3 text-center font-black text-text-main text-sm italic pr-2 select-none">
-                            {row.points}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Legend Summary */}
-              <div className="flex flex-col sm:flex-row items-center justify-between text-[9px] font-bold text-text-muted uppercase tracking-widest border-t border-white/5 pt-4 gap-2">
-                <span>Legend: W={settings?.points_win || 3}pts · D={settings?.points_draw || 1}pts · L={settings?.points_loss || 0}pts</span>
-                <span className="text-emerald-400 italic">Top {qualifyCount} Advance to Playoffs</span>
-              </div>
-            </div>
-
-            {/* Tiebreaker information panel */}
-            {settings?.tie_breaker_rules && settings.tie_breaker_rules.length > 0 && (
-              <div className="bg-surface/30 border border-white/5 rounded-2xl p-4 flex gap-3 text-xs">
-                <Info className="w-4.5 h-4.5 text-primary shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="text-text-main font-bold uppercase tracking-tight">Group Tie-breaker Rules Priority Order</p>
-                  <div className="flex flex-wrap items-center gap-1.5 text-zinc-500 text-[10px] uppercase font-black tracking-widest">
-                    {settings.tie_breaker_rules.map((rule: string, rIdx: number) => (
-                      <React.Fragment key={rule}>
-                        {rIdx > 0 && <span>➔</span>}
-                        <span className="text-primary">{formatRuleName(rule)}</span>
-                      </React.Fragment>
-                    ))}
-                  </div>
-                </div>
-              </div>
+      {/* ── STAGE VIEW SELECTOR SEGMENTED SWITCH ───────────────────────────────────── */}
+      <div className="flex justify-center border-b border-white/5 pb-6">
+        <div className="bg-surface/60 border border-white/5 p-1 rounded-2xl flex gap-1 shadow-inner">
+          <button
+            onClick={() => setView('standings')}
+            className={cn(
+              "px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ease-out cursor-pointer select-none",
+              view === 'standings' 
+                ? "bg-primary text-black font-extrabold shadow-md shadow-primary/10" 
+                : "text-text-muted hover:text-text-main"
             )}
-          </div>
-
-          {/* Right Block: Fixtures list */}
-          <div className="xl:col-span-5 space-y-6">
-            <div className="flex items-center space-x-2.5">
-              <Calendar className="w-5 h-5 text-zinc-500" />
-              <h3 className="text-xs font-extrabold uppercase tracking-widest text-zinc-400">
-                Group {activeGroupTab} Match Fixtures
-              </h3>
-            </div>
-
-            <div className="space-y-6 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-              {sortedRounds.map((round) => {
-                const roundMatches = matchesByRound[round] || [];
-                return (
-                  <div key={round} className="space-y-3">
-                    <div className="flex items-center justify-between border-b border-white/5 pb-1 sm:pb-2">
-                      <span className="text-[10px] font-black uppercase text-primary tracking-widest">
-                        Matchday {round}
-                      </span>
-                      <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">
-                        {roundMatches.length} Engagements
-                      </span>
-                    </div>
-
-                    <div className="space-y-2.5">
-                      {roundMatches.map((m) => (
-                        <GroupMatchCard key={m.id} match={m} flashed={!!flashedMatches[m.id]} navigate={navigate} />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {sortedRounds.length === 0 && (
-                <div className="py-12 text-center text-text-muted italic border border-dashed border-white/5 rounded-2xl bg-surface/10">
-                  No matches have been generated or played for this group yet.
-                </div>
-              )}
-            </div>
-          </div>
-
+          >
+            Group Stage Standings
+          </button>
+          <button
+            onClick={() => setView('bracket')}
+            className={cn(
+              "px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ease-out cursor-pointer select-none",
+              view === 'bracket' 
+                ? "bg-primary text-black font-extrabold shadow-md shadow-primary/10" 
+                : "text-text-muted hover:text-text-main"
+            )}
+          >
+            Playoff Bracket Tree
+          </button>
         </div>
       </div>
 
-      {/* ── Knockout Championship Bracket ────────────────────────────────────────── */}
-      {showKnockoutBracket && (
-        <div className="space-y-8 pt-8 border-t border-white/5">
+      {view === 'standings' ? (
+        <div className="space-y-16">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-black text-text-main italic uppercase tracking-tight">GROUP STANDINGS</h2>
+              <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Real-time updated standings during the group stage</p>
+            </div>
+            
+            <button 
+              onClick={async () => {
+                setSyncing(true);
+                await Promise.all([
+                  fetchStandings(),
+                  fetchGroupMatches(),
+                  fetchBracketMatches()
+                ]);
+                setSyncing(false);
+              }}
+              disabled={syncing}
+              className="p-1.5 px-3 bg-zinc-900/60 border border-white/5 hover:border-primary/25 hover:text-primary rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all text-zinc-400 cursor-pointer disabled:opacity-50 select-none"
+            >
+              <RefreshCw className={cn("w-3 h-3 text-primary", syncing && "animate-spin")} />
+              <span>{syncing ? 'Syncing...' : 'Sync Now'}</span>
+            </button>
+          </div>
+
+          {resolvedGroups.map((group) => {
+            // Filter standings for this group
+            const groupStandings = resolvedStandings
+              .filter(s => s.group_name === group.group_name)
+              .sort((a, b) => {
+                const rA = a.group_rank ?? 999;
+                const rB = b.group_rank ?? 999;
+                if (rA !== rB) return rA - rB;
+                return (b.points ?? 0) - (a.points ?? 0);
+              });
+
+            // Filter matches for this group
+            const groupMatchesList = groupMatches.filter(m => m.group_name === group.group_name);
+            const matchesByRound = groupMatchesList.reduce<Record<number, GroupMatch[]>>((acc, match) => {
+              const r = match.round || 1;
+              if (!acc[r]) acc[r] = [];
+              acc[r].push(match);
+              return acc;
+            }, {});
+            const sortedRounds = Object.keys(matchesByRound).map(Number).sort((a, b) => a - b);
+
+            return (
+              <div key={group.id} className="space-y-6 border-b border-white/5 pb-10 last:border-b-0 last:pb-0">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-2.5 h-6 bg-primary rounded-full select-none" />
+                  <h3 className="text-xl font-black text-text-main italic uppercase tracking-tight">
+                    Group {group.group_name}
+                  </h3>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+                  {/* Left Block: Standings Table */}
+                  <div className={cn(sortedRounds.length > 0 ? "xl:col-span-7" : "xl:col-span-12", "space-y-4")}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2.5">
+                        <AlignLeft className="w-5 h-5 text-zinc-500" />
+                        <h4 className="text-xs font-extrabold uppercase tracking-widest text-zinc-400">
+                          Standings Table
+                        </h4>
+                      </div>
+                    </div>
+
+                    <div className="card rounded-[1.8rem] bg-surface border-border-main p-4 sm:p-6 space-y-4 shadow-xl overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left min-w-[500px]">
+                          <thead>
+                            <tr className="text-[10px] font-bold text-text-muted uppercase tracking-widest border-b border-white/5 pb-2">
+                              <th className="py-2.5 pl-2 select-none">Rank</th>
+                              <th className="py-2.5">Player</th>
+                              <th className="py-2.5 text-center">P</th>
+                              <th className="py-2.5 text-center">W</th>
+                              <th className="py-2.5 text-center">D</th>
+                              <th className="py-2.5 text-center">L</th>
+                              <th className="py-2.5 text-center font-bold">GF</th>
+                              <th className="py-2.5 text-center font-bold">GA</th>
+                              <th className="py-2.5 text-center">GD</th>
+                              <th className="py-2.5 text-center text-primary pr-2">Pts</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {groupStandings.map((row, index) => {
+                              const pos = row.group_rank || (index + 1);
+                              // Highlight top qualify_count rows with a beautiful left border indicating they advance
+                              const isQualified = pos <= qualifyCount;
+                              const profileInfo = row.profiles || { username: 'Anonymous', avatar_url: null };
+
+                              // Extract badge selection safely
+                              const badgeSelections = row.tournament_badge_selections;
+                              const badgeId = badgeSelectionsMap[row.player_id] || (
+                                Array.isArray(badgeSelections) 
+                                  ? badgeSelections[0]?.badge_id 
+                                  : (badgeSelections as any)?.badge_id
+                              );
+
+                              return (
+                                <tr 
+                                  key={row.player_id}
+                                  className={cn(
+                                    "text-xs transition-colors hover:bg-white/5 border-l-4",
+                                    isQualified 
+                                      ? "border-l-emerald-500 bg-emerald-500/5 hover:bg-emerald-500/10" 
+                                      : "border-l-zinc-800 bg-transparent"
+                                  )}
+                                >
+                                  {/* Rank */}
+                                  <td className="py-3 px-2">
+                                    <span className={cn(
+                                      "font-black italic px-2 py-0.5 rounded text-[10px] select-none",
+                                      isQualified ? "text-emerald-400 bg-emerald-500/20" : "text-zinc-500 bg-zinc-800/50"
+                                    )}>
+                                      {pos}
+                                    </span>
+                                  </td>
+
+                                  {/* Player info (avatar + username + badge) */}
+                                  <td className="py-3">
+                                    <div className="flex items-center gap-2.5">
+                                      <PlayerBadge 
+                                        badgeId={badgeId} 
+                                        username={profileInfo.username} 
+                                        size="sm" 
+                                      />
+                                      
+                                      <div className="w-5 h-5 rounded-full overflow-hidden bg-zinc-950 flex items-center justify-center text-[9px] font-black uppercase text-zinc-500 shrink-0 border border-white/5 animate-pulse-once">
+                                        {profileInfo.avatar_url ? (
+                                          <img src={profileInfo.avatar_url} alt={profileInfo.username} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                        ) : (
+                                          profileInfo.username?.substring(0, 2)
+                                        )}
+                                      </div>
+                                      <span className="font-extrabold uppercase italic truncate tracking-tight text-text-main max-w-[150px]">
+                                        {profileInfo.username}
+                                      </span>
+                                    </div>
+                                  </td>
+
+                                  {/* P */}
+                                  <td className="py-3 text-center font-bold text-text-muted">{row.played}</td>
+                                  
+                                  {/* W */}
+                                  <td className="py-3 text-center font-bold text-zinc-400">{row.wins}</td>
+                                  
+                                  {/* D */}
+                                  <td className="py-3 text-center font-bold text-zinc-400">{row.draws}</td>
+                                  
+                                  {/* L */}
+                                  <td className="py-3 text-center font-bold text-zinc-400">{row.losses}</td>
+                                  
+                                  {/* GF */}
+                                  <td className="py-3 text-center font-bold text-text-muted">{row.goals_for}</td>
+
+                                  {/* GA */}
+                                  <td className="py-3 text-center font-bold text-text-muted">{row.goals_against}</td>
+                                  
+                                  {/* GD */}
+                                  <td className={cn(
+                                    "py-3 text-center font-bold italic font-mono select-none", 
+                                    row.goal_difference > 0 ? "text-emerald-400" : row.goal_difference < 0 ? "text-red-400" : "text-zinc-500"
+                                  )}>
+                                    {row.goal_difference > 0 ? `+${row.goal_difference}` : row.goal_difference}
+                                  </td>
+
+                                  {/* Pts */}
+                                  <td className="py-3 text-center font-black text-text-main text-sm italic pr-2 select-none">
+                                    {row.points}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Legend Summary */}
+                      <div className="flex flex-col sm:flex-row items-center justify-between text-[9px] font-bold text-text-muted uppercase tracking-widest border-t border-white/5 pt-4 gap-2 select-none">
+                        <span>Legend: W={settings?.points_win || 3}pts · D={settings?.points_draw || 1}pts · L={settings?.points_loss || 0}pts</span>
+                        <span className="text-emerald-400 italic font-black">Top {qualifyCount} Advance to Playoffs</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Block: Fixtures list */}
+                  {sortedRounds.length > 0 && (
+                    <div className="xl:col-span-5 space-y-4">
+                      <div className="flex items-center space-x-2.5">
+                        <Calendar className="w-5 h-5 text-zinc-500" />
+                        <h4 className="text-xs font-extrabold uppercase tracking-widest text-zinc-400">
+                          Fixtures List
+                        </h4>
+                      </div>
+
+                      <div className="space-y-6 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                        {sortedRounds.map((round) => {
+                          const roundMatches = matchesByRound[round] || [];
+                          return (
+                            <div key={round} className="space-y-3">
+                              <div className="flex items-center justify-between border-b border-white/5 pb-1 sm:pb-2">
+                                <span className="text-[10px] font-black uppercase text-primary tracking-widest">
+                                  Matchday {round}
+                                </span>
+                                <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">
+                                  {roundMatches.length} Engagements
+                                </span>
+                              </div>
+
+                              <div className="space-y-2.5">
+                                {roundMatches.map((m) => (
+                                  <GroupMatchCard key={m.id} match={m} flashed={!!flashedMatches[m.id]} navigate={navigate} />
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="space-y-8">
           <div className="flex items-center space-x-3">
             <div className="p-3 bg-primary/10 rounded-2xl border border-primary/20">
               <Trophy className="w-6 h-6 text-primary animate-pulse" />
             </div>
-            <div>
-              <h2 className="text-2xl font-black text-text-main italic uppercase tracking-tight">CHAMPIONSHIP BRACKET</h2>
-              <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Knockout Stage brackets formulated from group advancements</p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full gap-2">
+              <div>
+                <h2 className="text-2xl font-black text-text-main italic uppercase tracking-tight">CHAMPIONSHIP BRACKET</h2>
+                <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Knockout Stage brackets formulated from group advancements</p>
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-[0.15em] text-primary bg-primary/10 border border-primary/25 px-3 py-1 rounded-full animate-pulse self-start sm:self-center select-none">
+                Scroll sideways ⟷
+              </span>
             </div>
           </div>
 
@@ -825,8 +1155,11 @@ function BracketTree({ matches, tournament, settings }: { matches: any[], tourna
     roundsToShow = roundsInfo.slice(2);
   }
 
-  const columnsData = roundsToShow.map(round => {
-    const actualMatches = matches.filter(m => m.stage === round.key);
+  const columnsData = roundsToShow.map((round, idx) => {
+    const actualMatches = matches.filter(m => 
+      m.stage === round.key || 
+      ((m.stage === 'knockout' || m.stage === 'playoffs' || m.stage === 'stage-playoffs' || m.stage === 'main' || !m.stage) && Number(m.round) === (idx + 1))
+    );
     
     const slots = Array.from({ length: round.count }, (_, idx) => {
       const slotNum = idx + 1;
@@ -837,7 +1170,8 @@ function BracketTree({ matches, tournament, settings }: { matches: any[], tourna
           id: matched.id,
           actual: matched,
           placeholder: false,
-          slotLabel: `Match ${slotNum}`
+          slotLabel: `Match ${slotNum}`,
+          roundKey: round.key
         };
       } else {
         let tbdPlayer1 = 'TBD';
@@ -862,7 +1196,8 @@ function BracketTree({ matches, tournament, settings }: { matches: any[], tourna
           placeholder: true,
           tbdPlayer1,
           tbdPlayer2,
-          slotLabel: `Match ${slotNum}`
+          slotLabel: `Match ${slotNum}`,
+          roundKey: round.key
         };
       }
     });
@@ -888,7 +1223,7 @@ function BracketTree({ matches, tournament, settings }: { matches: any[], tourna
           >
             {col.slots.map((slot, matchIdx) => (
               <div key={slot.id} className="relative flex items-center py-1">
-                <BracketNode slot={slot} navigate={navigate} />
+                <BracketNode slot={slot} navigate={navigate} isFinal={col.roundKey === 'final'} />
                 
                 {/* Connection lines to next column */}
                 {colIdx < columnsData.length - 1 && (
@@ -907,7 +1242,7 @@ function BracketTree({ matches, tournament, settings }: { matches: any[], tourna
   );
 }
 
-function BracketNode({ slot, navigate }: { slot: any, navigate: any }) {
+function BracketNode({ slot, navigate, isFinal }: { slot: any; navigate: any; isFinal?: boolean }) {
   if (slot.placeholder) {
     return (
       <div className="w-[220px] bg-zinc-950/40 rounded-2xl border-2 border-dashed border-white/5 p-4 flex flex-col justify-between space-y-3 shadow-inner">
@@ -937,48 +1272,73 @@ function BracketNode({ slot, navigate }: { slot: any, navigate: any }) {
   const isWinner1 = isCompleted && score1 !== null && score2 !== null && score1 > score2;
   const isWinner2 = isCompleted && score1 !== null && score2 !== null && score2 > score1;
 
-  const p1 = match.player1_profile || {};
-  const p2 = match.player2_profile || {};
+  const p1 = match.player1_profile || match.p1 || {};
+  const p2 = match.player2_profile || match.p2 || {};
+
+  const getSingularStageLabel = (stage: string, slotLabel: string) => {
+    if (stage === 'final') return 'Final';
+    if (stage === 'semi_final') return slotLabel.replace('Match', 'Semi-Final');
+    if (stage === 'quarter_final') return slotLabel.replace('Match', 'Quarter-Final');
+    if (stage === 'round_of_16') return slotLabel.replace('Match', 'Round of 16');
+    return slotLabel;
+  };
+
+  const nodeLabel = match ? getSingularStageLabel(slot.roundKey || match.stage, slot.slotLabel) : slot.slotLabel;
+
+  const championName = isFinal && isCompleted
+    ? (isWinner1 ? (p1.username || 'TBD') : isWinner2 ? (p2.username || 'TBD') : null)
+    : null;
 
   return (
     <div 
       onClick={() => navigate(`/matches/${match.id}`)}
       className={cn(
-        "w-[220px] bg-surface/95 border rounded-2xl shadow-xl transition-all duration-300 hover:scale-105 relative z-10 cursor-pointer overflow-hidden",
-        isCompleted ? "border-white/5 hover:border-primary/40" : "border-primary/20 hover:border-primary"
+        "w-[220px] bg-surface/90 border rounded-2xl shadow-xl transition-all duration-300 hover:scale-[1.03] active:scale-[0.98] relative z-10 cursor-pointer overflow-hidden",
+        isFinal 
+          ? (isCompleted ? "border-amber-400/95 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-[#1e1503]/90 animate-pulse-once" : "border-amber-500/40 hover:border-amber-400") 
+          : (isCompleted ? "border-white/5 hover:border-primary/40" : "border-primary/20 hover:border-primary")
       )}
     >
+      {isFinal && isCompleted && championName && (
+        <div className="bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-black text-[9px] font-black uppercase tracking-[0.2em] py-1.5 text-center font-bold flex items-center justify-center gap-1 shadow-md select-none">
+          <Trophy className="w-3.5 h-3.5 text-black animate-bounce shrink-0" />
+          <span>CHAMPION: {championName} 🏆</span>
+        </div>
+      )}
+
       <div className="px-3 py-1 bg-background/50 border-b border-white/5 flex justify-between items-center text-[9px] font-black tracking-wider text-text-muted">
-        <span className="uppercase italic">{slot.slotLabel}</span>
+        <span className="uppercase italic">{nodeLabel}</span>
         <span className={cn(
           "uppercase tracking-widest px-1.5 py-0.5 rounded text-[8px] font-black",
-          match.status === 'completed' ? "text-emerald-500" : "text-primary animate-pulse"
+          match.status === 'completed' ? "text-emerald-500 bg-emerald-500/10" : "text-primary bg-primary/10 animate-pulse"
          )}>
           {match.status}
         </span>
       </div>
 
-      <div className="p-3 space-y-2">
+      <div className="p-3 space-y-2.5">
         {/* Player 1 Row */}
         <div className={cn(
-          "flex items-center justify-between transition-opacity",
-          isWinner2 && "opacity-45"
+          "flex items-center justify-between px-2 py-1.5 rounded-xl transition-all duration-300",
+          isWinner1 ? "bg-amber-500/10 text-amber-400 border border-amber-500/25 shadow-sm font-black italic" : "text-text-main",
+          isWinner2 ? "opacity-30 blur-[0.5px] filter grayscale saturate-50 scale-[0.98]" : ""
         )}>
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 border border-white/10 bg-zinc-900 flex items-center justify-center text-[8px] font-bold uppercase text-zinc-400">
               {p1.avatar_url ? <img src={p1.avatar_url} alt={p1.username} /> : (p1.username || 'P').slice(0, 2)}
             </div>
             <span className={cn(
-              "font-black text-[11px] truncate uppercase tracking-tight",
-              isWinner1 ? "text-primary italic" : "text-text-main"
+              "text-[11px] truncate uppercase tracking-tight font-extrabold flex items-center gap-1",
+              isWinner1 ? "text-amber-400 italic" : "text-text-main"
             )}>
+              {isWinner1 && <Trophy className="w-3 h-3 text-amber-400 shrink-0" />}
               {p1.username || 'TBD'}
             </span>
           </div>
           {isCompleted && score1 !== null ? (
             <span className={cn(
               "font-black text-xs px-1.5 py-0.5 rounded bg-background/60 min-w-[20px] text-center",
-              isWinner1 ? "text-primary border border-primary/20" : "text-text-muted"
+              isWinner1 ? "text-amber-400 border border-amber-500/30 bg-amber-505/5" : "text-text-muted"
             )}>
               {score1}
             </span>
@@ -991,24 +1351,26 @@ function BracketNode({ slot, navigate }: { slot: any, navigate: any }) {
 
         {/* Player 2 Row */}
         <div className={cn(
-          "flex items-center justify-between transition-opacity",
-          isWinner1 && "opacity-45"
+          "flex items-center justify-between px-2 py-1.5 rounded-xl transition-all duration-300",
+          isWinner2 ? "bg-amber-500/10 text-amber-400 border border-amber-500/25 shadow-sm font-black italic" : "text-text-main",
+          isWinner1 ? "opacity-30 blur-[0.5px] filter grayscale saturate-50 scale-[0.98]" : ""
         )}>
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 border border-white/10 bg-zinc-900 flex items-center justify-center text-[8px] font-bold uppercase text-zinc-400">
               {p2.avatar_url ? <img src={p2.avatar_url} alt={p2.username} /> : (p2.username || 'P').slice(0, 2)}
             </div>
             <span className={cn(
-              "font-black text-[11px] truncate uppercase tracking-tight",
-              isWinner2 ? "text-primary italic" : "text-text-main"
+              "text-[11px] truncate uppercase tracking-tight font-extrabold flex items-center gap-1",
+              isWinner2 ? "text-amber-400 italic" : "text-text-main"
             )}>
+              {isWinner2 && <Trophy className="w-3 h-3 text-amber-400 shrink-0" />}
               {p2.username || 'TBD'}
             </span>
           </div>
           {isCompleted && score2 !== null ? (
             <span className={cn(
               "font-black text-xs px-1.5 py-0.5 rounded bg-background/60 min-w-[20px] text-center",
-              isWinner2 ? "text-primary border border-primary/20" : "text-text-muted"
+              isWinner2 ? "text-amber-400 border border-amber-500/30 bg-amber-505/5" : "text-text-muted"
             )}>
               {score2}
             </span>
@@ -1052,10 +1414,11 @@ function BracketConnector({ isTop, matchesCount, height }: { isTop: boolean; mat
 }
 
 function ChampionCardSection({ matches }: { matches: any[] }) {
-  const finalMatch = matches.find(m => m.stage === 'final');
+  const finalMatch = matches.find(m => m.stage === 'final') || 
+    (matches.length > 0 ? [...matches].sort((a, b) => (b.round || 0) - (a.round || 0))[0] : null);
   const isFinalCompleted = finalMatch && finalMatch.status === 'completed';
   const championProfile = isFinalCompleted 
-    ? (finalMatch.winner_profile || (finalMatch.winner === finalMatch.player1 ? finalMatch.player1_profile : finalMatch.player2_profile)) 
+    ? (finalMatch.winner_profile || (finalMatch.winner === finalMatch.player1 ? (finalMatch.player1_profile || finalMatch.p1_profile || finalMatch.p1) : (finalMatch.player2_profile || finalMatch.p2_profile || finalMatch.p2))) 
     : null;
 
   if (!isFinalCompleted || !championProfile) return null;

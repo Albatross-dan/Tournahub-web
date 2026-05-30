@@ -11,9 +11,52 @@ interface AutoVerifiedResultProps {
   submissions?: any[];
   winner?: string;
   matchId: string;
+  playerName?: string;
+  tournamentId?: string;
 }
 
-export function AutoVerifiedResult({ finalScore1, finalScore2, submissions = [], winner, matchId }: AutoVerifiedResultProps) {
+export function AutoVerifiedResult({ finalScore1, finalScore2, submissions = [], winner, matchId, playerName, tournamentId }: AutoVerifiedResultProps) {
+  const mySub = playerName ? submissions?.find((s: any) => s.username === playerName) : null;
+  
+  let outcomeBadge = null;
+  if (mySub) {
+    const myScore = mySub.score1;
+    const oppScore = mySub.score2;
+    if (myScore > oppScore) {
+      outcomeBadge = (
+        <span className="px-4 py-1.5 bg-emerald-500/20 text-emerald-400 text-xs font-black uppercase tracking-widest rounded-full border border-emerald-500/30 animate-pulse">
+          Victory ✓
+        </span>
+      );
+    } else if (myScore < oppScore) {
+      outcomeBadge = (
+        <span className="px-4 py-1.5 bg-rose-500/20 text-rose-400 text-xs font-black uppercase tracking-widest rounded-full border border-rose-500/30">
+          Defeat ✗
+        </span>
+      );
+    } else {
+      outcomeBadge = (
+        <span className="px-4 py-1.5 bg-amber-500/20 text-amber-400 text-xs font-black uppercase tracking-widest rounded-full border border-amber-500/30">
+          Draw •
+        </span>
+      );
+    }
+  } else if (winner) {
+    if (winner === playerName) {
+      outcomeBadge = (
+        <span className="px-4 py-1.5 bg-emerald-500/20 text-emerald-400 text-xs font-black uppercase tracking-widest rounded-full border border-emerald-500/30 animate-pulse">
+          Victory ✓
+        </span>
+      );
+    } else {
+      outcomeBadge = (
+        <span className="px-4 py-1.5 bg-rose-500/20 text-rose-400 text-xs font-black uppercase tracking-widest rounded-full border border-rose-500/30">
+          Defeat ✗
+        </span>
+      );
+    }
+  }
+
   return (
     <div className="bg-slate-900 border border-emerald-500/30 rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500">
       <div className="bg-emerald-500 p-8 flex flex-col items-center justify-center text-center space-y-3">
@@ -21,12 +64,20 @@ export function AutoVerifiedResult({ finalScore1, finalScore2, submissions = [],
           <CheckCircle2 className="w-10 h-10 text-white" />
         </div>
         <div>
-          <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter leading-none mb-1">Result Verified</h3>
-          <p className="text-white/80 font-bold uppercase tracking-widest text-[10px]">Parity check successful • Consensus reached</p>
+          <h3 className="text-2xl font-black text-white italic uppercase tracking-tighter leading-none mb-1">Match Complete!</h3>
+          <p className="text-white font-bold uppercase tracking-widest text-[11px] mt-1">
+            Both players agreed: {finalScore1} – {finalScore2}
+          </p>
+          <p className="text-white/80 font-bold uppercase tracking-widest text-[9px] mt-1">Parity check successful • Consensus reached</p>
         </div>
       </div>
 
       <div className="p-10 space-y-12">
+        {outcomeBadge && (
+          <div className="flex justify-center -mb-4">
+            {outcomeBadge}
+          </div>
+        )}
         {/* Scores */}
         <div className="flex items-center justify-center space-x-12">
           <div className="text-center group">

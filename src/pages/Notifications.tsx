@@ -3,18 +3,68 @@ import { useNavigate } from 'react-router-dom';
 import Shell from '../components/layout/Shell';
 import { supabase } from '../lib/supabase';
 import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
-import { Bell, Trophy, MessageSquare, Calendar, Info, Clock, CheckCircle2, Shield } from 'lucide-react';
+import { Bell, Trophy, MessageSquare, Calendar, Info, Clock, CheckCircle2, Shield, AlertTriangle, Key, Monitor, Power, ExternalLink } from 'lucide-react';
 import { formatDate, cn } from '../lib/utils';
-import { Notification } from '../types/database';
+import { Notification as DbNotification } from '../types/database';
 import LoadingState from '../components/ui/LoadingState';
+import { requestNotificationPermission } from '../lib/notifications';
+import { toast } from 'react-hot-toast';
 
 export default function Notifications() {
   const { user, refetchSignal } = useAuth();
   const isInitialLoad = React.useRef(true);
   useRefetchOnFocus(fetchNotifications);
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<DbNotification[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Push Permission Diagnostics state
+  const [permissionStatus, setPermissionStatus] = useState<string>('unknown');
+  const [inIframe, setInIframe] = useState<boolean>(false);
+  const [hasFirebaseConfig, setHasFirebaseConfig] = useState<boolean>(false);
+  const [requestingPermission, setRequestingPermission] = useState<boolean>(false);
+  const [fcmToken, setFcmToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setInIframe(window.self !== window.top);
+      setPermissionStatus('Notification' in window ? Notification.permission : 'not_supported');
+      
+      const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+      const projId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+      const senderId = import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID;
+      const appId = import.meta.env.VITE_FIREBASE_APP_ID;
+      const vapidId = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+      
+      setHasFirebaseConfig(!!(apiKey && projId && senderId && appId && vapidId));
+      setFcmToken(localStorage.getItem('fcm_token'));
+    }
+  }, []);
+
+  const handleRequestPermission = async () => {
+    if (!user) return;
+    setRequestingPermission(true);
+    try {
+      const token = await requestNotificationPermission(user.id);
+      if (token) {
+        setFcmToken(token);
+        setPermissionStatus('granted');
+        toast.success("Push Notification Token Registered Successfully!");
+      } else {
+        const currentPerm = 'Notification' in window ? Notification.permission : 'not_supported';
+        setPermissionStatus(currentPerm);
+        if (currentPerm !== 'granted') {
+          toast.error(`Permission denied or blocked. Permission level: ${currentPerm}`);
+        } else {
+          toast.error("Could not obtain Push Token. Check console warnings or environment configuration.");
+        }
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to trigger permission dialog.");
+    } finally {
+      setRequestingPermission(false);
+    }
+  };
 
   useEffect(() => {
     if (user?.id) {
@@ -71,7 +121,7 @@ export default function Notifications() {
     }
   };
 
-  const handleNotificationClick = (notif: Notification) => {
+  const handleNotificationClick = (notif: DbNotification) => {
     const data = notif.data as any;
     if (data?.deep_link) {
       navigate(data.deep_link);
@@ -103,6 +153,131 @@ export default function Notifications() {
               Mark all as read
             </button>
           )}
+        </div>
+
+        {/* Push Notification Diagnostics & Subscription */}
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-black text-white italic uppercase tracking-tight flex items-center gap-2">
+                <Bell className="text-primary w-5 h-5 animate-pulse" />
+                Browser Push Setup & Diagnostics
+              </h2>
+              <p className="text-xs text-slate-400 mt-1 max-w-2xl font-semibold">
+                Configure, request and debug real-time system-level push notifications for match schedules and results.
+              </p>
+            </div>
+            
+            <button
+              onClick={handleRequestPermission}
+              disabled={requestingPermission}
+              className={cn(
+                "px-5 py-2.5 rounded-xl font-bold uppercase text-xs tracking-wider transition-all flex items-center gap-2 w-full md:w-auto justify-center",
+                permissionStatus === 'granted' && fcmToken
+                  ? "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20"
+                  : "bg-primary hover:bg-primary/95 text-slate-950 shadow-lg hover:shadow-primary/20"
+              )}
+            >
+              {requestingPermission ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                  Processing...
+                </>
+              ) : permissionStatus === 'granted' && fcmToken ? (
+                <>
+                  <CheckCircle2 size={14} />
+                  Push Active & Registered
+                </>
+              ) : (
+                <>
+                  <Power size={14} />
+                  Enable Push Notifications
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs pt-4 border-t border-slate-800/60">
+            {/* status item 1: IFrame Block Detection */}
+            <div className={cn(
+              "p-4 rounded-2xl border flex items-start gap-3",
+              inIframe 
+                ? "bg-amber-500/5 border-amber-500/10 text-amber-200"
+                : "bg-emerald-500/5 border-emerald-500/10 text-emerald-200"
+            )}>
+              <div className="mt-0.5">
+                {inIframe ? <AlertTriangle className="text-amber-500 w-4 h-4 flex-shrink-0" /> : <Monitor className="text-emerald-500 w-4 h-4 flex-shrink-0" />}
+              </div>
+              <div className="w-full min-w-0">
+                <p className="font-bold uppercase tracking-wide">Security Sandbox Check</p>
+                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed italic font-medium">
+                  {inIframe 
+                    ? "Currently running inside an iFrame container. Browsers block native notification requests in nested frames. Open in New Tab to trigger permission." 
+                    : "Running in top-level window. Ready to trigger standard permission requests."}
+                </p>
+                {inIframe && (
+                  <a 
+                    href={window.location.href} 
+                    target="_blank" 
+                    rel="noreferrer" 
+                    className="mt-2 text-[10px] text-amber-500 underline flex items-center gap-1 font-bold uppercase tracking-wider hover:text-amber-400"
+                  >
+                    Open in New Tab
+                    <ExternalLink size={10} />
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {/* status item 2: Firebase Credentials Check */}
+            <div className={cn(
+              "p-4 rounded-2xl border bg-slate-950/40 flex items-start gap-3",
+              hasFirebaseConfig ? "border-emerald-500/10 text-emerald-200" : "border-red-500/10 text-red-200"
+            )}>
+              <div className="mt-0.5">
+                {hasFirebaseConfig ? <Key className="text-emerald-500 w-4 h-4 flex-shrink-0" /> : <AlertTriangle className="text-red-500 w-4 h-4 flex-shrink-0" />}
+              </div>
+              <div>
+                <p className="font-bold uppercase tracking-wide">FCM Configuration</p>
+                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed italic font-medium">
+                  {hasFirebaseConfig 
+                    ? "FCM credentials fully validated and authenticated." 
+                    : "Firebase variables are missing. Set VITE_FIREBASE_API_KEY, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_MESSAGING_SENDER_ID and VITE_FIREBASE_VAPID_KEY."}
+                </p>
+              </div>
+            </div>
+
+            {/* status item 3: Permission & Device Sync status */}
+            <div className="p-4 rounded-2xl border border-slate-800 bg-slate-950/40 flex items-start gap-3 text-slate-300">
+              <div className="mt-0.5">
+                <Bell className="text-zinc-400 w-4 h-4 flex-shrink-0" />
+              </div>
+              <div className="w-full min-w-0">
+                <p className="font-bold uppercase tracking-wide text-white">Permission & Token Status</p>
+                <p className="text-[10px] text-slate-400 mt-1.5 flex justify-between gap-2 border-b border-slate-800 pb-1 italic">
+                  <span>Permission:</span>
+                  <span className={cn(
+                    "font-bold uppercase",
+                    permissionStatus === 'granted' ? "text-emerald-400" : permissionStatus === 'default' ? "text-slate-400" : "text-red-400"
+                  )}>
+                    {permissionStatus}
+                  </span>
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1 flex justify-between gap-2 italic">
+                  <span>Database Sync:</span>
+                  <span className={cn("font-bold uppercase", fcmToken ? "text-emerald-400" : "text-amber-400")}>
+                    {fcmToken ? "Tokens synced" : "Offline / Pending"}
+                  </span>
+                </p>
+                {fcmToken && (
+                  <div className="mt-2 text-[9px] bg-slate-900 border border-slate-800 p-1.5 rounded-lg flex flex-col font-mono w-full">
+                    <span className="text-slate-500 font-bold uppercase text-[8px]">Token preview:</span>
+                    <span className="text-slate-400 select-all truncate mt-0.5">{fcmToken}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="card divide-y divide-slate-800 rounded-3xl overflow-hidden border-slate-800/50">

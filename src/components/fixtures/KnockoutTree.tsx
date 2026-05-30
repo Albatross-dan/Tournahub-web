@@ -176,7 +176,7 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
                 >
                   {col.matches.map((match, matchIdx) => (
                     <div key={`left-node-${match.match_id || match.id || matchIdx}`} className="relative flex items-center py-1">
-                      <MatchNode match={match} />
+                      <MatchNode match={match} roundLabel={col.label} />
                       <MatchConnector 
                         side="left" 
                         colIdx={colIdx} 
@@ -214,7 +214,7 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
                 </span>
                 {finalMatch ? (
                   <div className="relative group p-1 rounded-3xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 scale-[1.03] shadow-xl shadow-yellow-500/15">
-                    <MatchNode match={finalMatch} />
+                    <MatchNode match={finalMatch} roundLabel="Grand Final" isFinal={true} />
                   </div>
                 ) : (
                   <div className="p-8 border-2 border-dashed border-border-main rounded-2xl text-xs italic text-text-muted uppercase text-center font-bold tracking-widest bg-surface/30 w-[190px] sm:w-[220px]">
@@ -230,7 +230,7 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
                     3rd Place Match
                   </span>
                   <div className="relative group p-1 rounded-3xl bg-gradient-to-r from-teal-500 via-emerald-400 to-teal-500 scale-[1.03] shadow-xl">
-                    <MatchNode match={thirdPlaceMatch} />
+                    <MatchNode match={thirdPlaceMatch} roundLabel="3rd Place Track" />
                   </div>
                 </div>
               )}
@@ -261,7 +261,7 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
                         matchesCount={col.matches.length} 
                         height={height} 
                       />
-                      <MatchNode match={match} />
+                      <MatchNode match={match} roundLabel={col.label} />
                     </div>
                   ))}
                 </div>
@@ -275,7 +275,7 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
   );
 }
 
-function MatchNode({ match }: { match: any }) {
+function MatchNode({ match, roundLabel, isFinal }: { match: any; roundLabel?: string; isFinal?: boolean }) {
   const navigate = useNavigate();
   const isCompleted = match.status === 'completed';
   const score1 = match.score1;
@@ -283,18 +283,41 @@ function MatchNode({ match }: { match: any }) {
   const isWinner1 = isCompleted && score1 !== null && score2 !== null && score1 > score2;
   const isWinner2 = isCompleted && score1 !== null && score2 !== null && score2 > score1;
 
+  const rawCleanLabel = roundLabel 
+    ? (roundLabel.endsWith('s') ? roundLabel.slice(0, -1) : roundLabel) 
+    : (match.stage === 'third_place' || match.stage === 'third-place' ? '3rd Place' : `Round ${match.round}`);
+
+  // Singularize e.g. Quarter-Finals to Quarter-Final
+  const cleanLabel = rawCleanLabel.replace('-Finals', '-Final').replace('finals', 'final').replace('Finals', 'Final');
+
+  const p1Name = match.player1_username ? getPublicIdentity(match.player1_username) : 'TBD';
+  const p2Name = match.player2_username ? getPublicIdentity(match.player2_username) : 'TBD';
+
+  const championName = isFinal && isCompleted
+    ? (isWinner1 ? p1Name : isWinner2 ? p2Name : null)
+    : null;
+
   return (
     <div 
       onClick={() => navigate(`/matches/${match.match_id || match.id}`)}
       className={cn(
-        "bg-surface/95 backdrop-blur-md border rounded-2xl w-[190px] sm:w-[220px] shadow-lg transition-all duration-300 hover:scale-[1.03] relative z-10 cursor-pointer overflow-hidden group/card",
-        isCompleted ? "border-border-main hover:border-primary/40" : "border-primary/20 hover:border-primary"
+        "bg-surface/90 backdrop-blur-md border rounded-2xl w-[190px] sm:w-[220px] shadow-lg transition-all duration-300 hover:scale-[1.03] relative z-10 cursor-pointer overflow-hidden group/card",
+        isFinal 
+          ? (isCompleted ? "border-amber-400/90 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-[#1e1503]/90" : "border-amber-500/40 hover:border-amber-400")
+          : (isCompleted ? "border-border-main hover:border-primary/40" : "border-primary/20 hover:border-primary")
       )}
     >
+      {isFinal && isCompleted && championName && (
+        <div className="bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-black text-[9px] font-black uppercase tracking-[0.2em] py-1.5 text-center font-bold flex items-center justify-center gap-1 shadow-md select-none">
+          <Trophy className="w-3.5 h-3.5 text-black animate-bounce" />
+          <span>CHAMPION: {championName} 🏆</span>
+        </div>
+      )}
+
       {/* Top Status Header */}
       <div className="px-3 py-1 bg-background/50 border-b border-border-main flex justify-between items-center text-[9px] font-black tracking-wider text-text-muted">
         <span className="uppercase italic">
-          {match.stage === 'third_place' || match.stage === 'third-place' ? '3rd Place Match' : `ROUND ${match.round}`}
+          {cleanLabel}
         </span>
         <span className={cn(
           "uppercase tracking-widest px-1 py-0.2 rounded font-black",
@@ -306,8 +329,8 @@ function MatchNode({ match }: { match: any }) {
 
       {/* Player 1 Row */}
       <div className={cn(
-        "flex items-center justify-between px-3 py-2 transition-colors",
-        isWinner1 ? "bg-emerald-500/5" : isWinner2 ? "opacity-40" : ""
+        "flex items-center justify-between px-3 py-2 transition-all duration-300",
+        isWinner1 ? "bg-emerald-500/5" : isWinner2 ? "opacity-30 blur-[1px] filter grayscale saturate-50" : ""
       )}>
         <div className="flex items-center gap-2 min-w-0">
           <PlayerBadge badgeId={match.player1_badge_id} username={match.player1_username || 'TBD'} size="xs" className="w-5 h-5 rounded" />
@@ -315,7 +338,7 @@ function MatchNode({ match }: { match: any }) {
             "font-black text-[11px] truncate uppercase tracking-tight",
             isWinner1 ? "text-primary" : "text-text-main"
           )}>
-            {match.player1_username ? getPublicIdentity(match.player1_username) : 'TBD'}
+            {p1Name}
           </span>
         </div>
         {isCompleted && score1 !== null ? (
@@ -335,8 +358,8 @@ function MatchNode({ match }: { match: any }) {
 
       {/* Player 2 Row */}
       <div className={cn(
-        "flex items-center justify-between px-3 py-2 transition-colors",
-        isWinner2 ? "bg-emerald-500/5" : isWinner1 ? "opacity-40" : ""
+        "flex items-center justify-between px-3 py-2 transition-all duration-300",
+        isWinner2 ? "bg-emerald-500/5" : isWinner1 ? "opacity-30 blur-[1px] filter grayscale saturate-50" : ""
       )}>
         <div className="flex items-center gap-2 min-w-0">
           <PlayerBadge badgeId={match.player2_badge_id} username={match.player2_username || 'TBD'} size="xs" className="w-5 h-5 rounded" />
@@ -344,7 +367,7 @@ function MatchNode({ match }: { match: any }) {
             "font-black text-[11px] truncate uppercase tracking-tight",
             isWinner2 ? "text-primary" : "text-text-main"
           )}>
-            {match.player2_username ? getPublicIdentity(match.player2_username) : 'TBD'}
+            {p2Name}
           </span>
         </div>
         {isCompleted && score2 !== null ? (

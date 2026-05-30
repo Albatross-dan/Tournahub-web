@@ -107,12 +107,12 @@ export function WalletPage() {
 
                 <div className="mt-6 pt-4 border-t border-white/5">
                   <button
-                    disabled={isLocked || activeBalance < 1 || mappedLimits.remaining_withdrawal_usd <= 0}
+                    disabled={true}
                     onClick={() => setIsWithdrawOpen(true)}
-                    className="w-full h-12 rounded-xl bg-slate-800 hover:bg-slate-705 border border-white/10 disabled:bg-slate-950 disabled:border-transparent disabled:text-slate-600 text-slate-200 hover:text-white font-extrabold text-xs uppercase italic tracking-wider shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full h-12 rounded-xl bg-slate-800/40 border border-white/5 text-slate-500 font-extrabold text-xs uppercase italic tracking-wider flex items-center justify-center gap-2 cursor-not-allowed transition-all"
                   >
-                    <ArrowUpRight className="w-4 h-4 text-slate-400" />
-                    <span>Withdraw Funds</span>
+                    <ArrowUpRight className="w-4 h-4 text-slate-500" />
+                    <span>Withdraw Funds (Coming Soon)</span>
                   </button>
                 </div>
               </div>
