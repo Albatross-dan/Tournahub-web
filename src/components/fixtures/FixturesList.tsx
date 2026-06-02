@@ -50,18 +50,17 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
         tournamentService.getById(tournamentId),
       ]);
       const rawMatches = matchesData || [];
-      const seen = new Set();
+      const seenIds = new Set();
       const uniqueMatches = [];
       for (const m of rawMatches) {
         if (!m) continue;
-        
-        const p1Id = m.player1 || m.player1_username || '';
-        const p2Id = m.player2 || m.player2_username || '';
-        const sortedPlayers = [p1Id, p2Id].sort().join('-');
-        const matchKey = `${m.stage || ''}-${m.round || ''}-${m.group_name || ''}-${sortedPlayers}`;
-
-        if (!seen.has(matchKey)) {
-          seen.add(matchKey);
+        const mId = m.match_id || m.id;
+        if (mId) {
+          if (!seenIds.has(mId)) {
+            seenIds.add(mId);
+            uniqueMatches.push(m);
+          }
+        } else {
           uniqueMatches.push(m);
         }
       }

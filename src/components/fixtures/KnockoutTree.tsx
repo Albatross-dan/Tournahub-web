@@ -15,6 +15,7 @@ interface KnockoutTreeProps {
 
 export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
   const [matches, setMatches] = useState<any[]>([]);
+  const [dbChampion, setDbChampion] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const { refreshCount } = useMatchCompletionSync(tournamentId);
 
@@ -35,6 +36,18 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
           fetchMatches();
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tournament_champions',
+          filter: `tournament_id=eq.${tournamentId}`,
+        },
+        () => {
+          fetchMatches();
+        }
+      )
       .subscribe();
 
     return () => {
@@ -44,8 +57,33 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
 
   async function fetchMatches() {
     try {
-      const matchesData = await tournamentService.getFixturesWithBadges(tournamentId);
-      setMatches(matchesData || []);
+      const [matchesData, champRes] = await Promise.all([
+        tournamentService.getFixturesWithBadges(tournamentId),
+        (supabase as any).from('tournament_champions').select('*').eq('tournament_id', tournamentId).maybeSingle()
+      ]);
+      
+      const rawMatches = matchesData || [];
+      const seenIds = new Set();
+      const uniqueData = [];
+      for (const m of rawMatches) {
+        if (!m) continue;
+        const mId = m.match_id || m.id;
+        if (mId) {
+          if (!seenIds.has(mId)) {
+            seenIds.add(mId);
+            uniqueData.push(m);
+          }
+        } else {
+          uniqueData.push(m);
+        }
+      }
+      
+      setMatches(uniqueData);
+      if (champRes && champRes.data) {
+        setDbChampion(champRes.data);
+      } else {
+        setDbChampion(null);
+      }
     } catch (err) {
       console.error('Error fetching matches for bracket:', err);
     } finally {
@@ -62,15 +100,33 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
   }
 
   // Filter tournament bracket matches to knockout and playoffs stages only (excluding third_place)
-  const bracketMatches = matches.filter(
+  let bracketMatches = matches.filter(
     (m) => m && m.stage && (
       m.stage === 'knockout' || 
       m.stage === 'playoffs' || 
       m.stage === 'stage-playoffs' ||
       m.stage.toLowerCase().includes('knockout') ||
-      m.stage.toLowerCase().includes('playoff')
-    )
+      m.stage.toLowerCase().includes('playoff') ||
+      m.stage.toLowerCase().includes('quarter') ||
+      m.stage.toLowerCase().includes('semi') ||
+      m.stage.toLowerCase().includes('final') ||
+      m.stage.toLowerCase().includes('main')
+    ) && 
+    !m.stage.toLowerCase().includes('group') && 
+    !m.stage.toLowerCase().includes('league') && 
+    !m.stage.toLowerCase().includes('third')
   );
+
+  // Fallback: If no matches are found using the strict filters but we have matches, use all non-group, non-third matches
+  if (bracketMatches.length === 0 && matches.length > 0) {
+    bracketMatches = matches.filter(
+      (m) => m && (!m.stage || (
+        !m.stage.toLowerCase().includes('group') && 
+        !m.stage.toLowerCase().includes('league') && 
+        !m.stage.toLowerCase().includes('third')
+      ))
+    );
+  }
 
   const thirdPlaceMatch = matches.find(
     (m) => m && m.stage && (m.stage === 'third_place' || m.stage === 'third-place' || m.stage.toLowerCase().includes('third'))
@@ -125,23 +181,34 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
   const finalCenterY = finalFirstOffset + cardHeight / 2;
 
   // Compute champion details
-  const isFinalCompleted = finalMatch && finalMatch.status === 'completed';
+  const isFinalCompleted = (finalMatch && finalMatch.status === 'completed') || !!dbChampion;
   const finalScore1 = finalMatch?.score1;
   const finalScore2 = finalMatch?.score2;
-  const finalWinner1 = isFinalCompleted && finalScore1 !== null && finalScore2 !== null && finalScore1 > finalScore2;
-  const finalWinner2 = isFinalCompleted && finalScore1 !== null && finalScore2 !== null && finalScore2 > finalScore1;
 
-  const championUsername = finalWinner1 
-    ? finalMatch.player1_username 
-    : finalWinner2 
-      ? finalMatch.player2_username 
-      : null;
+  const finalWinner1 = (finalMatch && finalMatch.status === 'completed') && (
+    (finalMatch.winner && finalMatch.winner === finalMatch.player1) ||
+    (finalScore1 !== null && finalScore2 !== null && finalScore1 > finalScore2)
+  );
+  const finalWinner2 = (finalMatch && finalMatch.status === 'completed') && (
+    (finalMatch.winner && finalMatch.winner === finalMatch.player2) ||
+    (finalScore1 !== null && finalScore2 !== null && finalScore2 > finalScore1)
+  );
 
-  const championBadgeId = finalWinner1 
-    ? finalMatch.player1_badge_id 
-    : finalWinner2 
-      ? finalMatch.player2_badge_id 
-      : null;
+  const championUsername = dbChampion 
+    ? dbChampion.winner_username 
+    : (finalWinner1 
+        ? finalMatch.player1_username 
+        : finalWinner2 
+          ? finalMatch.player2_username 
+          : null);
+
+  const championBadgeId = dbChampion 
+    ? dbChampion.winner_badge_id 
+    : (finalWinner1 
+        ? finalMatch.player1_badge_id 
+        : finalWinner2 
+          ? finalMatch.player2_badge_id 
+          : null);
 
   const championName = championUsername ? getPublicIdentity(championUsername) : null;
 
