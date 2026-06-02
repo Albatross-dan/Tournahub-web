@@ -68,10 +68,14 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowAdminOnly =
   }
 
   if (checkingStatus) {
-    if (allowAdminOnly && !isAdmin) {
-      return <Navigate to="/dashboard" replace />;
-    }
-    return <Outlet />;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="w-10 h-10 text-primary animate-spin" />
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest animate-pulse">Running Security Checks...</p>
+        </div>
+      </div>
+    );
   }
 
   // Evaluate current user status

@@ -3,8 +3,8 @@ import { cleanStoragePath } from '../lib/utils';
 
 export const storageService = {
   async uploadFile(bucket: string, path: string, file: File) {
-    // Force session hydration for RLS propagation in storage
-    await supabase.auth.getSession();
+    // Force session hydration for RLS propagation in storage and handle token refreshes robustly
+    await ensureAuthenticated();
     
     const { data, error } = await supabase.storage
       .from(bucket)

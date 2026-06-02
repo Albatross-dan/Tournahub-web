@@ -66,40 +66,111 @@ export default function ScheduleTournament() {
 
   async function fetchMatches() {
     try {
-      const data = await matchService.getByTournament(id!);
-      const safeData = data || [];
-      setMatches(safeData);
-      
-      // Determine initial active tab if not set
-      if (safeData.length > 0 && !activeTab) {
-        const rounds = Array.from(new Set(safeData.map(m => m.round))).filter((r): r is number => typeof r === 'number').sort((a, b) => a - b);
-        const groupNames = Array.from(new Set(safeData.map(m => m.group_name))).filter(Boolean).sort();
-        
-        if (groupNames.length > 0) {
-          setActiveTab(`Group ${groupNames[0]}`);
-        } else if (rounds.length > 0) {
-          setActiveTab(`Round ${rounds[0]}`);
-        }
+      const { data, error } = await (supabase as any).rpc('admin_get_schedulable_matches', { p_tournament_id: id });
+      if (error) {
+        throw error;
       }
+      
+      const rawMatches = (data as any)?.matches || [];
+      const mappedMatches = rawMatches.map((m: any, idx: number) => ({
+        id: m.match_id,
+        match_id: m.match_id,
+        tournament_id: id,
+        stage: m.stage,
+        round: m.round,
+        group_name: m.group_name,
+        status: m.status,
+        scheduled_at: m.scheduled_at,
+        player1: m.player1_username ? { username: m.player1_username } : null,
+        player2: m.player2_username ? { username: m.player2_username } : null,
+        player1_username: m.player1_username,
+        player2_username: m.player2_username,
+        players_known: m.players_known,
+        is_scheduled: m.is_scheduled,
+        fixture_id: m.fixture_id,
+        scheduled_date: m.scheduled_date,
+        scheduled_time: m.scheduled_time,
+        timezone: m.timezone || 'UTC',
+        location: m.location,
+        notes: m.notes,
+        match_order: m.match_order || (idx + 1)
+      }));
+
+      setMatches(mappedMatches);
     } catch (err) {
-      console.error(err);
+      console.error('[ScheduleTournament] Error loading matches:', err);
     }
   }
 
-  const rounds = Array.from(new Set(matches.map(m => m.round))).filter((r): r is number => typeof r === 'number').sort((a, b) => a - b);
-  const groupNames = Array.from(new Set(matches.map(m => m.group_name))).filter(Boolean).sort();
-  
-  const tabs = groupNames.length > 0 
-    ? groupNames.map(g => `Group ${g}`)
-    : rounds.map(r => `Round ${r}`);
+  // Format stage name beautifully (e.g. group_stage -> Group Stage, playoffs -> Playoffs)
+  const formatStageName = (stage: string) => {
+    if (!stage) return '';
+    return stage
+      .replace(/_/g, ' ')
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  };
 
-  const filteredMatches = matches.filter(m => {
-    if (activeTab.startsWith('Group ')) {
-      return m.group_name === activeTab.replace('Group ', '');
-    } else if (activeTab.startsWith('Round ')) {
-      return m.round === parseInt(activeTab.replace('Round ', ''));
+  // Compute dynamic tabs based on all fetched matches to support multi-stage/playoff matches
+  interface TabItem {
+    id: string;
+    label: string;
+    stage: string;
+    group_name: string | null;
+    round: number | null;
+  }
+
+  const dynamicTabs: TabItem[] = [];
+  matches.forEach((m: any) => {
+    const stageLabel = formatStageName(m.stage);
+    let detailLabel = '';
+    if (m.group_name) {
+      detailLabel = `Group ${m.group_name}`;
+    } else if (m.round !== undefined && m.round !== null) {
+      // Format specialized rounds / phases
+      if (m.stage === 'playoffs') {
+        if (m.round === 4) detailLabel = 'Finals';
+        else if (m.round === 3) detailLabel = 'Semifinals';
+        else if (m.round === 2) detailLabel = 'Quarterfinals';
+        else detailLabel = `Round ${m.round}`;
+      } else {
+        detailLabel = `Round ${m.round}`;
+      }
+    } else {
+      detailLabel = 'General';
     }
-    return true;
+
+    const label = `${stageLabel} - ${detailLabel}`;
+    // Construct unique tab key
+    const tabKey = `${m.stage || ''}-${m.group_name || ''}-${m.round !== undefined && m.round !== null ? m.round : ''}`;
+    
+    if (!dynamicTabs.some(t => t.id === tabKey)) {
+      dynamicTabs.push({
+        id: tabKey,
+        label: label,
+        stage: m.stage,
+        group_name: m.group_name || null,
+        round: m.round !== undefined && m.round !== null ? m.round : null
+      });
+    }
+  });
+
+  // Automatically sync activeTab to first available tab on mount/updates
+  useEffect(() => {
+    if (dynamicTabs.length > 0 && (!activeTab || !dynamicTabs.some(t => t.id === activeTab))) {
+      setActiveTab(dynamicTabs[0].id);
+    }
+  }, [matches, activeTab]);
+
+  const filteredMatches = matches.filter((m: any) => {
+    if (!activeTab) return true;
+    const currentTab = dynamicTabs.find(t => t.id === activeTab);
+    if (!currentTab) return true;
+    
+    return m.stage === currentTab.stage && 
+           m.group_name === currentTab.group_name && 
+           m.round === currentTab.round;
   });
 
   const handleAction = (match: any) => {
@@ -168,25 +239,25 @@ export default function ScheduleTournament() {
         {/* Tabs and Content */}
         <div className="space-y-6">
            <div className="flex overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide space-x-2">
-              {tabs.map((tab) => (
+              {dynamicTabs.map((tab) => (
                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
                     className={cn(
-                       "flex-none px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest italic transition-all border",
-                       activeTab === tab
+                       "flex-none px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest italic transition-all border shrink-0",
+                       activeTab === tab.id
                           ? "bg-primary text-white border-primary shadow-lg shadow-primary/20"
                           : "bg-slate-900/50 text-slate-500 border-slate-800 hover:border-slate-700 hover:text-slate-300"
                     )}
                  >
-                    {tab}
+                    {tab.label}
                  </button>
               ))}
            </div>
 
-           <div className="flex items-center justify-between">
+           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic ml-2">
-                 Displaying {filteredMatches.length} Matches for {activeTab}
+                 Displaying {filteredMatches.length} Matches for {dynamicTabs.find(t => t.id === activeTab)?.label || activeTab}
               </h3>
               
               <button 
@@ -199,13 +270,28 @@ export default function ScheduleTournament() {
            </div>
 
            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredMatches.map((match) => (
-                 <MatchCard 
-                    key={match.id} 
-                    match={match} 
-                    onAction={handleAction}
-                 />
-              ))}
+              {filteredMatches.map((match) => {
+                 const isTbd = match.players_known === false;
+                 return (
+                    <div 
+                       key={match.id}
+                       className={cn(
+                          "transition-all duration-300 relative",
+                          isTbd && "opacity-55 saturate-[0.4] filter blur-[0.25px] hover:opacity-100 hover:saturate-100 hover:blur-none"
+                       )}
+                    >
+                       <MatchCard 
+                          match={match} 
+                          onAction={handleAction}
+                       />
+                       {isTbd && (
+                          <div className="text-[8px] font-black text-[#FFD700]/90 text-center mt-1.5 uppercase tracking-widest italic select-none">
+                             TBD Spot • Pre-Schedulable
+                          </div>
+                       )}
+                    </div>
+                 );
+              })}
            </div>
 
            {filteredMatches.length === 0 && (

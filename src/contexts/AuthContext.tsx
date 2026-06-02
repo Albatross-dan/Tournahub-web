@@ -407,11 +407,28 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     });
 
     // After subscribing to onAuthStateChange, check if there is no session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error('[AuthContext] Error getting session on init:', error);
+        if (error.message?.toLowerCase().includes('refresh token') || error.message?.toLowerCase().includes('refresh_token')) {
+          const keysToRemove: string[] = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.startsWith('sb-') || key.startsWith('supabase'))) {
+              keysToRemove.push(key);
+            }
+          }
+          keysToRemove.forEach((key) => localStorage.removeItem(key));
+        }
+      }
       if (!session) {
         if (!isMounted) return;
         setLoading(false);
       }
+    }).catch(err => {
+      console.error('[AuthContext] Unhandled rejection getting session on init:', err);
+      if (!isMounted) return;
+      setLoading(false);
     });
 
     // Outer safety timeout to guarantee initialization screen resolves under any conditions

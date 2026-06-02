@@ -5,7 +5,7 @@ import { cn, getPublicIdentity } from '../../lib/utils';
 import LoadingState from '../ui/LoadingState';
 import { PlayerBadge } from '../ui/PlayerBadge';
 import { useMatchCompletionSync } from '../../hooks/useMatchCompletionSync';
-import { Trophy } from 'lucide-react';
+import { Trophy, Shield, HelpCircle, CornerDownRight, Compass } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 
@@ -55,21 +55,25 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
 
   if (loading) {
     return (
-      <div className="card p-12 bg-surface/50 border-border-main text-center shadow-sm">
+      <div id="bracket-loading" className="card p-12 bg-surface/50 border-border-main text-center shadow-sm">
         <LoadingState message="Mapping Brackets..." />
       </div>
     );
   }
 
-  const height = 660; // Standard bracket height for perfect alignment
-
   // Filter tournament bracket matches to knockout and playoffs stages only (excluding third_place)
   const bracketMatches = matches.filter(
-    (m) => (m.stage === 'knockout' || m.stage === 'playoffs' || m.stage === 'stage-playoffs')
+    (m) => m && m.stage && (
+      m.stage === 'knockout' || 
+      m.stage === 'playoffs' || 
+      m.stage === 'stage-playoffs' ||
+      m.stage.toLowerCase().includes('knockout') ||
+      m.stage.toLowerCase().includes('playoff')
+    )
   );
 
   const thirdPlaceMatch = matches.find(
-    (m) => (m.stage === 'third_place' || m.stage === 'third-place')
+    (m) => m && m.stage && (m.stage === 'third_place' || m.stage === 'third-place' || m.stage.toLowerCase().includes('third'))
   );
 
   // Group by round
@@ -86,188 +90,299 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
 
   if (roundKeys.length === 0) {
     return (
-      <div className="py-20 text-center text-text-muted italic border-2 border-dashed border-border-main rounded-3xl">
+      <div id="bracket-no-rounds" className="py-20 text-center text-text-muted italic border-2 border-dashed border-border-main rounded-3xl">
         No tournament bracket rounds scheduled yet.
       </div>
     );
   }
 
-  const finalRoundKey = roundKeys[roundKeys.length - 1];
-  const finalMatches = roundMap[finalRoundKey] || [];
-  const finalMatch = finalMatches[0];
+  // Measurements
+  const cardHeight = 110;
+  const baseGap = 32;
+  const colWidth = 220;
+  const connWidth = 48;
+  const colStep = colWidth + connWidth; // 268px
 
-  const previousRoundKeys = roundKeys.filter(k => k !== finalRoundKey);
+  // The first round has the most matches
+  const col0MatchesCount = (roundMap[roundKeys[0]] || []).length || 1;
+  const totalHeight = col0MatchesCount * cardHeight + (col0MatchesCount - 1) * baseGap + 48;
 
-  const leftColumns: { roundKey: number; label: string; matches: any[] }[] = [];
-  const rightColumns: { roundKey: number; label: string; matches: any[] }[] = [];
-
-  const getRoundLabelByCount = (roundKey: number, totalRounds: number, matchesCount: number) => {
-    if (roundKey === finalRoundKey) return 'Grand Final';
-    // If double sided, total matches in round = matchesCount * 2
-    const totalRoundMatches = matchesCount * 2;
-    if (totalRoundMatches === 8) return 'Quarterfinals';
-    if (totalRoundMatches === 4) return 'Quarterfinals';
-    if (totalRoundMatches === 2) return 'Semifinals';
+  // Let's formatting labels
+  const getRoundLabel = (roundKey: number, isFinalCol: boolean) => {
+    if (isFinalCol) return 'Grand Final';
+    const totalRounds = roundKeys.length;
+    const diff = totalRounds - roundKeys.indexOf(roundKey) - 1;
+    if (diff === 1) return 'Semifinals';
+    if (diff === 2) return 'Quarterfinals';
     return `Round ${roundKey}`;
   };
 
-  previousRoundKeys.forEach(roundKey => {
-    const roundMatches = roundMap[roundKey] || [];
-    // Sort to ensure stable position assignment
-    const sortedRoundMatches = [...roundMatches].sort((a, b) => {
-      const aId = a?.match_id || a?.id || '';
-      const bId = b?.match_id || b?.id || '';
-      return aId.localeCompare(bId);
-    });
-    const half = Math.ceil(sortedRoundMatches.length / 2);
-    const leftPart = sortedRoundMatches.slice(0, half);
-    const rightPart = sortedRoundMatches.slice(half);
+  const finalColIdx = roundKeys.length - 1;
+  const finalMatches = roundMap[roundKeys[finalColIdx]] || [];
+  const finalMatch = finalMatches[0];
 
-    leftColumns.push({
-      roundKey,
-      label: getRoundLabelByCount(roundKey, roundKeys.length, sortedRoundMatches.length),
-      matches: leftPart
-    });
+  const finalFirstOffset = (Math.pow(2, finalColIdx) - 1) * (cardHeight / 2) + (Math.pow(2, finalColIdx) - 1) * (baseGap / 2);
+  const finalCenterY = finalFirstOffset + cardHeight / 2;
 
-    rightColumns.push({
-      roundKey,
-      label: getRoundLabelByCount(roundKey, roundKeys.length, sortedRoundMatches.length),
-      matches: rightPart
-    });
-  });
+  // Compute champion details
+  const isFinalCompleted = finalMatch && finalMatch.status === 'completed';
+  const finalScore1 = finalMatch?.score1;
+  const finalScore2 = finalMatch?.score2;
+  const finalWinner1 = isFinalCompleted && finalScore1 !== null && finalScore2 !== null && finalScore1 > finalScore2;
+  const finalWinner2 = isFinalCompleted && finalScore1 !== null && finalScore2 !== null && finalScore2 > finalScore1;
 
-  // Right side columns go symmetrically from inside-out: Semifinals -> Quarterfinals -> Round of 16
-  const rightColumnsSymmetric = [...rightColumns].reverse();
+  const championUsername = finalWinner1 
+    ? finalMatch.player1_username 
+    : finalWinner2 
+      ? finalMatch.player2_username 
+      : null;
+
+  const championBadgeId = finalWinner1 
+    ? finalMatch.player1_badge_id 
+    : finalWinner2 
+      ? finalMatch.player2_badge_id 
+      : null;
+
+  const championName = championUsername ? getPublicIdentity(championUsername) : null;
 
   return (
-    <div className="w-full relative bg-radial-gradient from-surface/20 to-background rounded-3xl border border-border-main p-4 md:p-8 overflow-hidden">
-      {/* Visual neon ambient decoration light */}
-      <div className="absolute top-0 left-1/4 w-[300px] h-[300px] bg-primary/5 rounded-full blur-[120px] pointer-events-none -z-10" />
-      <div className="absolute bottom-0 right-1/4 w-[300px] h-[300px] bg-primary/5 rounded-full blur-[120px] pointer-events-none -z-10" />
+    <div id="knockout-tree-container" className="w-full relative bg-gradient-to-b from-surface/25 to-background rounded-3xl border border-border-main p-4 md:p-8 overflow-hidden shadow-2xl">
+      {/* Light glow effects */}
+      <div className="absolute top-0 left-1/4 w-[400px] h-[400px] bg-primary/5 rounded-full blur-[140px] pointer-events-none -z-10" />
+      <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-primary/5 rounded-full blur-[140px] pointer-events-none -z-10" />
 
-      {/* Bracket Title */}
-      <div className="text-center mb-8 border-b border-border-main/20 pb-4">
-        <h2 className="text-2xl sm:text-3xl font-black text-text-main tracking-tight uppercase italic flex items-center justify-center gap-3">
-          <Trophy className="w-7 h-7 text-primary animate-pulse" />
-          <span>KNOCKOUT TREE</span>
-        </h2>
-        <p className="text-[10px] text-text-muted font-bold tracking-widest uppercase mt-1">
-          Championship bracket pathing • Click any match node to chat & resolve
-        </p>
+      {/* Bracket Header with interactive manual scroll indicator */}
+      <div className="flex flex-col sm:flex-row items-center justify-between mb-8 pb-4 border-b border-border-main/20 gap-4">
+        <div className="text-center sm:text-left">
+          <h2 className="text-2xl sm:text-3xl font-black text-text-main tracking-tight uppercase italic flex items-center justify-center sm:justify-start gap-3">
+            <Trophy className="w-7 h-7 text-primary animate-pulse" />
+            <span>CHAMPIONSHIP BRACKET</span>
+          </h2>
+          <p className="text-[10px] text-text-muted font-bold tracking-widest uppercase mt-1">
+            Standard single elimination pathing • Interactive fixture nodes
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/60 border border-slate-800 rounded-xl text-[10px] font-black text-primary uppercase tracking-widest animate-pulse">
+          <Compass className="w-4.5 h-4.5 text-primary" />
+          <span>Swipe or Scroll Horizonally to view full path ➔</span>
+        </div>
       </div>
 
-      {/* Responsive Horizontal Scroll Stage Container */}
-      <div className="overflow-x-auto pb-6 scrollbar-thin scrollbar-thumb-border-main select-none animate-fade-in">
-        <div className="flex items-center justify-center min-w-[1000px] gap-6 xl:gap-10 py-4 px-2">
-          
-          {/* LEFT COLUMN TREE BRACKETS INWARD (Ascending, e.g. R1 -> R2 -> Semis) */}
-          <div className="flex items-center gap-6 xl:gap-8 justify-end">
-            {leftColumns.map((col, colIdx) => (
-              <div key={`left-col-${col.roundKey}`} className="flex flex-col items-center">
-                {/* Column header label */}
-                <span className="text-[9px] font-black text-primary uppercase tracking-widest italic mb-4 bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full">
-                  {col.label}
-                </span>
-                
-                {/* Vertical aligned blocks list */}
+      {/* Horizontal Scroll Stage */}
+      <div id="bracket-scroll-stage" className="overflow-x-auto pb-6 scrollbar-thin scrollbar-thumb-border-main select-none animate-fade-in">
+        {/* Relative Positioning Base matches the dynamic total height */}
+        <div 
+          style={{ height: `${totalHeight}px`, minWidth: `${(roundKeys.length + 1) * colStep + 64}px` }} 
+          className="relative py-4 px-2"
+        >
+          {/* Columns & Connectors */}
+          {roundKeys.map((roundKey, colIdx) => {
+            const rawColMatches = roundMap[roundKey] || [];
+            // Sort matches to pair correctly by slot
+            const colMatches = [...rawColMatches].sort((a, b) => {
+              const aSlot = a.bracket_slot !== undefined && a.bracket_slot !== null ? a.bracket_slot : 0;
+              const bSlot = b.bracket_slot !== undefined && b.bracket_slot !== null ? b.bracket_slot : 0;
+              if (aSlot !== bSlot) return aSlot - bSlot;
+
+              const aOrder = a.match_order !== undefined && a.match_order !== null ? a.match_order : 0;
+              const bOrder = b.match_order !== undefined && b.match_order !== null ? b.match_order : 0;
+              return aOrder - bOrder;
+            });
+
+            const isFinalCol = colIdx === finalColIdx;
+            const xOffset = colIdx * colStep;
+
+            return (
+              <React.Fragment key={`round-col-fragment-${roundKey}`}>
+                {/* Column Column Headers */}
                 <div 
-                  style={{ height: `${height}px` }} 
-                  className="flex flex-col justify-around relative py-2 w-[190px] sm:w-[220px]"
+                  className="absolute z-20 text-center"
+                  style={{ left: `${xOffset}px`, width: `${colWidth}px`, top: '0px' }}
                 >
-                  {col.matches.map((match, matchIdx) => (
-                    <div key={`left-node-${match.match_id || match.id || matchIdx}`} className="relative flex items-center py-1">
-                      <MatchNode match={match} roundLabel={col.label} />
-                      <MatchConnector 
-                        side="left" 
-                        colIdx={colIdx} 
-                        totalCols={leftColumns.length} 
-                        matchIdx={matchIdx} 
-                        matchesCount={col.matches.length} 
-                        height={height} 
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* CENTRAL STAGE FOCAL POINT (The Grand Final & 3rd Place with the Championship Cup) */}
-          <div className="flex flex-col items-center justify-center gap-6 min-w-[280px] relative px-4">
-            <div className="absolute w-48 h-48 bg-primary/10 rounded-full blur-3xl pointer-events-none -z-10" />
-
-            <div className="flex flex-col items-center text-center space-y-1">
-              <div className="w-14 h-14 bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg shadow-yellow-500/10 border-2 border-yellow-300 animate-bounce">
-                <Trophy className="w-8 h-8 text-background font-bold" />
-              </div>
-              <h3 className="text-base font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-200 uppercase tracking-widest italic animate-pulse">
-                FINALS STAGE
-              </h3>
-              <p className="text-[9px] text-text-muted font-bold uppercase tracking-widest">Championship & Podium showdowns</p>
-            </div>
-
-            <div className="flex flex-col lg:flex-row gap-8 items-center justify-center">
-              {/* Grand Final Column */}
-              <div className="flex flex-col items-center gap-2">
-                <span className="text-[8px] font-black text-amber-400 uppercase tracking-[0.2em] bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full select-none">
-                  Grand Final
-                </span>
-                {finalMatch ? (
-                  <div className="relative group p-1 rounded-3xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 scale-[1.03] shadow-xl shadow-yellow-500/15">
-                    <MatchNode match={finalMatch} roundLabel="Grand Final" isFinal={true} />
-                  </div>
-                ) : (
-                  <div className="p-8 border-2 border-dashed border-border-main rounded-2xl text-xs italic text-text-muted uppercase text-center font-bold tracking-widest bg-surface/30 w-[190px] sm:w-[220px]">
-                    TBD Finalists
-                  </div>
-                )}
-              </div>
-
-              {/* 3rd Place (Bronze) Column */}
-              {thirdPlaceMatch && (
-                <div className="flex flex-col items-center gap-2">
-                  <span className="text-[8px] font-black text-teal-400 uppercase tracking-[0.2em] bg-teal-500/10 border border-teal-500/20 px-2.5 py-0.5 rounded-full select-none">
-                    3rd Place Match
+                  <span className="inline-block text-[9px] font-black text-primary uppercase tracking-widest italic bg-primary/10 border border-primary/20 px-3 py-1 rounded-full shadow-sm">
+                    {getRoundLabel(roundKey, isFinalCol)}
                   </span>
-                  <div className="relative group p-1 rounded-3xl bg-gradient-to-r from-teal-500 via-emerald-400 to-teal-500 scale-[1.03] shadow-xl">
-                    <MatchNode match={thirdPlaceMatch} roundLabel="3rd Place Track" />
+                </div>
+
+                {/* Match Cards of the current round */}
+                {colMatches.map((match, i) => {
+                  const childFirstOffset = (Math.pow(2, colIdx) - 1) * (cardHeight / 2) + (Math.pow(2, colIdx) - 1) * (baseGap / 2);
+                  const childGap = (Math.pow(2, colIdx) - 1) * cardHeight + Math.pow(2, colIdx) * baseGap;
+                  const topPos = childFirstOffset + i * (cardHeight + childGap);
+
+                  return (
+                    <div 
+                      key={`match-[${match.id || match.match_id}]`}
+                      className="absolute"
+                      style={{ left: `${xOffset}px`, width: `${colWidth}px`, top: `${topPos}px` }}
+                    >
+                      <MatchNode match={match} roundLabel={getRoundLabel(roundKey, isFinalCol)} />
+                    </div>
+                  );
+                })}
+
+                {/* SVG Connections to the next column */}
+                {!isFinalCol && (
+                  <svg 
+                    className="absolute pointer-events-none"
+                    style={{ 
+                      left: `${xOffset + colWidth}px`, 
+                      width: `${connWidth}px`, 
+                      height: `${totalHeight}px`,
+                      top: '0px'
+                    }}
+                  >
+                    {colMatches.map((childMatch, i) => {
+                      const parentIdx = Math.floor(i / 2);
+                      const parentColIdx = colIdx + 1;
+
+                      // Compute positions
+                      const childFirstOffset = (Math.pow(2, colIdx) - 1) * (cardHeight / 2) + (Math.pow(2, colIdx) - 1) * (baseGap / 2);
+                      const childGap = (Math.pow(2, colIdx) - 1) * cardHeight + Math.pow(2, colIdx) * baseGap;
+                      const childCenterY = childFirstOffset + i * (cardHeight + childGap) + cardHeight / 2;
+
+                      const parentFirstOffset = (Math.pow(2, parentColIdx) - 1) * (cardHeight / 2) + (Math.pow(2, parentColIdx) - 1) * (baseGap / 2);
+                      const parentGap = (Math.pow(2, parentColIdx) - 1) * cardHeight + Math.pow(2, parentColIdx) * baseGap;
+                      const parentCenterY = parentFirstOffset + parentIdx * (cardHeight + parentGap) + cardHeight / 2;
+
+                      const isCompleted = childMatch.status === 'completed';
+                      const isWinnerP1 = isCompleted && childMatch.score1 > childMatch.score2;
+                      const isWinnerP2 = isCompleted && childMatch.score2 > childMatch.score1;
+                      const winnerUser = isWinnerP1 ? childMatch.player1_username : isWinnerP2 ? childMatch.player2_username : null;
+
+                      // Path is highlighted if this child match has completed and successfully feeds its champion
+                      const isPathActive = isCompleted && !!winnerUser;
+                      const strokeColor = isPathActive ? 'rgba(59, 130, 246, 0.75)' : 'rgba(51, 65, 85, 0.25)';
+                      const strokeWidth = isPathActive ? 2.5 : 1.5;
+                      const strokeDash = isPathActive ? 'none' : '3,3';
+
+                      return (
+                        <g key={`path-${colIdx}-${i}`}>
+                          {/* Shadow Background Line */}
+                          <path 
+                            d={`M 0,${childCenterY} H ${connWidth / 2} V ${parentCenterY} H ${connWidth}`}
+                            fill="none"
+                            stroke="rgba(15, 23, 42, 0.5)"
+                            strokeWidth={strokeWidth + 1}
+                          />
+                          {/* Main Colored Connector line */}
+                          <path 
+                            d={`M 0,${childCenterY} H ${connWidth / 2} V ${parentCenterY} H ${connWidth}`}
+                            fill="none"
+                            stroke={strokeColor}
+                            strokeWidth={strokeWidth}
+                            strokeDasharray={strokeDash}
+                            className="transition-all duration-300"
+                          />
+                        </g>
+                      );
+                    })}
+                  </svg>
+                )}
+              </React.Fragment>
+            );
+          })}
+
+          {/* CHAMPION / WINNER COLUMN (Emeges separately on the exact right) */}
+          <div 
+            className="absolute z-20 text-center"
+            style={{ left: `${roundKeys.length * colStep}px`, width: `${colWidth}px`, top: '0px' }}
+          >
+            <span className="inline-block text-[9px] font-black text-amber-500 uppercase tracking-widest italic bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full shadow-sm">
+              Winner Track
+            </span>
+          </div>
+
+          {/* Connector Line from Grand Final to Champion details */}
+          <svg
+            className="absolute pointer-events-none"
+            style={{
+              left: `${(roundKeys.length - 1) * colStep + colWidth}px`,
+              width: `${connWidth}px`,
+              height: `${totalHeight}px`,
+              top: '0px'
+            }}
+          >
+            <g>
+              <path 
+                d={`M 0,${finalCenterY} H ${connWidth}`}
+                fill="none"
+                stroke={isFinalCompleted ? 'rgba(245, 158, 11, 0.8)' : 'rgba(51, 65, 85, 0.25)'}
+                strokeWidth={isFinalCompleted ? 3 : 1.5}
+                strokeDasharray={isFinalCompleted ? 'none' : '3,3'}
+                className="transition-all duration-300"
+              />
+            </g>
+          </svg>
+
+          {/* Champion card node */}
+          <div 
+            className="absolute flex flex-col justify-center"
+            style={{
+              left: `${roundKeys.length * colStep}px`,
+              width: `${colWidth}px`,
+              top: `${finalCenterY - 60}px` // Centered on finalCenterY with height 120px
+            }}
+          >
+            {isFinalCompleted && championName ? (
+              <div className="relative group p-[2px] rounded-3xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 shadow-2xl shadow-yellow-500/20 animate-fade-in hover:scale-[1.04] transition-all duration-300">
+                <div className="bg-[#1e1503]/95 backdrop-blur-md border border-amber-400/40 rounded-[22px] p-4 text-center overflow-hidden relative">
+                  <div className="absolute top-0 right-0 p-1 bg-amber-500 text-black rounded-bl-xl text-[8px] font-black uppercase tracking-wider">
+                    CHAMP
+                  </div>
+                  
+                  {/* Glowing amber aura */}
+                  <div className="absolute -inset-10 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+
+                  <div className="flex flex-col items-center">
+                    <div className="w-11 h-11 bg-gradient-to-br from-amber-400 to-yellow-600 rounded-full flex items-center justify-center border-2 border-yellow-300 shadow-md mb-2">
+                      <Trophy className="w-5.5 h-5.5 text-black" />
+                    </div>
+
+                    <PlayerBadge badgeId={championBadgeId} username={championUsername || 'TBD'} size="sm" className="w-7 h-7 rounded-sm mb-1" />
+                    
+                    <h3 className="font-sans font-black text-xs text-amber-200 uppercase tracking-tight truncate max-w-full">
+                      {championName}
+                    </h3>
+                    <p className="text-[8px] font-bold text-yellow-500 uppercase tracking-widest mt-0.5">
+                      Tournament Winner 🏆
+                    </p>
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* RIGHT COLUMN TREE BRACKETS INWARD (Descending, e.g. Semis <- R2 <- R1) */}
-          <div className="flex items-center gap-6 xl:gap-8 justify-start">
-            {rightColumnsSymmetric.map((col, colIdx) => (
-              <div key={`right-col-${col.roundKey}`} className="flex flex-col items-center">
-                {/* Column header label */}
-                <span className="text-[9px] font-black text-primary uppercase tracking-widest italic mb-4 bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full">
-                  {col.label}
-                </span>
-
-                {/* Vertical aligned blocks list */}
-                <div 
-                  style={{ height: `${height}px` }} 
-                  className="flex flex-col justify-around relative py-2 w-[190px] sm:w-[220px]"
-                >
-                  {col.matches.map((match, matchIdx) => (
-                    <div key={`right-node-${match.match_id || match.id || matchIdx}`} className="relative flex items-center py-1">
-                      <MatchConnector 
-                        side="right" 
-                        colIdx={rightColumns.length - 1 - colIdx} 
-                        totalCols={rightColumns.length} 
-                        matchIdx={matchIdx} 
-                        matchesCount={col.matches.length} 
-                        height={height} 
-                      />
-                      <MatchNode match={match} roundLabel={col.label} />
-                    </div>
-                  ))}
-                </div>
               </div>
-            ))}
+            ) : (
+              <div className="border-2 border-dashed border-amber-500/30 bg-surface/30 rounded-3xl p-6 text-center select-none w-full h-[120px] flex flex-col items-center justify-center">
+                <div className="w-10 h-10 rounded-full bg-slate-900/60 border border-slate-800 text-slate-500 flex items-center justify-center mb-2">
+                  <Trophy className="w-5 h-5" />
+                </div>
+                <span className="text-[9px] font-black text-amber-500/60 uppercase tracking-widest">
+                  TBD Champion
+                </span>
+                <span className="text-[7px] text-text-muted font-bold tracking-wider uppercase mt-1">
+                  Awaiting Grand Final
+                </span>
+              </div>
+            )}
           </div>
+
+          {/* Third Place Match positioned beautifully below the grand finals region */}
+          {thirdPlaceMatch && (
+            <div 
+              className="absolute"
+              style={{
+                left: `${(roundKeys.length - 1) * colStep}px`,
+                width: `${colWidth}px`,
+                top: `${finalCenterY + cardHeight + 24}px` // Directly below the grand final
+              }}
+            >
+              <div className="text-center mb-1.5">
+                <span className="inline-block text-[8px] font-black text-teal-400 bg-teal-500/10 border border-teal-500/20 px-2.5 py-0.5 rounded-full select-none uppercase tracking-widest">
+                  3rd Place Track
+                </span>
+              </div>
+              <MatchNode match={thirdPlaceMatch} roundLabel="3rd Place Match" />
+            </div>
+          )}
 
         </div>
       </div>
@@ -287,7 +402,6 @@ function MatchNode({ match, roundLabel, isFinal }: { match: any; roundLabel?: st
     ? (roundLabel.endsWith('s') ? roundLabel.slice(0, -1) : roundLabel) 
     : (match.stage === 'third_place' || match.stage === 'third-place' ? '3rd Place' : `Round ${match.round}`);
 
-  // Singularize e.g. Quarter-Finals to Quarter-Final
   const cleanLabel = rawCleanLabel.replace('-Finals', '-Final').replace('finals', 'final').replace('Finals', 'Final');
 
   const p1Name = match.player1_username ? getPublicIdentity(match.player1_username) : 'TBD';
@@ -301,7 +415,7 @@ function MatchNode({ match, roundLabel, isFinal }: { match: any; roundLabel?: st
     <div 
       onClick={() => navigate(`/matches/${match.match_id || match.id}`)}
       className={cn(
-        "bg-surface/90 backdrop-blur-md border rounded-2xl w-[190px] sm:w-[220px] shadow-lg transition-all duration-300 hover:scale-[1.03] relative z-10 cursor-pointer overflow-hidden group/card",
+        "bg-surface/90 backdrop-blur-md border rounded-2xl w-full shadow-lg transition-all duration-300 hover:scale-[1.03] relative z-10 cursor-pointer overflow-hidden group/card",
         isFinal 
           ? (isCompleted ? "border-amber-400/90 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-[#1e1503]/90" : "border-amber-500/40 hover:border-amber-400")
           : (isCompleted ? "border-border-main hover:border-primary/40" : "border-primary/20 hover:border-primary")
@@ -380,65 +494,6 @@ function MatchNode({ match, roundLabel, isFinal }: { match: any; roundLabel?: st
         ) : (
           <span className="text-text-muted opacity-30 text-[10px] font-bold italic">-</span>
         )}
-      </div>
-    </div>
-  );
-}
-
-function MatchConnector({ 
-  side, 
-  colIdx, 
-  totalCols, 
-  matchIdx, 
-  matchesCount, 
-  height 
-}: { 
-  side: 'left' | 'right'; 
-  colIdx: number; 
-  totalCols: number; 
-  matchIdx: number; 
-  matchesCount: number; 
-  height: number;
-}) {
-  if (colIdx === totalCols - 1) {
-    const isLeft = side === 'left';
-    return (
-      <div 
-        className={cn(
-          "absolute top-1/2 -translate-y-1/2 z-0 pointer-events-none flex items-center w-5 sm:w-8 xl:w-10 h-[2px] bg-primary/25",
-          isLeft ? "right-0 translate-x-full" : "left-0 -translate-x-full"
-        )}
-      />
-    );
-  }
-
-  const isTop = matchIdx % 2 === 0;
-  const isLeft = side === 'left';
-  const vertHeight = height / (matchesCount * 2);
-
-  return (
-    <div 
-      className={cn(
-        "absolute top-1/2 -translate-y-1/2 z-0 pointer-events-none flex items-center w-5 sm:w-8",
-        isLeft ? "right-0 translate-x-full h-[2px]" : "left-0 -translate-x-full h-[2px]"
-      )}
-    >
-      <div className="w-full h-[2px] bg-primary/25 relative">
-        <div 
-          style={{ height: `${vertHeight}px` }}
-          className={cn(
-            "absolute w-[2px] bg-primary/25",
-            isLeft ? "right-0" : "left-0",
-            isTop ? "top-0" : "bottom-0"
-          )}
-        />
-        <div 
-          className={cn(
-            "absolute w-5 sm:w-8 h-[2px] bg-primary/25",
-            isLeft ? "right-[-18px] sm:right-[-32px]" : "left-[-18px] sm:left-[-32px]"
-          )}
-          style={isTop ? { top: `${vertHeight}px` } : { bottom: `${vertHeight}px` }}
-        />
       </div>
     </div>
   );

@@ -90,7 +90,17 @@ export default function TournamentForm({ initialData, mode }: TournamentFormProp
       let bannerUrl = bannerPreview;
 
       if (bannerFile) {
-        bannerUrl = await storageService.uploadBanner(bannerFile);
+        try {
+          bannerUrl = await storageService.uploadBanner(bannerFile);
+        } catch (uploadErr: any) {
+          console.warn('[TournamentForm] Banner upload failed, using high-quality placeholder banner instead:', uploadErr);
+          // Fallback to high-quality gaming placeholder instead of failing completely
+          bannerUrl = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=800';
+          
+          // Let the user know the image upload failed, but continue to save the tournament
+          const uploadMsg = uploadErr.message || 'Failed to fetch';
+          setError(`Notice: Banner upload failed (${uploadMsg}). Falling back to default gaming cover. Attempting to save tournament data...`);
+        }
       }
 
       // Prepare data, ensuring dates are properly formatted or null

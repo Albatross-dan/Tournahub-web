@@ -18,6 +18,7 @@ import LoadingState from '../components/ui/LoadingState';
 import StatusBadge from '../components/ui/StatusBadge';
 import { TournamentStatus } from '../constants';
 
+import { useQuery } from '@tanstack/react-query';
 import { useRealtimeTournaments } from '../hooks/useRealtimeTournaments';
 
 import VerificationStatusBadge from '../components/match/VerificationStatusBadge';
@@ -45,68 +46,59 @@ export default function Dashboard() {
   // Separate fetch for completed tournaments for the hall of fame
   const { tournaments: completedTournaments, loading: completedLoading } = useRealtimeTournaments(completedStatus, 6);
   
-  const [scheduledMatches, setScheduledMatches] = useState<Match[]>([]);
-  const [userStats, setUserStats] = useState({ totalMatches: 0, wins: 0, winRate: 0 });
-  const [loading, setLoading] = useState(true);
+  // Query scheduled matches
+  const { data: userMatches = [], status: matchesStatus, refetch: refetchMatches } = useQuery<Match[]>({
+    queryKey: ['user_scheduled_matches', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const res = await matchService.getUserMatches(user.id);
+      return res || [];
+    },
+    enabled: !!user?.id,
+    staleTime: 1000 * 20, // 20 seconds
+    gcTime: 1000 * 60 * 60 * 24, // 24 hours persistent garbage collection
+    refetchOnReconnect: 'always',
+    refetchOnWindowFocus: true,
+  });
 
-  const isDashboardLoading = loading || activeLoading || completedLoading;
+  // Query user stats
+  const { data: userStats = { totalMatches: 0, wins: 0, winRate: 0 }, status: statsStatus, refetch: refetchStats } = useQuery({
+    queryKey: ['user_stats', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return { totalMatches: 0, wins: 0, winRate: 0 };
+      const res = await matchService.getUserStats(user.id);
+      return res || { totalMatches: 0, wins: 0, winRate: 0 };
+    },
+    enabled: !!user?.id,
+    staleTime: 1000 * 30, // 30 seconds
+    gcTime: 1000 * 60 * 60 * 24,
+    refetchOnReconnect: 'always',
+    refetchOnWindowFocus: true,
+  });
+
+  const scheduledMatches = React.useMemo(() => {
+    return userMatches.filter((m: any) => 
+      ['pending', 'ongoing', 'awaiting_result', 'match_in_progress', 'lobby_open', 'under_review'].includes(m.status)
+    ).slice(0, 5);
+  }, [userMatches]);
+
+  const isDashboardLoading = (matchesStatus === 'pending' && userMatches.length === 0) || 
+                             (statsStatus === 'pending' && userStats.totalMatches === 0) || 
+                             activeLoading || 
+                             completedLoading;
 
   useEffect(() => {
-    if (user?.id) {
-       loadDashboardData();
+    if (refetchSignal > 0) {
+      refetchMatches();
+      refetchStats();
     }
-  }, [user?.id, refetchSignal]);
+  }, [refetchSignal, refetchMatches, refetchStats]);
 
+  // Compatibility callback for refetchOnFocus hook
   async function loadDashboardData() {
-    if (!user) return;
-    if (!navigator.onLine) return;
-    if (isInitialLoad.current) {
-      setLoading(true);
-    }
-    
-    const timeoutId = setTimeout(() => {
-       setLoading(false);
-       console.warn('[Dashboard] Data loading timed out after 10s');
-    }, 10000);
-
-    try {
-      const matchesResult = await fetchWithRetry(async () => {
-        try {
-          const res = await matchService.getUserMatches(user.id);
-          return { data: res, error: null };
-        } catch (e) {
-          return { data: null, error: e };
-        }
-      });
-      const statsResult = await fetchWithRetry(async () => {
-        try {
-          const res = await matchService.getUserStats(user.id);
-          return { data: res, error: null };
-        } catch (e) {
-          return { data: null, error: e };
-        }
-      });
-
-      if (matchesResult.data) {
-        const matches = matchesResult.data || [];
-        // Show matches that are pending, ongoing, or awaiting results/review
-        const filteredMatches = matches.filter((m: any) => 
-          ['pending', 'ongoing', 'awaiting_result', 'match_in_progress', 'lobby_open', 'under_review'].includes(m.status)
-        ).slice(0, 5);
-        setScheduledMatches(filteredMatches);
-      }
-
-      if (statsResult.data) {
-        setUserStats(statsResult.data as any);
-      }
-      
-      clearTimeout(timeoutId);
-    } catch (err) {
-      console.error('Error loading dashboard:', err);
-      clearTimeout(timeoutId);
-    } finally {
-      setLoading(false);
-      isInitialLoad.current = false;
+    if (user?.id) {
+      refetchMatches();
+      refetchStats();
     }
   }
 
@@ -235,9 +227,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Prize Winners Slider (Hall of Fame) */}
-        <RecentChampions />
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-4">
           {/* Main Feed: Scheduled Matches */}
             <motion.div variants={item} className="lg:col-span-2 space-y-8">
@@ -305,6 +294,9 @@ export default function Dashboard() {
             </motion.div>
           </div>
         </div>
+
+        {/* Prize Winners Slider (Hall of Fame) */}
+        <RecentChampions />
 
         {/* Professional Footer Section */}
         <div className="mt-16 pt-12 pb-8 border-t border-border-main w-full flex flex-col items-center">

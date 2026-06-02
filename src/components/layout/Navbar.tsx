@@ -172,6 +172,17 @@ export default function Navbar() {
         <div className="flex items-center space-x-2 md:space-x-4">
           {/* Desktop/Global Menu Toggle */}
           <div className="flex items-center space-x-2">
+            {isAdmin && (
+              <NavLink 
+                to="/admin" 
+                className="flex items-center space-x-2 sm:px-3.5 px-2.5 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all font-black uppercase text-[10px] tracking-wider italic shadow-sm active:scale-95 duration-200 cursor-pointer"
+                title="Admin Control Hub"
+              >
+                <Shield size={12} className="stroke-[2.5px] text-rose-400 animate-pulse" />
+                <span className="hidden sm:inline">Admin Hub</span>
+              </NavLink>
+            )}
+
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="w-11 h-11 rounded-xl bg-surface border border-border-main flex items-center justify-center text-primary transition-all active:scale-95 hover:bg-surface-hover shadow-sm"
