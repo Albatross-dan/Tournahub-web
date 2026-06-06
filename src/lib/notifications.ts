@@ -17,45 +17,63 @@ import { toast } from 'react-hot-toast';
 export async function requestNotificationPermission(userId: string): Promise<string | null> {
   // 1. Safety Checks for Browser APIs
   if (typeof window === 'undefined') {
+    console.log('[Notifications] requestNotificationPermission called server-side. Aborting.');
     return null;
   }
   
+  console.log('[Notifications] requestNotificationPermission triggered for user:', userId);
+  console.log('[Notifications] Browser sandbox status: run-time window top level =', window.self === window.top);
+
   if (!('serviceWorker' in navigator) || !('Notification' in window) || !('PushManager' in window)) {
-    console.log('[Notifications] Push notifications are not supported in this browser.');
+    console.log('[Notifications] Push notifications are not supported in this browser. Main criteria check failed:', {
+      serviceWorkerSupport: 'serviceWorker' in navigator,
+      notificationSupport: 'Notification' in window,
+      pushManagerSupport: 'PushManager' in window
+    });
     return null;
   }
 
   try {
     // 2. Request / Check Notification Permission First
     let permission = Notification.permission;
+    console.log('[Notifications] Initial notification permission on-entry state is:', permission);
+
     if (permission === 'default') {
+      console.log('[Notifications] Permission is currently default. Triggering interactive permission prompt...');
       try {
         permission = await Notification.requestPermission();
+        console.log('[Notifications] Promisified Notification.requestPermission returned:', permission);
       } catch (permErr) {
-        console.warn('[Notifications] Notification.requestPermission promise form failed, trying callback:', permErr);
+        console.warn('[Notifications] Notification.requestPermission promise form failed, trying fallback callback pattern:', permErr);
         permission = await new Promise<NotificationPermission>((resolve) => {
           Notification.requestPermission(resolve);
         });
+        console.log('[Notifications] Callback Notification.requestPermission returned:', permission);
       }
+    } else {
+      console.log('[Notifications] System skipping permission prompt. Relying on existing state:', permission);
     }
 
     if (permission !== 'granted') {
-      console.log(`[Notifications] Permission state: ${permission}. Cannot obtain FCM token.`);
+      console.warn(`[Notifications] Permission blocked or denied: "${permission}". Aborting setup.`);
       return null;
     }
 
     const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+    console.log('[Notifications] Checking VITE_FIREBASE_VAPID_KEY:', vapidKey ? 'PASSED (value hidden)' : 'FAILED (missing)');
     if (!vapidKey) {
       console.warn('[Notifications] VITE_FIREBASE_VAPID_KEY is missing in environment variables. FCM registration aborted.');
       return null;
     }
 
     // 3. Get Firebase Messaging Instance
+    console.log('[Notifications] Querying getMessagingInstance from firebase helper...');
     const messaging = await getMessagingInstance();
     if (!messaging) {
-      console.warn('[Notifications] Unable to retrieve Firebase Messaging instance.');
+      console.warn('[Notifications] Unable to retrieve Firebase Messaging instance because app/messaging check failed in firebase.ts.');
       return null;
     }
+    console.log('[Notifications] Firebase Messaging instance retrieved successfully.');
 
     // 4. Custom registration of the Service Worker to guarantee it resolves correctly in Vite/Vercel
     let swRegistration: ServiceWorkerRegistration | undefined;
@@ -70,31 +88,38 @@ export async function requestNotificationPermission(userId: string): Promise<str
       };
 
       const swUrl = `/firebase-messaging-sw.js?apiKey=${encodeURIComponent(config.apiKey)}&authDomain=${encodeURIComponent(config.authDomain)}&projectId=${encodeURIComponent(config.projectId)}&storageBucket=${encodeURIComponent(config.storageBucket)}&messagingSenderId=${encodeURIComponent(config.messagingSenderId)}&appId=${encodeURIComponent(config.appId)}`;
+      console.log('[Notifications] Registering dynamic service worker path:', swUrl);
 
       swRegistration = await navigator.serviceWorker.register(swUrl);
+      console.log('[Notifications] Service Worker registration promise successful. Active scope:', swRegistration.scope);
+
       // Wait for service worker to finish activating if needed
+      console.log('[Notifications] Waiting for navigator.serviceWorker.ready...');
       await navigator.serviceWorker.ready;
-      console.log('[Notifications] Service Worker registered successfully:', swRegistration.scope);
+      console.log('[Notifications] Service Worker is ready and active.');
     } catch (swErr) {
       console.warn('[Notifications] Custom Service Worker registration failed:', swErr);
     }
 
     // 5. Generate FCM token
+    console.log('[Notifications] Calling Firebase getToken() method with active dynamic service Worker registration...');
     const token = await getToken(messaging, {
       vapidKey,
       serviceWorkerRegistration: swRegistration,
     });
 
     if (!token) {
-      console.warn('[Notifications] Generated FCM token is empty.');
+      console.warn('[Notifications] Generated FCM token is empty. The getToken call did not return any value.');
       return null;
     }
 
-    console.log('[Notifications] FCM token successfully generated.');
+    console.log('[Notifications] FCM token successfully generated. Character preview:', token.substring(0, 10) + '...');
     localStorage.setItem('fcm_token', token);
 
     // 6. Save and Sync to Supabase table: 'notification_tokens'
+    console.log('[Notifications] Initiating Supabase database synchronization...');
     await syncTokenToSupabase(userId, token);
+    console.log('[Notifications] Completed token synchronization process.');
 
     // 7. Handle token refresh inside callback if supported
     if (typeof (messaging as any).onTokenRefresh === 'function') {
