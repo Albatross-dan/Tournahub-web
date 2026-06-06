@@ -452,6 +452,7 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
               badgeUrl={badges[msg.sender_id]}
               opponentId={opponent?.id}
               isOpponentOnline={isOpponentOnline}
+              currentUserId={currentUserId}
             />
           ))}
         </AnimatePresence>
@@ -491,11 +492,109 @@ interface MessageItemProps {
   badgeUrl?: string;
   opponentId?: string;
   isOpponentOnline?: boolean;
+  currentUserId?: string;
   key?: any;
 }
 
 /* Message bubble colors and styles for a professional look */
-function MessageItem({ message, isMe, badgeUrl, opponentId, isOpponentOnline }: MessageItemProps) {
+function MessageItem({ message, isMe, badgeUrl, opponentId, isOpponentOnline, currentUserId }: MessageItemProps) {
+  if (message.message_type === 'whatsapp_action') {
+    let actionData: any = null;
+    try {
+      actionData = typeof message.content === 'string' ? JSON.parse(message.content) : message.content;
+    } catch (e) {
+      console.error("[MatchChat] Failed to parse whatsapp_action content:", e);
+    }
+
+    if (!actionData) return null;
+
+    const isPlayer1 = currentUserId === actionData.player1?.id;
+    const isPlayer2 = currentUserId === actionData.player2?.id;
+
+    // Do not show this card to admins / observers - only to the two active players
+    if (!isPlayer1 && !isPlayer2) {
+      return null;
+    }
+
+    const rawOpponentWhatsapp = isPlayer1 ? actionData.player2?.whatsapp : actionData.player1?.whatsapp;
+    // Strip everything except digits from number
+    const opponentWhatsapp = rawOpponentWhatsapp ? rawOpponentWhatsapp.replace(/\D/g, '') : '';
+    const waText = isPlayer1 ? actionData.player1?.wa_text : actionData.player2?.wa_text;
+    const hasWhatsapp = !!opponentWhatsapp && opponentWhatsapp.length > 0;
+
+    let scheduledTime = 'Time not set yet';
+    if (isPlayer1 && actionData.player1?.time_display) {
+      scheduledTime = actionData.player1.time_display;
+    } else if (isPlayer2 && actionData.player2?.time_display) {
+      scheduledTime = actionData.player2.time_display;
+    }
+
+    const url = hasWhatsapp 
+      ? `https://wa.me/${opponentWhatsapp}?text=${encodeURIComponent(waText || '')}`
+      : '#';
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="flex justify-center w-full my-4"
+      >
+        <div className="w-full max-w-sm bg-emerald-950/25 border-2 border-emerald-500/20 rounded-3xl p-5 shadow-2xl relative overflow-hidden backdrop-blur-md">
+          {/* Subtle green ambient background glow */}
+          <div className="absolute -right-12 -top-12 w-28 h-28 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+          
+          <div className="flex items-start gap-3.5">
+            {/* Green icon container */}
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+              <span className="text-lg relative flex h-3.5 w-3.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
+              </span>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <span className="text-[10px] font-black tracking-widest text-emerald-400/80 uppercase block mb-1">
+                🟢 COORDINATOR MATCH LINK
+              </span>
+              <h4 className="text-xs font-black text-white uppercase tracking-tight line-clamp-2">
+                Match Scheduled — {actionData.tournament_name || 'Tournament'} · Round {actionData.round ?? '?'}
+              </h4>
+              <p className="text-xs text-zinc-300 font-bold mt-2 flex items-center gap-1.5 bg-black/30 w-fit px-2.5 py-1 rounded-lg border border-zinc-800/40">
+                <span>📅</span> {scheduledTime}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-zinc-900 flex flex-col gap-2">
+            {hasWhatsapp ? (
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase tracking-wider text-[11px] py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-emerald-500/10"
+              >
+                <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
+                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.18 1.449 4.825 1.451 5.436 0 9.859-4.42 9.862-9.859.002-2.636-1.023-5.11-2.884-6.974C16.591 1.908 14.113.882 11.997.882c-5.441 0-9.863 4.425-9.866 9.866-.001 1.772.464 3.5 1.344 5.03l-.1.545-1.03 3.766 3.844-1.008.528-.109z" />
+                </svg>
+                Chat on WhatsApp
+              </a>
+            ) : (
+              <button
+                disabled
+                className="w-full bg-zinc-900 border border-zinc-800 text-zinc-500 font-black uppercase tracking-wider text-[11px] py-3.5 px-4 rounded-xl flex items-center justify-center gap-1.5 cursor-not-allowed text-center"
+              >
+                Opponent hasn't added their WhatsApp yet
+              </button>
+            )}
+            <p className="text-[9px] text-zinc-500 font-bold uppercase text-center mt-1">
+              * ONLY VISIBLE TO GAME PARTICIPANTS
+            </p>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
   const isError = message.status === 'error';
   const isSending = message.status === 'sending';
   const delivered = message.isDelivered || message.status === 'sent' || message.status === 'delivered';

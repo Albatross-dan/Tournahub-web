@@ -1,16 +1,53 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { Trophy, Mail, Lock, Loader2 } from 'lucide-react';
+import { Trophy, Mail, Lock, Loader2, Phone, Globe } from 'lucide-react';
 import SEO from '../components/common/SEO';
 
 const logoUrl = '/android-chrome-512x512.png';
+
+const getTimezones = () => {
+  let list: string[] = [];
+  try {
+    if (typeof Intl !== 'undefined' && typeof Intl.supportedValuesOf === 'function') {
+      list = Intl.supportedValuesOf('timeZone');
+    }
+  } catch (e) {
+    console.error('Error fetching timezones via Intl:', e);
+  }
+  if (!list || list.length === 0) {
+    list = [
+      'Africa/Nairobi',
+      'UTC',
+      'Africa/Lagos',
+      'Africa/Johannesburg',
+      'Africa/Cairo',
+      'Europe/London',
+      'Europe/Paris',
+      'America/New_York',
+      'America/Los_Angeles',
+      'Asia/Dubai',
+      'Asia/Kolkata',
+      'Asia/Singapore',
+      'Asia/Tokyo',
+      'Australia/Sydney'
+    ];
+  }
+  if (!list.includes('Africa/Nairobi')) {
+    list.push('Africa/Nairobi');
+  }
+  return [...list].sort();
+};
+
+const SYSTEM_TIMEZONES = getTimezones();
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [username, setUsername] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [timezone, setTimezone] = useState('Africa/Nairobi');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -65,17 +102,41 @@ export default function Login() {
           throw new Error('Tournaments username is already taken. Try another one, champion.');
         }
 
+        if (!whatsappNumber) {
+          throw new Error('WhatsApp number is required for match coordination coordination signup.');
+        }
+
+        if (!/^\+[1-9]\d{1,14}$/.test(whatsappNumber)) {
+          throw new Error('WhatsApp Number must be in E.164 format (e.g. +254712345678)');
+        }
+
         const { error, data } = await supabase.auth.signUp({ 
           email, 
           password,
           options: {
             data: {
               username: username,
-              role: 'user'
+              role: 'user',
+              whatsapp_number: whatsappNumber,
+              timezone: timezone
             }
           }
         });
         if (error) throw error;
+        
+        if (data.user) {
+          // Explicitly update profiles table to ensure whatsapp_number and timezone are stored
+          const { error: profileError } = await (supabase as any)
+            .from('profiles')
+            .update({ 
+              whatsapp_number: whatsappNumber,
+              timezone: timezone
+            })
+            .eq('id', data.user.id);
+          if (profileError) {
+            console.error('Failed to update profiles during signup:', profileError);
+          }
+        }
         
         if (data.user && data.session) {
           // Auto-logged in
@@ -209,6 +270,56 @@ export default function Login() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                   />
                 </div>
+              </div>
+            )}
+
+            {isSignUp && (
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em] ml-1">
+                  WhatsApp Number (for match coordination)
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-primary/5 rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
+                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-text-muted group-focus-within:text-primary transition-colors pointer-events-none z-20" />
+                  <input
+                    type="tel"
+                    required
+                    className="w-full bg-background/40 border border-border-main rounded-2xl pl-12 pr-4 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-text-main font-medium relative z-10"
+                    placeholder="e.g. +254712345678"
+                    value={whatsappNumber}
+                    onChange={(e) => setWhatsappNumber(e.target.value.trim())}
+                  />
+                </div>
+                <p className="text-[9px] text-text-muted italic ml-1 mt-1">
+                  Your number will only be shared with your matched opponents.
+                </p>
+              </div>
+            )}
+
+            {isSignUp && (
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em] ml-1">
+                  Timezone
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-primary/5 rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
+                  <Globe className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-text-muted group-focus-within:text-primary transition-colors pointer-events-none z-20" />
+                  <select
+                    required
+                    className="w-full bg-background/40 border border-border-main rounded-2xl pl-12 pr-10 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-text-main font-medium relative z-10 cursor-pointer"
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                  >
+                    {SYSTEM_TIMEZONES.map((tz) => (
+                      <option key={tz} value={tz} className="bg-[#111218] text-white">
+                        {tz}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-[9px] text-text-muted italic ml-1 mt-1">
+                  Used to translate scheduled match times automatically to your exact local time.
+                </p>
               </div>
             )}
 

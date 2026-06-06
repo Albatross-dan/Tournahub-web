@@ -8,10 +8,45 @@ import {
   User as UserIcon, Camera, Save, 
   Settings, Shield, Loader2, Trophy,
   Star, Target, Zap, LogOut, CheckCircle2,
-  ArrowRight
+  ArrowRight, Phone, Globe
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
+
+const getTimezones = () => {
+  let list: string[] = [];
+  try {
+    if (typeof Intl !== 'undefined' && typeof Intl.supportedValuesOf === 'function') {
+      list = Intl.supportedValuesOf('timeZone');
+    }
+  } catch (e) {
+    console.error('Error fetching timezones via Intl:', e);
+  }
+  if (!list || list.length === 0) {
+    list = [
+      'Africa/Nairobi',
+      'UTC',
+      'Africa/Lagos',
+      'Africa/Johannesburg',
+      'Africa/Cairo',
+      'Europe/London',
+      'Europe/Paris',
+      'America/New_York',
+      'America/Los_Angeles',
+      'Asia/Dubai',
+      'Asia/Kolkata',
+      'Asia/Singapore',
+      'Asia/Tokyo',
+      'Australia/Sydney'
+    ];
+  }
+  if (!list.includes('Africa/Nairobi')) {
+    list.push('Africa/Nairobi');
+  }
+  return [...list].sort();
+};
+
+const SYSTEM_TIMEZONES = getTimezones();
 import TrophyWall from '../components/profile/TrophyWall';
 import SettingsMenu from '../components/profile/SettingsMenu';
 
@@ -57,7 +92,11 @@ export default function Profile() {
   useRefetchOnFocus(loadStats);
   const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
   const [username, setUsername] = useState(profile?.username || '');
+  const [whatsappNumber, setWhatsappNumber] = useState(profile?.whatsapp_number || '');
+  const [timezone, setTimezone] = useState(profile?.timezone || 'Africa/Nairobi');
   const [loading, setLoading] = useState(false);
+  const [waLoading, setWaLoading] = useState(false);
+  const [waMessage, setWaMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [stats, setStats] = useState({ totalMatches: 0, wins: 0, winRate: 0, totalTournaments: 0 });
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const initial = (profile?.username || user?.email || 'U')[0].toUpperCase();
@@ -67,6 +106,18 @@ export default function Profile() {
       setUsername(profile.username);
     }
   }, [profile?.username]);
+
+  useEffect(() => {
+    if (profile?.whatsapp_number) {
+      setWhatsappNumber(profile.whatsapp_number);
+    }
+  }, [profile?.whatsapp_number]);
+
+  useEffect(() => {
+    if (profile?.timezone) {
+      setTimezone(profile.timezone);
+    }
+  }, [profile?.timezone]);
 
   const editsUsed = user?.user_metadata?.username_edits_count || 0;
   const editsRemaining = Math.max(0, 3 - editsUsed);
@@ -172,6 +223,52 @@ export default function Profile() {
       setMessage({ type: 'error', text: err.message || 'Update failed. Check connection & retry.' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const whatsappChanged = whatsappNumber.trim() !== (profile?.whatsapp_number || '');
+  const timezoneChanged = timezone !== (profile?.timezone || 'Africa/Nairobi');
+  const isDataChanged = whatsappChanged || timezoneChanged;
+
+  const updateWhatsapp = async () => {
+    if (!profile || !user) return;
+    setWaLoading(true);
+    setWaMessage(null);
+
+    const val = whatsappNumber.trim();
+
+    if (!val) {
+      setWaMessage({ type: 'error', text: 'WhatsApp number cannot be blank.' });
+      setWaLoading(false);
+      return;
+    }
+
+    if (!/^\+[1-9]\d{1,14}$/.test(val)) {
+      setWaMessage({ type: 'error', text: 'WhatsApp number must be in E.164 format (e.g., +254712345678).' });
+      setWaLoading(false);
+      return;
+    }
+
+    try {
+      // Update directly via Supabase client as requested
+      const { error: updateError } = await (supabase as any)
+        .from('profiles')
+        .update({ 
+          whatsapp_number: val,
+          timezone: timezone
+        })
+        .eq('id', user.id);
+
+      if (updateError) throw updateError;
+
+      // Force state alignment in AuthContext
+      await refreshAuth();
+      setWaMessage({ type: 'success', text: 'WhatsApp coordination & local timezone saved successfully!' });
+      setTimeout(() => setWaMessage(null), 5000);
+    } catch (err: any) {
+      setWaMessage({ type: 'error', text: err.message || 'Failed to update WhatsApp coordination config. Try again.' });
+    } finally {
+      setWaLoading(false);
     }
   };
 
@@ -397,6 +494,117 @@ export default function Profile() {
                       <>Already Saved</>
                     ) : (
                       <>Apply Modification <Save className="w-4 h-4" /></>
+                    )}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* WhatsApp Coordination Terminal */}
+            <div className="card p-8 bg-gradient-to-tr from-[#0b0c11] to-[#12131a] border border-border-main relative overflow-hidden space-y-6">
+              <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+              
+              <div className="flex items-center space-x-4">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                  <Phone className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-text-main uppercase italic tracking-tighter">WhatsApp Coordination</h3>
+                  <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest leading-none mt-1">Connect with matched opponents to play games</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1">WhatsApp Number (for match coordination)</label>
+                  <p className="text-[10px] text-text-muted italic ml-1 mb-2">
+                    Your number will only be shared with your matched opponents.
+                  </p>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500 font-extrabold italic text-sm leading-none select-none">+</span>
+                    <input
+                      type="tel"
+                      disabled={waLoading}
+                      className="w-full bg-[#111218]/80 border border-zinc-800 rounded-2xl pl-10 pr-4 py-4 font-bold transition-all placeholder-zinc-700 text-white shadow-inner focus:ring-1 focus:ring-emerald-500/40 focus:border-emerald-500/40 outline-none"
+                      placeholder="Country code first (e.g. +254712345678)"
+                      value={whatsappNumber}
+                      onChange={(e) => {
+                        setWaMessage(null);
+                        let val = e.target.value.trim();
+                        if (val && !val.startsWith('+')) {
+                          val = '+' + val;
+                        }
+                        setWhatsappNumber(val);
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1">Local Timezone</label>
+                  <p className="text-[10px] text-text-muted italic ml-1 mb-2">
+                    Used to automatically translate scheduled match times into your exact local time.
+                  </p>
+                  <div className="relative group">
+                    <div className="absolute inset-0 bg-emerald-500/5 rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
+                    <Globe className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-text-muted group-focus-within:text-emerald-400 transition-colors pointer-events-none z-20" />
+                    <select
+                      disabled={waLoading}
+                      className="w-full bg-[#111218]/80 border border-zinc-800 rounded-2xl pl-12 pr-10 h-14 font-bold transition-all text-white focus:ring-1 focus:ring-emerald-500/40 focus:border-emerald-500/40 outline-none cursor-pointer"
+                      value={timezone}
+                      onChange={(e) => {
+                        setWaMessage(null);
+                        setTimezone(e.target.value);
+                      }}
+                    >
+                      {SYSTEM_TIMEZONES.map((tz) => (
+                        <option key={tz} value={tz} className="bg-[#111218] text-white">
+                          {tz}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {waMessage && (
+                  <div className={cn(
+                    "p-4 rounded-xl text-xs font-bold border flex items-center space-x-3",
+                    waMessage.type === 'success' 
+                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
+                      : "bg-red-500/10 text-red-500 border-red-500/20"
+                  )}>
+                    {waMessage.type === 'success' ? (
+                      <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" />
+                    ) : (
+                      <span className="w-5 h-5 bg-red-500/20 text-red-400 font-black rounded-full flex items-center justify-center shrink-0 text-[10px] leading-tight text-center">!</span>
+                    )}
+                    <span>{waMessage.text}</span>
+                  </div>
+                )}
+
+                <button
+                  onClick={updateWhatsapp}
+                  disabled={waLoading || !isDataChanged}
+                  className="w-full relative group overflow-hidden rounded-2xl h-14 flex items-center justify-center cursor-pointer transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isDataChanged ? (
+                    <>
+                      <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-emerald-600 transition-transform group-hover:scale-105" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                    </>
+                  ) : (
+                    <div className="absolute inset-0 bg-[#16171f] border border-zinc-800" />
+                  )}
+                  <span className={cn(
+                    "relative z-10 text-sm font-black uppercase italic tracking-wider flex items-center gap-2",
+                    isDataChanged ? "text-slate-950" : "text-text-muted"
+                  )}>
+                    {waLoading ? (
+                      <>Saving configuration... <Loader2 className="w-4 h-4 animate-spin" /></>
+                    ) : !isDataChanged ? (
+                      <>Already Saved</>
+                    ) : (
+                      <>Apply Coordination Configuration <Save className="w-4 h-4" /></>
                     )}
                   </span>
                 </button>

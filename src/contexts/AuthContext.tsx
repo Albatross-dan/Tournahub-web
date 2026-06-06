@@ -757,7 +757,9 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         const insertPromise = (supabase as any).from('profiles').upsert({
           id: user.id,
           username: finalUsername,
-          role: isDevAdmin ? 'admin' : 'user'
+          role: isDevAdmin ? 'admin' : 'user',
+          whatsapp_number: user.user_metadata?.whatsapp_number || null,
+          timezone: user.user_metadata?.timezone || 'Africa/Nairobi'
         }, { onConflict: 'id' });
         await withTimeout(insertPromise, 3000, null);
 
