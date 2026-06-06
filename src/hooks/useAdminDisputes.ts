@@ -11,57 +11,57 @@ export function useAdminDisputes(adminId: string) {
   const [isResolving, setIsResolving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [cutoff] = useState(() => new Date().toISOString());
+
   const loadDisputes = useCallback(async () => {
     if (!adminId) return;
     setIsLoading(true);
     try {
-      const { data: disputeData, error: disputeError } = await supabase.from('matches')
-        .select(`
-          *,
-          player1:profiles!matches_player1_fkey(id, username, avatar_url),
-          player2:profiles!matches_player2_fkey(id, username, avatar_url),
-          tournaments:tournament_id(name)
-        `)
-        .in('result_verification_status', ['disputed', 'single_submission']);
+      const { data, error: rpcError } = await (supabase as any).rpc('get_disputed_matches', {
+        p_admin_id: adminId
+      });
 
-      if (disputeError) throw disputeError;
+      if (rpcError) throw rpcError;
 
-      const disputesList = (disputeData || []).map((m: any) => ({
-        ...m,
-        match_id: m.id,
-        tournament_name: m.tournaments?.name,
-        player1_username: m.player1?.username,
-        player2_username: m.player2?.username,
-        verification_status: m.result_verification_status,
-        required_action: m.result_verification_status === 'disputed' 
-          ? 'pick_winner_or_override' 
-          : 'approve_or_reject_single_submission'
-      }));
+      const rpcData = data as any;
 
-      const totalCount = disputesList.length;
-      setDisputes(disputesList);
+      const mapMatch = (m: any, defaultStatus: string) => {
+        const isRpc = 'match_id' in m;
+        const mId = isRpc ? m.match_id : m.id;
+        const statusVal = m.verification_status || m.result_verification_status || defaultStatus;
+        const player1Obj = isRpc ? { id: m.player1, username: m.player1_username } : m.player1;
+        const player2Obj = isRpc ? { id: m.player2, username: m.player2_username } : m.player2;
 
-      // Fetch expired/abandoned matches in the past which have no submissions yet or has not completed
-      const { data: expiredData, error: expiredError } = await supabase.from('matches')
-        .select(`
-          id,
-          tournament_id,
-          scheduled_at,
-          player1,
-          player2,
-          result_verification_status
-        `)
-        .neq('status', 'completed')
-        .neq('status', 'verified')
-        .lt('scheduled_at', new Date().toISOString());
+        return {
+          ...m,
+          id: mId,
+          match_id: mId,
+          tournament_name: isRpc ? m.tournament_name : m.tournaments?.name,
+          player1_username: isRpc ? m.player1_username : m.player1?.username,
+          player2_username: isRpc ? m.player2_username : m.player2?.username,
+          player1: player1Obj,
+          player2: player2Obj,
+          verification_status: statusVal,
+          required_action: statusVal === 'disputed' 
+            ? 'pick_winner_or_override' 
+            : 'approve_or_reject_single_submission'
+        };
+      };
 
-      if (expiredError) throw expiredError;
+      const disputedList = (rpcData?.disputed || rpcData?.disputes || []).map((m: any) => mapMatch(m, 'disputed'));
+      const awaitingList = (rpcData?.awaiting || []).map((m: any) => mapMatch(m, 'single_submission'));
+      const abandonedList = (rpcData?.abandoned || []).map((m: any) => mapMatch(m, 'abandoned'));
+      const historyList = (rpcData?.history || []).map((m: any) => mapMatch(m, 'completed'));
 
-      const disputeMatchIds = new Set(disputesList.map((m: any) => m.match_id || m.id));
-      const abandonedList = (expiredData || []).filter((m: any) => !disputeMatchIds.has(m.id));
+      const combined = [...disputedList, ...awaitingList, ...abandonedList, ...historyList];
 
+      setDisputes(combined);
       setAbandonedMatches(abandonedList);
-      setCount(totalCount + abandonedList.length);
+      
+      const totalAlerts = (rpcData?.disputed_count ?? disputedList.length) + 
+                          (rpcData?.awaiting_count ?? awaitingList.length) + 
+                          (rpcData?.abandoned_count ?? abandonedList.length);
+      setCount(totalAlerts);
     } catch (err: any) {
       setError(err.message || 'Failed to load disputes');
       setDisputes([]);
@@ -85,12 +85,10 @@ export function useAdminDisputes(adminId: string) {
           table: 'matches',
         },
         (payload) => {
-          // If verification status changed, reload disputes
-          const oldStatus = (payload.old as any)?.result_verification_status;
+          const allowed = ['disputed', 'awaiting_admin_review', 'abandoned', 'single_submission'];
           const newStatus = (payload.new as any)?.result_verification_status;
-          if (oldStatus !== newStatus) {
-            loadDisputes();
-          }
+          if (!newStatus || !allowed.includes(newStatus)) return;
+          loadDisputes();
         }
       )
       .subscribe();
@@ -151,6 +149,6 @@ export function useAdminDisputes(adminId: string) {
     forceApprove,
     abandonedMatches,
     disputedMatches: disputes.filter(d => d.verification_status === 'disputed'),
-    singleSubmissionMatches: disputes.filter(d => d.verification_status === 'single_submission')
+    singleSubmissionMatches: disputes.filter(d => d.verification_status === 'single_submission' || d.verification_status === 'awaiting_admin_review')
   };
 }

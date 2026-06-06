@@ -13,13 +13,27 @@ export function useSignedUrl(bucket: string, path: string | null | undefined) {
       return;
     }
 
+    let finalPath = path;
     if (path.startsWith('http')) {
-      setUrl(path);
-      return;
+      const publicPrefix = `/storage/v1/object/public/${bucket}/`;
+      const signPrefix = `/storage/v1/object/sign/${bucket}/`;
+      const authenticatedPrefix = `/storage/v1/object/authenticated/${bucket}/`;
+      
+      if (path.includes(publicPrefix)) {
+        finalPath = path.substring(path.indexOf(publicPrefix) + publicPrefix.length);
+      } else if (path.includes(signPrefix)) {
+        finalPath = path.substring(path.indexOf(signPrefix) + signPrefix.length);
+      } else if (path.includes(authenticatedPrefix)) {
+        finalPath = path.substring(path.indexOf(authenticatedPrefix) + authenticatedPrefix.length);
+      } else {
+        setUrl(path);
+        return;
+      }
+      finalPath = finalPath.split('?')[0];
     }
 
     let isMounted = true;
-    const cleanPath = cleanStoragePath(bucket, path);
+    const cleanPath = cleanStoragePath(bucket, finalPath);
 
     async function fetchUrl() {
       setLoading(true);

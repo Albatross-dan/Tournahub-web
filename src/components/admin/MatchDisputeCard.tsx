@@ -46,6 +46,11 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
   const submissions = match.submissions && match.submissions.length > 0 ? match.submissions : internalSubmissions;
   const requiredAction = match.required_action;
 
+  const player1Id = typeof match?.player1 === 'object' ? (match?.player1?.id || match?.player1) : match?.player1;
+  const player2Id = typeof match?.player2 === 'object' ? (match?.player2?.id || match?.player2) : match?.player2;
+  const isMyMatch = !!(adminId && (adminId === player1Id || adminId === player2Id));
+  const isAlreadyFinalised = match.verification_status === 'completed' || match.verification_status === 'verified' || match.status === 'completed' || match.status === 'verified';
+
   React.useEffect(() => {
     // If we have submissions in match object or match is already completed, don't fetch
     if ((match.submissions && match.submissions.length > 0) || match.verification_status === 'completed') {
@@ -100,6 +105,18 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
     if (!targetMatchId) {
       console.error('[MatchDisputeCard] Critical Error: Match object is missing match_id and id', match);
       alert('Internal Reference Error: This match data is malformed and missing its unique identifier. Please refresh the page.');
+      setLoadingAction(null);
+      return;
+    }
+
+    if (isMyMatch) {
+      alert("Unauthorized: Admins cannot resolve disputes for their own matches.");
+      setLoadingAction(null);
+      return;
+    }
+
+    if (isAlreadyFinalised) {
+      alert("This match is already finalised.");
       setLoadingAction(null);
       return;
     }
@@ -169,6 +186,16 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
   const handleOverrideSubmit = async () => {
     setLoadingAction('override');
     const targetMatchId = match.match_id || match.id;
+    if (isMyMatch) {
+      alert("Unauthorized: Admins cannot resolve disputes for their own matches.");
+      setLoadingAction(null);
+      return;
+    }
+    if (isAlreadyFinalised) {
+      alert("This match is already finalised.");
+      setLoadingAction(null);
+      return;
+    }
     try {
       await matchService.resolveDispute({
         adminId,
@@ -189,6 +216,16 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
   const handleRescheduleSubmit = async () => {
     setLoadingAction('reschedule_action');
     const targetMatchId = match.match_id || match.id;
+    if (isMyMatch) {
+      alert("Unauthorized: Admins cannot resolve disputes for their own matches.");
+      setLoadingAction(null);
+      return;
+    }
+    if (isAlreadyFinalised) {
+      alert("This match is already finalised.");
+      setLoadingAction(null);
+      return;
+    }
     try {
       if (!rescheduleTime) {
         throw new Error('Please select a valid scheduled timestamp.');
@@ -334,7 +371,7 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
                   </div>
                   
                   {/* Approve Specific Button */}
-                  {requiredAction === 'pick_winner_or_override' && match.verification_status !== 'completed' && (
+                  {requiredAction === 'pick_winner_or_override' && !isAlreadyFinalised && !isMyMatch && (
                     <button 
                       onClick={() => handleAction('approve', sub.id)}
                       disabled={!!loadingAction}
@@ -391,86 +428,95 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
       </div>
 
       {/* Global Actions */}
-      {match.verification_status !== 'completed' && (
-          <div className="pt-6 border-t border-slate-800 flex flex-wrap gap-3">
-          {requiredAction === 'pick_winner_or_override' || match.verification_status === 'disputed' || match.verification_status === 'abandoned' ? (
-            <>
-              <button 
-                onClick={() => setShowOverrideModal(true)}
-                disabled={!!loadingAction}
-                className="flex-1 min-w-[110px] py-4 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-slate-700 flex items-center justify-center space-x-2"
-              >
-                <Edit3 className="w-4 h-4" />
-                <span>Override</span>
-              </button>
-              <button 
-                onClick={() => handleAction('reschedule')}
-                disabled={!!loadingAction}
-                className="flex-1 min-w-[110px] py-4 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-slate-700 flex items-center justify-center space-x-2"
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span>Reschedule</span>
-              </button>
-              <button 
-                onClick={() => handleAction('no_show_p1')}
-                disabled={!!loadingAction}
-                className="flex-1 min-w-[110px] py-4 bg-red-600/10 hover:bg-red-600/20 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-red-500/10 flex items-center justify-center space-x-2 disabled:opacity-50"
-              >
-                {loadingAction === 'no_show_p1' ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-                <span>Forfeit P1</span>
-              </button>
-              <button 
-                onClick={() => handleAction('no_show_p2')}
-                disabled={!!loadingAction}
-                className="flex-1 min-w-[110px] py-4 bg-red-600/10 hover:bg-red-600/20 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-red-500/10 flex items-center justify-center space-x-2 disabled:opacity-50"
-              >
-                {loadingAction === 'no_show_p2' ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-                <span>Forfeit P2</span>
-              </button>
-              <button 
-                onClick={() => handleAction('cancel')}
-                disabled={!!loadingAction}
-                className="flex-1 min-w-[110px] py-4 bg-red-600/10 hover:bg-red-600/20 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-red-500/10 flex items-center justify-center space-x-2 disabled:opacity-50"
-              >
-                {loadingAction === 'cancel' ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-                <span>Cancel</span>
-              </button>
-            </>
-          ) : (requiredAction === 'approve_or_reject_single_submission' || match.verification_status === 'awaiting_admin_review' || match.verification_status === 'single_submission' || (submissions.length === 1 && match.verification_status === 'disputed')) ? (
-            <>
-              <button 
-                onClick={() => {
-                  if (submissions[0]) {
-                    handleAction('approve', submissions[0].id);
-                  } else {
-                    console.error('[MatchDisputeCard] Approval failed: submissions array is empty', match);
-                    alert('Configuration Error: Unable to approve because no submission data was found for this match. This may be a synchronization issue.');
-                  }
-                }}
-                disabled={!!loadingAction}
-                className="py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
-              >
-                {loadingAction === 'approve' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                <span>{loadingAction === 'approve' ? 'Processing...' : 'Approve One'}</span>
-              </button>
-              <button 
-                onClick={() => handleAction('no_show_p2')} // Assuming P2 is the one who didn't submit
-                disabled={!!loadingAction}
-                className="py-4 bg-red-600/10 hover:bg-red-600/20 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-red-500/10 flex items-center justify-center space-x-2 disabled:opacity-50"
-              >
-                {loadingAction === 'no_show_p2' ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-                <span>No-Show P2</span>
-              </button>
-            </>
+      {!isAlreadyFinalised && (
+        <div className="pt-6 border-t border-slate-800 space-y-4">
+          {isMyMatch ? (
+            <div className="bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-2xl p-4 text-xs font-bold uppercase tracking-tight flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>You cannot resolve or override disputes for your own match. Please request another administrator to audit this conflict.</span>
+            </div>
           ) : (
-             <button 
-                onClick={() => handleAction('cancel')}
-                disabled={!!loadingAction}
-                className="col-span-2 py-4 bg-red-600/10 hover:bg-red-600/20 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-red-500/10 flex items-center justify-center space-x-2 disabled:opacity-50"
-              >
-                {loadingAction === 'cancel' ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-                <span>Eradicate Match</span>
-              </button>
+            <div className="flex flex-wrap gap-3">
+              {requiredAction === 'pick_winner_or_override' || match.verification_status === 'disputed' || match.verification_status === 'abandoned' ? (
+                <>
+                  <button 
+                    onClick={() => setShowOverrideModal(true)}
+                    disabled={!!loadingAction}
+                    className="flex-1 min-w-[110px] py-4 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-slate-700 flex items-center justify-center space-x-2"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    <span>Override</span>
+                  </button>
+                  <button 
+                    onClick={() => handleAction('reschedule')}
+                    disabled={!!loadingAction}
+                    className="flex-1 min-w-[110px] py-4 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-slate-700 flex items-center justify-center space-x-2"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Reschedule</span>
+                  </button>
+                  <button 
+                    onClick={() => handleAction('no_show_p1')}
+                    disabled={!!loadingAction}
+                    className="flex-1 min-w-[110px] py-4 bg-red-600/10 hover:bg-red-600/20 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-red-500/10 flex items-center justify-center space-x-2 disabled:opacity-50"
+                  >
+                    {loadingAction === 'no_show_p1' ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                    <span>Forfeit P1</span>
+                  </button>
+                  <button 
+                    onClick={() => handleAction('no_show_p2')}
+                    disabled={!!loadingAction}
+                    className="flex-1 min-w-[110px] py-4 bg-red-600/10 hover:bg-red-600/20 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-red-500/10 flex items-center justify-center space-x-2 disabled:opacity-50"
+                  >
+                    {loadingAction === 'no_show_p2' ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                    <span>Forfeit P2</span>
+                  </button>
+                  <button 
+                    onClick={() => handleAction('cancel')}
+                    disabled={!!loadingAction}
+                    className="flex-1 min-w-[110px] py-4 bg-red-600/10 hover:bg-red-600/20 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-red-500/10 flex items-center justify-center space-x-2 disabled:opacity-50"
+                  >
+                    {loadingAction === 'cancel' ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                    <span>Cancel</span>
+                  </button>
+                </>
+              ) : (requiredAction === 'approve_or_reject_single_submission' || match.verification_status === 'awaiting_admin_review' || match.verification_status === 'single_submission' || (submissions.length === 1 && match.verification_status === 'disputed')) ? (
+                <>
+                  <button 
+                    onClick={() => {
+                      if (submissions[0]) {
+                        handleAction('approve', submissions[0].id);
+                      } else {
+                        console.error('[MatchDisputeCard] Approval failed: submissions array is empty', match);
+                        alert('Configuration Error: Unable to approve because no submission data was found for this match. This may be a synchronization issue.');
+                      }
+                    }}
+                    disabled={!!loadingAction}
+                    className="py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+                  >
+                    {loadingAction === 'approve' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                    <span>{loadingAction === 'approve' ? 'Processing...' : 'Approve One'}</span>
+                  </button>
+                  <button 
+                    onClick={() => handleAction('no_show_p2')} // Assuming P2 is the one who didn't submit
+                    disabled={!!loadingAction}
+                    className="py-4 bg-red-600/10 hover:bg-red-600/20 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-red-500/10 flex items-center justify-center space-x-2 disabled:opacity-50"
+                  >
+                    {loadingAction === 'no_show_p2' ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                    <span>No-Show P2</span>
+                  </button>
+                </>
+              ) : (
+                <button 
+                  onClick={() => handleAction('cancel')}
+                  disabled={!!loadingAction}
+                  className="col-span-2 py-4 bg-red-600/10 hover:bg-red-600/20 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-red-500/10 flex items-center justify-center space-x-2 disabled:opacity-50"
+                >
+                  {loadingAction === 'cancel' ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                  <span>Eradicate Match</span>
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}

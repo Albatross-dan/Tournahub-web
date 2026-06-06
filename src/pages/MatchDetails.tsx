@@ -21,9 +21,12 @@ import { PlayerBadge } from '../components/ui/PlayerBadge';
 
 export default function MatchDetails() {
   const { id } = useParams<{ id: string }>();
-  const { user, refetchSignal } = useAuth();
+  const { user, profile, refetchSignal } = useAuth();
   const isInitialLoad = React.useRef(true);
-  useRefetchOnFocus(loadMatchData);
+  useRefetchOnFocus(() => {
+    loadMatchData(false);
+    loadMatchStreamUrls();
+  });
   const navigate = useNavigate();
   const [match, setMatch] = useState<Match | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,7 +73,7 @@ export default function MatchDetails() {
       supabase.removeChannel(matchChannel);
       supabase.removeChannel(streamChannel);
     };
-  }, [id, user?.id, refetchSignal]);
+  }, [id, user?.id]);
 
   async function loadMatchStreamUrls() {
     if (!id) return;
@@ -395,7 +398,7 @@ export default function MatchDetails() {
                 <SubmitResultPanel 
                   matchId={match.id}
                   currentUserId={user.id}
-                  playerName={getPublicIdentity({ id: user.id, username: user.user_metadata?.username })}
+                  playerName={getPublicIdentity(profile || { id: user.id, username: user.user_metadata?.username })}
                   match={match}
                 />
                 

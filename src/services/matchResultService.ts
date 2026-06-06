@@ -1,4 +1,5 @@
 import { ensureAuthenticated, supabase } from '../lib/supabase';
+import { matchService } from './matchService';
 import { 
   SubmitResultPayload, 
   MatchVerificationState, 
@@ -8,26 +9,13 @@ import {
 } from '../types/verification.types';
 
 export const matchResultService = {
-  async submitResult(payload: SubmitResultPayload): Promise<{
-    success: boolean;
-    verification_status: VerificationStatus;
-    auto_verified?: boolean;
-    final_score?: string;
-    result_id?: string;
-    message?: string;
-    error?: string;
-  }> {
-    await ensureAuthenticated();
-    const { data, error } = await (supabase.rpc as any)('submit_match_result', {
-      p_match_id: payload.matchId,
-      p_submitter_id: payload.submitterId,
-      p_score1: payload.score1,
-      p_score2: payload.score2,
-      p_screenshot_url: payload.screenshotUrl || null,
-    });
-
-    if (error) throw error;
-    return data;
+  async submitResult(payload: SubmitResultPayload): Promise<any> {
+    return matchService.submitResult(
+      payload.matchId,
+      payload.score1,
+      payload.score2,
+      payload.screenshotUrl || null
+    );
   },
 
   async getVerificationState(matchId: string): Promise<MatchVerificationState> {

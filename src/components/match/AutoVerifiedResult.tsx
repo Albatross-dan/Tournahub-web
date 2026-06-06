@@ -13,10 +13,13 @@ interface AutoVerifiedResultProps {
   matchId: string;
   playerName?: string;
   tournamentId?: string;
+  currentUserId?: string;
 }
 
-export function AutoVerifiedResult({ finalScore1, finalScore2, submissions = [], winner, matchId, playerName, tournamentId }: AutoVerifiedResultProps) {
-  const mySub = playerName ? submissions?.find((s: any) => s.username === playerName) : null;
+export function AutoVerifiedResult({ finalScore1, finalScore2, submissions = [], winner, matchId, playerName, tournamentId, currentUserId }: AutoVerifiedResultProps) {
+  const mySub = currentUserId 
+    ? submissions?.find((s: any) => s.submitted_by === currentUserId)
+    : (playerName ? submissions?.find((s: any) => s.username === playerName) : null);
   
   let outcomeBadge = null;
   if (mySub) {

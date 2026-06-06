@@ -6,6 +6,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { cn, getStorageUrl, getPublicIdentity } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
+import StorageImage from '../common/StorageImage';
 
 interface SingleSubmissionCardProps {
   dispute: DisputedMatch;
@@ -92,7 +93,7 @@ export default function SingleSubmissionCard({
           
           {sub.screenshot_url && (
             <div className="w-10 h-10 rounded-lg overflow-hidden border border-white/10">
-              <img src={getStorageUrl('result-screenshots', sub.screenshot_url) || ''} alt="Evidence" className="w-full h-full object-cover" />
+              <StorageImage bucket="result-screenshots" path={sub.screenshot_url} alt="Evidence" className="w-full h-full object-cover" />
             </div>
           )}
         </div>

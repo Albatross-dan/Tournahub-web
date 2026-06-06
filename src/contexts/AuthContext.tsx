@@ -45,6 +45,11 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   refetchSignal: number;
   refreshAuth: () => Promise<void>;
+  walletSummary: any | null;
+  accountStatus: any | null;
+  unreadNotificationsCount: number;
+  unreadChatCount: number;
+  refreshWalletAndStatus: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -220,6 +225,198 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
   }, [user]);
   const [refetchSignal, setRefetchSignal] = useState(0);
   const [needsUsernameSetup, setNeedsUsernameSetup] = useState(false);
+
+  // Shared state values for get_my_account_status, get_wallet_summary, notifications & chat counts
+  const [walletSummary, setWalletSummary] = useState<any>(null);
+  const [accountStatus, setAccountStatus] = useState<any>(null);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
+  const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
+
+  const fetchWalletAndStatus = async (userId: string) => {
+    try {
+      // 1. Fetch account status (get_my_account_status RPC or profiles select fallback)
+      const fetchStatusPromise = (async () => {
+        const { data, error } = await (supabase as any).rpc('get_my_account_status');
+        if (error) {
+          console.error('[AuthContext] get_my_account_status error:', error);
+          const { data: profileData } = await (supabase as any)
+            .from('profiles')
+            .select('status, banned_reason, suspension_reason, suspended_until')
+            .eq('id', userId)
+            .single();
+          return profileData || { status: 'active' };
+        }
+        return data;
+      })();
+
+      // 2. Fetch wallet summary (get_wallet_summary RPC or wallets select fallback)
+      const fetchWalletPromise = (async () => {
+        const { data, error } = await (supabase as any).rpc('get_wallet_summary', {
+          p_display_currency: 'USD'
+        });
+        if (error) {
+          console.error('[AuthContext] get_wallet_summary error:', error);
+          const { data: walletData } = await (supabase as any)
+            .from('wallets')
+            .select('*')
+            .eq('user_id', userId)
+            .maybeSingle();
+          if (walletData) {
+            return {
+              id: (walletData as any).id,
+              user_id: (walletData as any).user_id,
+              balance_usd: (walletData as any).balance || 0,
+              is_locked: (walletData as any).is_locked,
+              environment: (walletData as any).environment || 'sandbox'
+            };
+          }
+          return { balance_usd: 0, is_locked: false, environment: 'sandbox' };
+        }
+        return data;
+      })();
+
+      // 3. Fetch notifications unread count
+      const fetchNotificationsPromise = (async () => {
+        const { count } = await (supabase as any)
+          .from('notifications')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('read', false);
+        return count || 0;
+      })();
+
+      // 4. Fetch chat unread count
+      const fetchChatPromise = (async () => {
+        const { data: conversations } = await (supabase as any)
+          .from('match_conversations')
+          .select(`
+            id,
+            match_id,
+            matches!inner (
+              player1,
+              player2
+            )
+          `);
+
+        if (!conversations || conversations.length === 0) {
+          return 0;
+        }
+
+        const conversationIds = conversations.map((c: any) => c.id);
+        const { count } = await (supabase as any)
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .in('conversation_id', conversationIds)
+          .neq('sender_id', userId)
+          .not('read_by', 'cs', `["${userId}"]`);
+
+        return count || 0;
+      })();
+
+      const [status, wallet, unreadNotif, unreadChat] = await Promise.all([
+        withTimeout(fetchStatusPromise, 3000, { status: 'active' }),
+        withTimeout(fetchWalletPromise, 3000, { balance_usd: 0, is_locked: false, environment: 'sandbox' }),
+        withTimeout(fetchNotificationsPromise, 3000, 0),
+        withTimeout(fetchChatPromise, 3000, 0),
+      ]);
+
+      setAccountStatus(status);
+      setWalletSummary(wallet);
+      setUnreadNotificationsCount(unreadNotif);
+      setUnreadChatCount(unreadChat);
+    } catch (err) {
+      console.error('[AuthContext] Error fetching consolidated wallet, status and counts:', err);
+    }
+  };
+
+  const refreshWalletAndStatus = async () => {
+    if (user?.id) {
+      await fetchWalletAndStatus(user.id);
+    }
+  };
+
+  // Realtime subscription effect to synchronize all these counts
+  useEffect(() => {
+    if (!user) {
+      setAccountStatus(null);
+      setWalletSummary(null);
+      setUnreadNotificationsCount(0);
+      setUnreadChatCount(0);
+      return;
+    }
+
+    let isMounted = true;
+    const userId = user.id;
+
+    const refreshAll = () => {
+      if (isMounted) {
+        fetchWalletAndStatus(userId);
+      }
+    };
+
+    // Initial load
+    refreshAll();
+
+    // Set up real-time subscriptions for immediate reactivity:
+    const notificationsChannel = supabase
+      .channel(`auth-notifs-${userId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${userId}`
+      }, () => {
+        refreshAll();
+      })
+      .subscribe();
+
+    const messagesChannel = supabase
+      .channel(`auth-messages-${userId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'messages'
+      }, () => {
+        refreshAll();
+      })
+      .subscribe();
+
+    const walletChannel = supabase
+      .channel(`auth-wallet-${userId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'wallets',
+        filter: `user_id=eq.${userId}`
+      }, (payload) => {
+        if (isMounted && payload.new) {
+          setWalletSummary((prev: any) => prev ? {
+            ...prev,
+            balance_usd: payload.new.balance,
+            is_locked: payload.new.is_locked,
+            environment: payload.new.environment || 'sandbox'
+          } : {
+            balance_usd: payload.new.balance,
+            is_locked: payload.new.is_locked,
+            environment: payload.new.environment || 'sandbox'
+          });
+        }
+      })
+      .subscribe();
+
+    // Periodic poll every 10 seconds to ensure consistency
+    const interval = setInterval(() => {
+      refreshAll();
+    }, 10000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      supabase.removeChannel(notificationsChannel);
+      supabase.removeChannel(messagesChannel);
+      supabase.removeChannel(walletChannel);
+    };
+  }, [user?.id]);
 
   // Initialize FCM Push Notifications once after user is successfully authenticated
   useEffect(() => {
@@ -544,11 +741,11 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         const metadataUsername = user.user_metadata?.username;
         const finalUsername = pendingUsername || metadataUsername || `temp_user_${user.id.slice(0, 8)}`;
 
-        const insertPromise = (supabase as any).from('profiles').insert({
+        const insertPromise = (supabase as any).from('profiles').upsert({
           id: user.id,
           username: finalUsername,
           role: isDevAdmin ? 'admin' : 'user'
-        });
+        }, { onConflict: 'id' });
         await withTimeout(insertPromise, 3000, null);
 
         if (pendingUsername) {
@@ -570,26 +767,6 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
           const updateRolePromise = (supabase as any).from('profiles').update({ role: 'admin' }).eq('id', user.id);
           await withTimeout(updateRolePromise, 3000, null);
         }
-      }
-
-      const walletPromise = (supabase as any)
-        .from('wallets')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle()
-        .then((res: any) => {
-          if (res.error) throw res.error;
-          return res.data;
-        });
-
-      const existingWallet = await withTimeout(walletPromise, 3000, null);
-
-      if (!existingWallet) {
-        const insertWalletPromise = (supabase as any).from('wallets').insert({
-          user_id: user.id,
-          balance: 0
-        });
-        await withTimeout(insertWalletPromise, 3000, null);
       }
     } catch (err) {
       console.error('Provisioning failed:', err);
@@ -693,6 +870,11 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     signOut,
     refetchSignal,
     refreshAuth,
+    walletSummary,
+    accountStatus,
+    unreadNotificationsCount,
+    unreadChatCount,
+    refreshWalletAndStatus,
   };
 
   return (

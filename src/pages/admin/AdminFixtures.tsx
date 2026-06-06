@@ -16,6 +16,7 @@ export default function AdminFixtures() {
   const [tournaments, setTournaments] = useState<any[]>([]);
   const [selectedTournament, setSelectedTournament] = useState<string | null>(null);
   const [matches, setMatches] = useState<any[]>([]);
+  const [matchResults, setMatchResults] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -28,6 +29,7 @@ export default function AdminFixtures() {
       fetchMatches(selectedTournament);
     } else {
       setMatches([]);
+      setMatchResults({});
     }
   }, [selectedTournament]);
 
@@ -50,7 +52,32 @@ export default function AdminFixtures() {
     setLoading(true);
     try {
       const data = await matchService.getByTournament(id);
-      setMatches(data || []);
+      const matchesData = data || [];
+      setMatches(matchesData);
+
+      if (matchesData.length > 0) {
+        const matchIds = matchesData.map((m: any) => m.id);
+        const { data: allResults, error: resultsError } = await (supabase as any)
+          .from('match_results')
+          .select('*, profiles:submitted_by(username)')
+          .in('match_id', matchIds)
+          .order('created_at', { ascending: false });
+
+        if (resultsError) throw resultsError;
+
+        const resultsByMatch = (allResults || []).reduce((acc: any, r: any) => {
+          if (!acc[r.match_id]) {
+            acc[r.match_id] = {
+              ...r,
+              submitter_username: r.profiles?.username
+            };
+          }
+          return acc;
+        }, {});
+        setMatchResults(resultsByMatch);
+      } else {
+        setMatchResults({});
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -153,6 +180,7 @@ export default function AdminFixtures() {
                   key={match.id} 
                   match={match} 
                   onUpdate={updateScore}
+                  result={matchResults[match.id] || null}
                 />
               ))}
             </div>
@@ -168,30 +196,15 @@ export default function AdminFixtures() {
   );
 }
 
-function FixtureCard({ match, onUpdate }: { match: any; onUpdate: (id: string, s1: number, s2: number) => Promise<void> | void; key?: any }) {
+function FixtureCard({ match, onUpdate, result }: { match: any; onUpdate: (id: string, s1: number, s2: number) => Promise<void> | void; result: any; key?: any }) {
   const [s1, setS1] = useState(match.score1 || 0);
   const [s2, setS2] = useState(match.score2 || 0);
   const [editing, setEditing] = useState(false);
-  const [result, setResult] = useState<any>(null);
 
   useEffect(() => {
-    fetchResult();
-  }, [match.id]);
-
-  const fetchResult = async () => {
-    const { data } = await (supabase as any)
-      .from('match_results')
-      .select('*, profiles:submitted_by(username)')
-      .eq('match_id', match.id)
-      .maybeSingle();
-    
-    if (data) {
-      setResult({
-        ...data,
-        submitter_username: data.profiles?.username
-      });
-    }
-  };
+    setS1(match.score1 || 0);
+    setS2(match.score2 || 0);
+  }, [match.score1, match.score2]);
 
   return (
     <div className={cn(

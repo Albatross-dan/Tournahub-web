@@ -220,3 +220,306 @@ BEGIN
   DELETE FROM public.tournaments WHERE id = p_tournament_id;
 END;
 $$;
+
+-- 6. RE-APPLY THE SUBMIT RESULT RPC
+CREATE OR REPLACE FUNCTION public.submit_match_result(
+  p_match_id UUID,
+  p_submitter_id UUID,
+  p_player1_score INTEGER,
+  p_player2_score INTEGER,
+  p_screenshot_url TEXT DEFAULT NULL
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_match RECORD;
+  v_opp_id UUID;
+  v_opp_sub RECORD;
+  v_new_result_id UUID;
+  v_winner_id UUID;
+BEGIN
+  -- 1. Get and lock the match row to prevent concurrent updates
+  SELECT id, player1, player2, COALESCE(result_verification_status, 'none') as verification_status, status
+  INTO v_match
+  FROM public.matches
+  WHERE id = p_match_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'Match not found.');
+  END IF;
+
+  -- 2. Validate submitter identity
+  IF p_submitter_id != v_match.player1 AND p_submitter_id != v_match.player2 THEN
+    RETURN json_build_object('success', false, 'error', 'You are not a participant in this match.');
+  END IF;
+
+  -- 3. Check if submitter already has an active submission
+  IF EXISTS (
+    SELECT 1 FROM public.match_results 
+    WHERE match_id = p_match_id AND submitted_by = p_submitter_id AND status != 'rejected'
+  ) THEN
+    RETURN json_build_object('success', false, 'error', 'You have already submitted a result for this match.');
+  END IF;
+
+  -- 4. Determine opponent ID
+  IF p_submitter_id = v_match.player1 THEN
+    v_opp_id := v_match.player2;
+  ELSE
+    v_opp_id := v_match.player1;
+  END IF;
+
+  -- 5. Look for opponent's active/submitted result
+  SELECT id, player1_score, player2_score, status 
+  INTO v_opp_sub
+  FROM public.match_results
+  WHERE match_id = p_match_id AND submitted_by = v_opp_id AND status = 'submitted'
+  LIMIT 1;
+
+  -- 6. Insert new match result row
+  INSERT INTO public.match_results (
+    id,
+    match_id,
+    submitted_by,
+    player1_score,
+    player2_score,
+    screenshot_url,
+    status,
+    created_at
+  )
+  VALUES (
+    gen_random_uuid(),
+    p_match_id,
+    p_submitter_id,
+    p_player1_score,
+    p_player2_score,
+    p_screenshot_url,
+    'submitted',
+    NOW()
+  )
+  RETURNING id INTO v_new_result_id;
+
+  -- 7. Process matching/mismatch status
+  IF v_opp_sub.id IS NULL THEN
+    -- First submission
+    UPDATE public.matches
+    SET 
+      result_verification_status = 'single_submission',
+      status = 'awaiting_result',
+      updated_at = NOW()
+    WHERE id = p_match_id;
+
+    RETURN json_build_object(
+      'success', true,
+      'verification_status', 'single_submission',
+      'result_id', v_new_result_id,
+      'path', 'A',
+      'message', 'Result submitted, waiting for opponent.'
+    );
+  ELSE
+    -- Second submission: compare scores
+    IF p_player1_score = v_opp_sub.player1_score AND p_player2_score = v_opp_sub.player2_score THEN
+      -- SUCCESS: Scores match!
+      UPDATE public.match_results
+      SET status = 'verified', verified_at = NOW()
+      WHERE match_id = p_match_id;
+
+      -- Determine winner UUID
+      IF p_player1_score > p_player2_score THEN
+        v_winner_id := v_match.player1;
+      ELSIF p_player2_score > p_player1_score THEN
+        v_winner_id := v_match.player2;
+      ELSE
+        v_winner_id := NULL; -- Draw
+      END IF;
+
+      -- Mark match completed in matches
+      UPDATE public.matches
+      SET 
+        score1 = p_player1_score,
+        score2 = p_player2_score,
+        winner = v_winner_id,
+        status = 'completed',
+        result_verification_status = 'verified',
+        updated_at = NOW()
+      WHERE id = p_match_id;
+
+      RETURN json_build_object(
+        'success', true,
+        'verification_status', 'verified',
+        'result_id', v_new_result_id,
+        'path', 'B',
+        'message', 'Scores matched! Match results confirmed.'
+      );
+    ELSE
+      -- DISPUTE: Scores conflict!
+      UPDATE public.match_results
+      SET status = 'disputed'
+      WHERE match_id = p_match_id;
+
+      UPDATE public.matches
+      SET 
+        result_verification_status = 'disputed',
+        status = 'under_review',
+        updated_at = NOW()
+      WHERE id = p_match_id;
+
+      RETURN json_build_object(
+        'success', true,
+        'verification_status', 'disputed',
+        'result_id', v_new_result_id,
+        'path', 'C',
+        'message', 'Scores conflict! Match marked for administration review.'
+      );
+    END IF;
+  END IF;
+
+EXCEPTION WHEN OTHERS THEN
+  RETURN json_build_object('success', false, 'error', SQLERRM);
+END;
+$$;
+
+-- 7. RE-APPLY THE GET MATCH STATE RPC
+CREATE OR REPLACE FUNCTION public.get_match_verification_state(p_match_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_match_status TEXT;
+    v_verification_status TEXT;
+    v_final_score1 INTEGER;
+    v_final_score2 INTEGER;
+    v_winner_id UUID;
+    v_winner_username TEXT;
+    v_locked BOOLEAN;
+    v_submission_count INTEGER;
+    v_submissions JSONB;
+    v_ui_state TEXT;
+    v_approved_result_id UUID;
+    v_scheduled_at TIMESTAMPTZ;
+    v_play_window_end TIMESTAMPTZ;
+    v_submission_deadline TIMESTAMPTZ;
+    v_can_submit BOOLEAN;
+BEGIN
+    -- 1. Fetch match details
+    SELECT 
+        status, 
+        COALESCE(result_verification_status, 'none'),
+        score1, 
+        score2, 
+        winner,
+        COALESCE(locked, false),
+        scheduled_at::TIMESTAMPTZ
+    INTO 
+        v_match_status, 
+        v_verification_status,
+        v_final_score1, 
+        v_final_score2, 
+        v_winner_id,
+        v_locked,
+        v_scheduled_at
+    FROM public.matches
+    WHERE id = p_match_id;
+
+    IF NOT FOUND THEN
+        RETURN json_build_object('error', 'Match not found');
+    END IF;
+
+    -- 2. Fetch winner username
+    IF v_winner_id IS NOT NULL THEN
+        SELECT username INTO v_winner_username
+        FROM public.profiles
+        WHERE id = v_winner_id;
+    END IF;
+
+    -- 3. Fetch submissions linked to this match
+    -- We join with profiles to get the username and avatar_url
+    SELECT COALESCE(jsonb_agg(sub), '[]'::jsonb), COUNT(*)
+    INTO v_submissions, v_submission_count
+    FROM (
+        SELECT 
+            mr.id,
+            mr.submitted_by,
+            p.username,
+            p.avatar_url,
+            mr.player1_score as score1,
+            mr.player2_score as score2,
+            mr.player1_score,
+            mr.player2_score,
+            mr.screenshot_url,
+            mr.status,
+            mr.created_at,
+            CASE WHEN mr.status = 'verified' THEN true ELSE false END as is_canonical
+        FROM public.match_results mr
+        LEFT JOIN public.profiles p ON mr.submitted_by = p.id
+        WHERE mr.match_id = p_match_id
+        ORDER BY mr.created_at ASC
+    ) sub;
+
+    -- 4. Calculate play windows & deadlines
+    IF v_scheduled_at IS NOT NULL THEN
+        v_play_window_end := v_scheduled_at + interval '30 minutes';
+        v_submission_deadline := v_play_window_end + interval '10 minutes';
+    ELSE
+        v_play_window_end := NOW() + interval '30 minutes';
+        v_submission_deadline := v_play_window_end + interval '10 minutes';
+    END IF;
+
+    v_can_submit := COALESCE(v_scheduled_at <= NOW(), true);
+
+    -- 5. Calculate ui_state & verification_status
+    -- ui_state keys: 'awaiting_submissions' | 'waiting_for_opponent' | 'auto_verified' | 'under_admin_review' | 'admin_verified'
+    -- verification_status keys: 'none' | 'single_submission' | 'matched' | 'disputed' | 'verified' | 'pending' | 'abandoned' | 'superseded' 
+    IF v_verification_status = 'verified' THEN
+        v_ui_state := 'admin_verified';
+    ELSIF v_verification_status = 'matched' THEN
+        v_ui_state := 'auto_verified';
+    ELSIF v_verification_status = 'disputed' THEN
+        v_ui_state := 'under_admin_review';
+    ELSIF v_submission_count = 1 THEN
+        v_ui_state := 'waiting_for_opponent';
+        v_verification_status := 'single_submission';
+    ELSE
+        v_ui_state := 'awaiting_submissions';
+        v_verification_status := 'none';
+    END IF;
+
+    -- If match is marked completed, and status is verified or matched, match ui_states appropriately
+    IF v_match_status = 'completed' THEN
+        IF v_verification_status = 'verified' THEN
+            v_ui_state := 'admin_verified';
+        ELSE
+            v_ui_state := 'auto_verified';
+        END IF;
+    END IF;
+
+    -- Fetch approved result id
+    SELECT id INTO v_approved_result_id
+    FROM public.match_results
+    WHERE match_id = p_match_id AND status = 'verified'
+    LIMIT 1;
+
+    -- Return full JSON state
+    RETURN json_build_object(
+        'match_id', p_match_id,
+        'match_status', v_match_status,
+        'verification_status', v_verification_status,
+        'ui_state', v_ui_state,
+        'approved_result_id', v_approved_result_id,
+        'final_score1', v_final_score1,
+        'final_score2', v_final_score2,
+        'winner_username', v_winner_username,
+        'locked', v_locked,
+        'submission_count', v_submission_count,
+        'submissions', v_submissions,
+        'can_submit', v_can_submit,
+        'play_window_end', v_play_window_end,
+        'submission_deadline', v_submission_deadline,
+        'server_time', NOW()
+    );
+END;
+$$;
+

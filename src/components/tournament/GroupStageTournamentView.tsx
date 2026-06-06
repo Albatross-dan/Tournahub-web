@@ -7,7 +7,8 @@ import {
   ArrowRight, Shield, Check, AlignLeft, RefreshCw, Info, Lock
 } from 'lucide-react';
 import { PlayerBadge } from '../ui/PlayerBadge';
-import { cn } from '../../lib/utils';
+import { cn, getPublicIdentity } from '../../lib/utils';
+import { tournamentService } from '../../services/tournamentService';
 import { useNavigate } from 'react-router-dom';
 
 interface GroupStageTournamentViewProps {
@@ -78,6 +79,7 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
   const [standings, setStandings] = useState<Standing[]>([]);
   const [groupMatches, setGroupMatches] = useState<GroupMatch[]>([]);
   const [bracketMatches, setBracketMatches] = useState<any[]>([]);
+  const [dbChampion, setDbChampion] = useState<any | null>(null);
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,6 +100,24 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
     fetchBracketMatches();
   };
 
+  async function fetchDbChampion() {
+    try {
+      const { data, error } = await supabase
+        .from('tournament_champions')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+        .maybeSingle();
+
+      if (!error && data) {
+        setDbChampion(data);
+      } else {
+        setDbChampion(null);
+      }
+    } catch (err) {
+      console.warn('Could not load db champion for tournament:', err);
+    }
+  }
+
   useEffect(() => {
     fetchData();
 
@@ -106,6 +126,7 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
       fetchStandings();
       fetchGroupMatches();
       fetchBracketMatches();
+      fetchDbChampion();
     }, 10000);
 
     // Real-time standings updates
@@ -133,6 +154,15 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
       })
       .subscribe();
 
+    // Champion updates subscription
+    const champChannel = supabase
+      .channel('champ-' + tournamentId)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'tournament_champions',
+        filter: `tournament_id=eq.${tournamentId}`
+      }, () => fetchDbChampion())
+      .subscribe();
+
     // Stage transition awareness
     const stageChannel = supabase
       .channel('tournament-stage-' + tournamentId)
@@ -140,7 +170,7 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
         event: 'UPDATE', schema: 'public', table: 'tournaments',
         filter: `id=eq.${tournamentId}`
       }, (payload) => {
-        if (payload.new.current_stage === 'playoffs') {
+        if (payload.new.current_stage === 'playoffs' || payload.new.current_stage === 'knockout') {
           // Switch UI from standings view to bracket view
           setView('bracket');
           refetchMatches();
@@ -165,6 +195,7 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
       clearInterval(pollingInterval);
       supabase.removeChannel(standingsChannel);
       supabase.removeChannel(bracketChannel);
+      supabase.removeChannel(champChannel);
       supabase.removeChannel(stageChannel);
       supabase.removeChannel(groupMatchesChannel);
     };
@@ -267,7 +298,8 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
       await Promise.all([
         fetchStandings(),
         fetchGroupMatches(),
-        fetchBracketMatches()
+        fetchBracketMatches(),
+        fetchDbChampion()
       ]);
 
     } catch (err: any) {
@@ -388,7 +420,16 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
   // Fetch bracket matches if playsoffs are active or completed
   async function fetchBracketMatches() {
     try {
-      // Fetch all matches that do not belong to the group stage (e.g., playoffs, knockout, etc.)
+      // Use the highly robust getFixturesWithBadges RPC from tournamentService first
+      const allFixtures = await tournamentService.getFixturesWithBadges(tournamentId);
+      const filtered = (allFixtures || []).filter(m => m && m.stage !== 'group_stage');
+      
+      if (filtered.length > 0) {
+        setBracketMatches(filtered);
+        return;
+      }
+
+      // Fallback: Fetch all matches that do not belong to the group stage (e.g., playoffs, knockout, etc.)
       const { data: matches, error } = await supabase
         .from('matches')
         .select(`
@@ -397,7 +438,8 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
           next_match_id, scheduled_at,
           player1_profile:profiles!matches_player1_fkey ( id, username, avatar_url ),
           player2_profile:profiles!matches_player2_fkey ( id, username, avatar_url ),
-          winner_profile:profiles!matches_winner_fkey ( id, username, avatar_url )
+          winner_profile:profiles!matches_winner_fkey ( id, username, avatar_url ),
+          fixtures ( id, scheduled_date, scheduled_time, timezone, location, notes )
         `)
         .eq('tournament_id', tournamentId)
         .neq('stage', 'group_stage')
@@ -413,7 +455,8 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
             player1, player2, score1, score2, winner,
             next_match_id, scheduled_at,
             p1_profile:profiles!matches_player1_fkey ( id, username, avatar_url ),
-            p2_profile:profiles!matches_player2_fkey ( id, username, avatar_url )
+            p2_profile:profiles!matches_player2_fkey ( id, username, avatar_url ),
+            fixtures ( id, scheduled_date, scheduled_time, timezone, location, notes )
           `)
           .eq('tournament_id', tournamentId)
           .neq('stage', 'group_stage')
@@ -735,7 +778,8 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
                 await Promise.all([
                   fetchStandings(),
                   fetchGroupMatches(),
-                  fetchBracketMatches()
+                  fetchBracketMatches(),
+                  fetchDbChampion()
                 ]);
                 setSyncing(false);
               }}
@@ -967,11 +1011,11 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
 
           <div className="overflow-x-auto pb-8 select-none border border-border-main rounded-[2.5rem] bg-zinc-950 p-6 md:p-10 custom-scrollbar">
             <div className="min-w-[1000px] flex items-center justify-center gap-8 py-5">
-              <BracketTree matches={bracketMatches} tournament={tournament} settings={settings} />
+              <BracketTree matches={bracketMatches} tournament={tournament} settings={settings} badgeSelectionsMap={badgeSelectionsMap} dbChampion={dbChampion} />
             </div>
           </div>
 
-          <ChampionCardSection matches={bracketMatches} />
+          <ChampionCardSection matches={bracketMatches} dbChampion={dbChampion} />
         </div>
       )}
 
@@ -1134,11 +1178,14 @@ const GroupMatchCard: React.FC<{ match: GroupMatch, flashed: boolean, navigate: 
 
 // ── BRACKET GRAPH PATHWAY SUB-COMPONENTS ───────────────────────────────────────
 
-function BracketTree({ matches, tournament, settings }: { matches: any[], tournament: any, settings: any }) {
+// ── BRACKET GRAPH PATHWAY SUB-COMPONENTS ───────────────────────────────────────
+
+function BracketTree({ matches, tournament, settings, badgeSelectionsMap, dbChampion }: { matches: any[], tournament: any, settings: any, badgeSelectionsMap: Record<string, string>, dbChampion: any | null }) {
   const navigate = useNavigate();
-  const height = 480;
 
   const roundsInfo = [
+    { key: 'round_of_64', label: 'Round of 64', count: 32 },
+    { key: 'round_of_32', label: 'Round of 32', count: 16 },
     { key: 'round_of_16', label: 'Round of 16', count: 8 },
     { key: 'quarter_final', label: 'Quarter-Finals', count: 4 },
     { key: 'semi_final', label: 'Semi-Finals', count: 2 },
@@ -1146,36 +1193,122 @@ function BracketTree({ matches, tournament, settings }: { matches: any[], tourna
   ];
 
   const totalQualifiers = (tournament?.group_count || 0) * (settings?.qualify_count || 2) || 8;
-  let roundsToShow = [];
-  if (totalQualifiers >= 16) {
-    roundsToShow = roundsInfo;
-  } else if (totalQualifiers >= 8) {
-    roundsToShow = roundsInfo.slice(1);
+  const initialMatchCountNeeded = Math.max(1, Math.floor(totalQualifiers / 2));
+  
+  // Find the matching start index in roundsInfo
+  const startIndex = roundsInfo.findIndex(r => r.count <= initialMatchCountNeeded);
+  const roundsToShow = startIndex !== -1 ? roundsInfo.slice(startIndex) : roundsInfo.slice(3); // default to Round of 16 onwards if not found
+
+  const getRoundLabelText = (idx: number, totalRounds: number) => {
+    const reverseIdx = totalRounds - idx - 1;
+    if (reverseIdx === 0) return 'Final';
+    if (reverseIdx === 1) return 'Semi-Finals';
+    if (reverseIdx === 2) return 'Quarter-Finals';
+    if (reverseIdx === 3) return 'Round of 16';
+    if (reverseIdx === 4) return 'Round of 32';
+    if (reverseIdx === 5) return 'Round of 64';
+    return `Round ${idx + 1}`;
+  };
+
+  let columnsData: any[] = [];
+
+  if (matches && matches.length > 0) {
+    // Group matches by round
+    const roundGroups: Record<number, any[]> = {};
+    matches.forEach(m => {
+      const r = Number(m.round || 1);
+      if (!roundGroups[r]) roundGroups[r] = [];
+      roundGroups[r].push(m);
+    });
+
+    const roundNumbers = Object.keys(roundGroups).map(Number).sort((a, b) => a - b);
+    const totalRounds = roundNumbers.length;
+
+    columnsData = roundNumbers.map((roundNum, idx) => {
+      const colMatches = roundGroups[roundNum].sort((a, b) => {
+        const slotA = a.bracket_slot !== undefined && a.bracket_slot !== null ? a.bracket_slot : 0;
+        const slotB = b.bracket_slot !== undefined && b.bracket_slot !== null ? b.bracket_slot : 0;
+        return slotA - slotB;
+      });
+
+      const label = getRoundLabelText(idx, totalRounds);
+
+      // Pad round matches dynamically to expected count
+      const expectedCount = Math.pow(2, totalRounds - 1 - idx);
+      const paddedSlotsMatches = Array.from({ length: expectedCount }, () => null as any);
+      
+      const unassignedMatches: any[] = [];
+      colMatches.forEach((match) => {
+        const slot = match.bracket_slot;
+        if (slot !== undefined && slot !== null && slot >= 1 && slot <= expectedCount) {
+          if (!paddedSlotsMatches[slot - 1]) {
+            paddedSlotsMatches[slot - 1] = match;
+          } else {
+            unassignedMatches.push(match);
+          }
+        } else {
+          unassignedMatches.push(match);
+        }
+      });
+      
+      let unassignedIdx = 0;
+      for (let i = 0; i < expectedCount; i++) {
+        if (!paddedSlotsMatches[i] && unassignedIdx < unassignedMatches.length) {
+          paddedSlotsMatches[i] = unassignedMatches[unassignedIdx];
+          unassignedIdx++;
+        }
+      }
+
+      const slots = paddedSlotsMatches.map((matched, slotIdx) => {
+        const slotNum = slotIdx + 1;
+        if (matched) {
+          return {
+            id: matched.id || `match-actual-fallback-${roundNum}-${slotIdx}`,
+            actual: matched,
+            placeholder: false,
+            slotLabel: `Match ${slotNum}`,
+            roundKey: matched.stage || `round_${roundNum}`
+          };
+        } else {
+          const isSemi = (totalRounds - 1 - idx) === 1;
+          const isFinalCol = idx === totalRounds - 1;
+          let tbdPlayer1 = 'TBD';
+          let tbdPlayer2 = 'TBD';
+          
+          if (isSemi) {
+            tbdPlayer1 = `Winner QF Match ${slotIdx * 2 + 1}`;
+            tbdPlayer2 = `Winner QF Match ${slotIdx * 2 + 2}`;
+          } else if (isFinalCol) {
+            tbdPlayer1 = `Winner SF Match 1`;
+            tbdPlayer2 = `Winner SF Match 2`;
+          }
+
+          return {
+            id: `placeholder-node-${roundNum}-${slotNum}`,
+            actual: null,
+            placeholder: true,
+            tbdPlayer1,
+            tbdPlayer2,
+            slotLabel: `Match ${slotNum}`,
+            roundKey: `round_${roundNum}`
+          };
+        }
+      });
+
+      return {
+        roundKey: `round_${roundNum}`,
+        label,
+        slots
+      };
+    });
   } else {
-    roundsToShow = roundsInfo.slice(2);
-  }
-
-  const columnsData = roundsToShow.map((round, idx) => {
-    const actualMatches = matches.filter(m => 
-      m.stage === round.key || 
-      ((m.stage === 'knockout' || m.stage === 'playoffs' || m.stage === 'stage-playoffs' || m.stage === 'main' || !m.stage) && Number(m.round) === (idx + 1))
-    );
-    
-    const slots = Array.from({ length: round.count }, (_, idx) => {
-      const slotNum = idx + 1;
-      const matched = actualMatches.find(m => m.bracket_slot === slotNum) || actualMatches[idx];
-
-      if (matched) {
-        return {
-          id: matched.id,
-          actual: matched,
-          placeholder: false,
-          slotLabel: `Match ${slotNum}`,
-          roundKey: round.key
-        };
-      } else {
+    // Use placeholder generation based on roundsToShow
+    columnsData = roundsToShow.map((round) => {
+      const slots = Array.from({ length: round.count }, (_, idx) => {
+        const slotNum = idx + 1;
         let tbdPlayer1 = 'TBD';
         let tbdPlayer2 = 'TBD';
+        
         if (round.key === 'quarter_final') {
           tbdPlayer1 = `Winner QF Slot ${idx * 2 + 1}`;
           tbdPlayer2 = `Winner QF Slot ${idx * 2 + 2}`;
@@ -1186,6 +1319,12 @@ function BracketTree({ matches, tournament, settings }: { matches: any[], tourna
           tbdPlayer1 = `Winner SF Match 1`;
           tbdPlayer2 = `Winner SF Match 2`;
         } else if (round.key === 'round_of_16') {
+          tbdPlayer1 = `Winner Group ${String.fromCharCode(65 + idx)}`;
+          tbdPlayer2 = `Runner-up Group ${String.fromCharCode(66 + idx)}`;
+        } else if (round.key === 'round_of_32') {
+          tbdPlayer1 = `Winner Group ${String.fromCharCode(65 + idx)}`;
+          tbdPlayer2 = `Runner-up Group ${String.fromCharCode(66 + idx)}`;
+        } else if (round.key === 'round_of_64') {
           tbdPlayer1 = `Winner Group ${String.fromCharCode(65 + idx)}`;
           tbdPlayer2 = `Runner-up Group ${String.fromCharCode(66 + idx)}`;
         }
@@ -1199,20 +1338,49 @@ function BracketTree({ matches, tournament, settings }: { matches: any[], tourna
           slotLabel: `Match ${slotNum}`,
           roundKey: round.key
         };
-      }
-    });
+      });
 
-    return {
-      roundKey: round.key,
-      label: round.label,
-      slots
-    };
+      return {
+        roundKey: round.key,
+        label: round.label,
+        slots
+      };
+    });
+  }
+
+  // Determine if we have matches and search for finalMatch
+  const hasMatches = matches && matches.length > 0;
+  let finalMatchForChamp = null;
+  if (hasMatches) {
+    finalMatchForChamp = matches.find((m: any) => m.stage === 'final') || 
+      (matches.length > 0 ? [...matches].sort((a: any, b: any) => (b.round || 0) - (a.round || 0))[0] : null);
+  }
+
+  const isFinalCompleted = (finalMatchForChamp && finalMatchForChamp.status === 'completed') || !!dbChampion;
+  
+  const championSlot = {
+    id: 'champion-node',
+    isChampionColumn: true,
+    placeholder: !isFinalCompleted,
+    finalMatch: finalMatchForChamp,
+    dbChampion: dbChampion,
+    roundKey: 'champion'
+  };
+
+  columnsData.push({
+    roundKey: 'champion',
+    label: '🏆 CHAMPION',
+    slots: [championSlot]
   });
+
+  // Calculate dynamic height of the entire column based on maximum slots inside any column (excluding champion column)
+  const maxSlots = Math.max(...columnsData.filter(col => col.roundKey !== 'champion').map(col => col.slots.length), 1);
+  const height = Math.max(480, maxSlots * 120);
 
   return (
     <div className="flex gap-16 xl:gap-24 relative select-none">
       {columnsData.map((col, colIdx) => (
-        <div key={col.roundKey} className="flex flex-col items-center">
+        <div key={`${col.roundKey}-${colIdx}`} className="flex flex-col items-center">
           <span className="text-[10px] font-black tracking-[0.2em] text-primary uppercase mb-6 bg-primary/10 border border-primary/20 px-3 py-1 rounded-full">
             {col.label}
           </span>
@@ -1222,8 +1390,8 @@ function BracketTree({ matches, tournament, settings }: { matches: any[], tourna
             className="flex flex-col justify-around relative w-[220px]"
           >
             {col.slots.map((slot, matchIdx) => (
-              <div key={slot.id} className="relative flex items-center py-1">
-                <BracketNode slot={slot} navigate={navigate} isFinal={col.roundKey === 'final'} />
+              <div key={`${slot.id || 'slot'}-${matchIdx}`} className="relative flex items-center py-1">
+                <BracketNode slot={slot} navigate={navigate} isFinal={col.roundKey === 'final' || col.roundKey === 'round_final'} badgeSelectionsMap={badgeSelectionsMap} />
                 
                 {/* Connection lines to next column */}
                 {colIdx < columnsData.length - 1 && (
@@ -1231,6 +1399,7 @@ function BracketTree({ matches, tournament, settings }: { matches: any[], tourna
                     isTop={matchIdx % 2 === 0} 
                     matchesCount={col.slots.length} 
                     height={height} 
+                    isStraight={col.slots.length === 1}
                   />
                 )}
               </div>
@@ -1242,7 +1411,108 @@ function BracketTree({ matches, tournament, settings }: { matches: any[], tourna
   );
 }
 
-function BracketNode({ slot, navigate, isFinal }: { slot: any; navigate: any; isFinal?: boolean }) {
+function BracketNode({ slot, navigate, isFinal, badgeSelectionsMap }: { slot: any; navigate: any; isFinal?: boolean; badgeSelectionsMap: Record<string, string> }) {
+  if (slot.isChampionColumn) {
+    if (slot.placeholder) {
+      return (
+        <div className="w-[220px] bg-gradient-to-b from-zinc-950/60 to-zinc-950/40 rounded-3xl border-2 border-dashed border-amber-500/20 p-5 flex flex-col items-center justify-center space-y-4 text-center shadow-[inset_0_4px_12px_rgba(0,0,0,0.6)] group hover:border-amber-500/40 transition-colors">
+          <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-white/5 flex items-center justify-center text-xl shadow-md text-amber-500/40 group-hover:text-amber-500 group-hover:scale-110 transition-all duration-300">
+            🏆
+          </div>
+          <div>
+            <h4 className="text-[10px] font-black text-amber-500/40 tracking-[0.2em] uppercase leading-none mb-1">
+              GRAND CHAMPION
+            </h4>
+            <p className="text-xs font-black text-zinc-650 uppercase italic">
+              CHAMPION TBD
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    const match = slot.finalMatch;
+    const dbChamp = slot.dbChampion;
+    
+    let champName = 'Winner';
+    let avatarUrl = null;
+    let badgeId = null;
+
+    if (dbChamp) {
+      champName = dbChamp.winner_username ? getPublicIdentity({ username: dbChamp.winner_username }) : 'Winner';
+      avatarUrl = dbChamp.winner_avatar_url;
+      badgeId = dbChamp.winner_badge_id;
+    } else {
+      const isCompleted = match?.status === 'completed';
+      const score1 = match?.score1;
+      const score2 = match?.score2;
+      const isWinner1 = isCompleted && score1 !== null && score2 !== null && score1 > score2;
+      const isWinner2 = isCompleted && score1 !== null && score2 !== null && score2 > score1;
+
+      const champP = isWinner1 
+        ? (match.player1_profile || match.p1_profile || match.p1 || {})
+        : isWinner2 
+        ? (match.player2_profile || match.p2_profile || match.p2 || {})
+        : null;
+
+      champName = isWinner1
+        ? (match.player1_username ? getPublicIdentity({ username: match.player1_username }) : (champP?.username ? getPublicIdentity(champP) : 'Winner'))
+        : isWinner2
+        ? (match.player2_username ? getPublicIdentity({ username: match.player2_username }) : (champP?.username ? getPublicIdentity(champP) : 'Winner'))
+        : 'Winner';
+
+      avatarUrl = champP?.avatar_url;
+      badgeId = isWinner1
+        ? (match.player1_badge_id || champP?.badge_id || badgeSelectionsMap[match.player1] || null)
+        : isWinner2
+        ? (match.player2_badge_id || champP?.badge_id || badgeSelectionsMap[match.player2] || null)
+        : null;
+    }
+
+    const fallbackChar = (champName || 'W').slice(0, 2).toUpperCase();
+
+    return (
+      <div 
+        onClick={() => match?.id ? navigate(`/matches/${match.id}`) : null}
+        className={cn(
+          "w-[220px] bg-gradient-to-b from-[#1e1503] to-[#2d1e04] border border-amber-400/80 p-5 rounded-3xl flex flex-col items-center text-center space-y-4 shadow-[0_0_30px_rgba(245,158,11,0.35)] hover:border-amber-400 group hover:scale-[1.04] active:scale-[0.98] transition-all duration-300",
+          match?.id ? "cursor-pointer" : "cursor-default"
+        )}
+      >
+        {/* Crown & Avatar with Gold border */}
+        <div className="relative">
+          <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-20">
+            <svg className="w-8 h-8 text-[#FFD700] fill-[#FFD700] drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] animate-bounce" viewBox="0 0 24 24">
+              <path d="M2 4l3 5 7-6 7 6 3-5-3 15H5L2 4z" />
+            </svg>
+          </div>
+          
+          <div className="w-16 h-16 rounded-full p-0.5 bg-gradient-to-tr from-amber-300 via-yellow-400 to-amber-500 shadow-md">
+            <div className="w-full h-full rounded-full overflow-hidden border border-slate-950 bg-slate-900 flex items-center justify-center font-black">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={champName} className="w-full h-full object-cover animate-pulse-once" referrerPolicy="no-referrer" />
+              ) : (
+                <span className="text-amber-400 text-sm">{fallbackChar}</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <span className="bg-amber-400/10 border border-amber-400/20 text-amber-400 text-[8px] font-black uppercase tracking-[0.2em] px-2.5 py-1 rounded-full">
+            🏆 GRAND CHAMPION
+          </span>
+          <h4 className="text-sm font-black text-white uppercase italic tracking-tight pt-1.5 truncate max-w-[190px]">
+            {champName}
+          </h4>
+          <p className="text-[9px] font-bold text-amber-400/80 uppercase tracking-widest leading-none">
+            Tournament Winner
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (slot.placeholder) {
     return (
       <div className="w-[220px] bg-zinc-950/40 rounded-2xl border-2 border-dashed border-white/5 p-4 flex flex-col justify-between space-y-3 shadow-inner">
@@ -1272,8 +1542,11 @@ function BracketNode({ slot, navigate, isFinal }: { slot: any; navigate: any; is
   const isWinner1 = isCompleted && score1 !== null && score2 !== null && score1 > score2;
   const isWinner2 = isCompleted && score1 !== null && score2 !== null && score2 > score1;
 
-  const p1 = match.player1_profile || match.p1 || {};
-  const p2 = match.player2_profile || match.p2 || {};
+  const p1 = match.player1_profile || match.p1_profile || match.p1 || {};
+  const p2 = match.player2_profile || match.p2_profile || match.p2 || {};
+
+  const p1BadgeId = match.player1_badge_id || (p1 as any).badge_id || badgeSelectionsMap[match.player1] || null;
+  const p2BadgeId = match.player2_badge_id || (p2 as any).badge_id || badgeSelectionsMap[match.player2] || null;
 
   const getSingularStageLabel = (stage: string, slotLabel: string) => {
     if (stage === 'final') return 'Final';
@@ -1285,8 +1558,11 @@ function BracketNode({ slot, navigate, isFinal }: { slot: any; navigate: any; is
 
   const nodeLabel = match ? getSingularStageLabel(slot.roundKey || match.stage, slot.slotLabel) : slot.slotLabel;
 
+  const p1Name = match.player1_username ? getPublicIdentity({ username: match.player1_username }) : (p1.username ? getPublicIdentity(p1) : 'TBD');
+  const p2Name = match.player2_username ? getPublicIdentity({ username: match.player2_username }) : (p2.username ? getPublicIdentity(p2) : 'TBD');
+
   const championName = isFinal && isCompleted
-    ? (isWinner1 ? (p1.username || 'TBD') : isWinner2 ? (p2.username || 'TBD') : null)
+    ? (isWinner1 ? p1Name : isWinner2 ? p2Name : null)
     : null;
 
   return (
@@ -1324,21 +1600,19 @@ function BracketNode({ slot, navigate, isFinal }: { slot: any; navigate: any; is
           isWinner2 ? "opacity-30 blur-[0.5px] filter grayscale saturate-50 scale-[0.98]" : ""
         )}>
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 border border-white/10 bg-zinc-900 flex items-center justify-center text-[8px] font-bold uppercase text-zinc-400">
-              {p1.avatar_url ? <img src={p1.avatar_url} alt={p1.username} /> : (p1.username || 'P').slice(0, 2)}
-            </div>
+            <PlayerBadge badgeId={p1BadgeId} username={p1Name} size="xs" className="w-5 h-5 rounded shrink-0" />
             <span className={cn(
               "text-[11px] truncate uppercase tracking-tight font-extrabold flex items-center gap-1",
               isWinner1 ? "text-amber-400 italic" : "text-text-main"
             )}>
               {isWinner1 && <Trophy className="w-3 h-3 text-amber-400 shrink-0" />}
-              {p1.username || 'TBD'}
+              {p1Name}
             </span>
           </div>
           {isCompleted && score1 !== null ? (
             <span className={cn(
               "font-black text-xs px-1.5 py-0.5 rounded bg-background/60 min-w-[20px] text-center",
-              isWinner1 ? "text-amber-400 border border-amber-500/30 bg-amber-505/5" : "text-text-muted"
+              isWinner1 ? "text-amber-400 border border-amber-500/30 bg-amber-550/5" : "text-text-muted"
             )}>
               {score1}
             </span>
@@ -1356,21 +1630,19 @@ function BracketNode({ slot, navigate, isFinal }: { slot: any; navigate: any; is
           isWinner1 ? "opacity-30 blur-[0.5px] filter grayscale saturate-50 scale-[0.98]" : ""
         )}>
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 border border-white/10 bg-zinc-900 flex items-center justify-center text-[8px] font-bold uppercase text-zinc-400">
-              {p2.avatar_url ? <img src={p2.avatar_url} alt={p2.username} /> : (p2.username || 'P').slice(0, 2)}
-            </div>
+            <PlayerBadge badgeId={p2BadgeId} username={p2Name} size="xs" className="w-5 h-5 rounded shrink-0" />
             <span className={cn(
               "text-[11px] truncate uppercase tracking-tight font-extrabold flex items-center gap-1",
               isWinner2 ? "text-amber-400 italic" : "text-text-main"
             )}>
               {isWinner2 && <Trophy className="w-3 h-3 text-amber-400 shrink-0" />}
-              {p2.username || 'TBD'}
+              {p2Name}
             </span>
           </div>
           {isCompleted && score2 !== null ? (
             <span className={cn(
               "font-black text-xs px-1.5 py-0.5 rounded bg-background/60 min-w-[20px] text-center",
-              isWinner2 ? "text-amber-400 border border-amber-500/30 bg-amber-505/5" : "text-text-muted"
+              isWinner2 ? "text-amber-400 border border-amber-500/30 bg-amber-550/5" : "text-text-muted"
             )}>
               {score2}
             </span>
@@ -1378,14 +1650,39 @@ function BracketNode({ slot, navigate, isFinal }: { slot: any; navigate: any; is
             <span className="text-text-muted opacity-30 text-[10px] font-bold italic">-</span>
           )}
         </div>
+
+        {match.fixtures && (match.fixtures.scheduled_date || match.fixtures.location || match.fixtures.scheduled_time) && (
+          <>
+            <div className="h-[1px] bg-white/5 w-full" />
+            <div className="flex items-center justify-between text-[8px] font-bold text-text-muted uppercase tracking-widest pt-1 px-1">
+              <span className="truncate max-w-[115px]">
+                {match.fixtures.location ? `📍 ${match.fixtures.location}` : (match.fixtures.scheduled_date ? `📅 ${match.fixtures.scheduled_date}` : 'Scheduled')}
+              </span>
+              {match.fixtures.scheduled_time && (
+                <span>⏰ {match.fixtures.scheduled_time}</span>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
-function BracketConnector({ isTop, matchesCount, height }: { isTop: boolean; matchesCount: number; height: number; }) {
-  const vertHeight = height / (matchesCount * 2);
+function BracketConnector({ isTop, matchesCount, height, isStraight }: { isTop: boolean; matchesCount: number; height: number; isStraight?: boolean; }) {
   const sideWidth = 24;
+
+  if (isStraight || matchesCount === 1) {
+    return (
+      <div 
+        className="absolute top-1/2 -translate-y-1/2 right-0 translate-x-full z-0 pointer-events-none flex items-center h-[2px] w-[64px] xl:w-[96px]"
+      >
+        <div className="w-full h-[2px] bg-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.5)]" />
+      </div>
+    );
+  }
+
+  const vertHeight = height / (matchesCount * 2);
 
   return (
     <div 
@@ -1413,15 +1710,28 @@ function BracketConnector({ isTop, matchesCount, height }: { isTop: boolean; mat
   );
 }
 
-function ChampionCardSection({ matches }: { matches: any[] }) {
+function ChampionCardSection({ matches, dbChampion }: { matches: any[], dbChampion?: any }) {
   const finalMatch = matches.find(m => m.stage === 'final') || 
-    (matches.length > 0 ? [...matches].sort((a, b) => (b.round || 0) - (a.round || 0))[0] : null);
-  const isFinalCompleted = finalMatch && finalMatch.status === 'completed';
-  const championProfile = isFinalCompleted 
-    ? (finalMatch.winner_profile || (finalMatch.winner === finalMatch.player1 ? (finalMatch.player1_profile || finalMatch.p1_profile || finalMatch.p1) : (finalMatch.player2_profile || finalMatch.p2_profile || finalMatch.p2))) 
-    : null;
+    (matches.length > 0 ? [...matches].sort((a: any, b: any) => (b.round || 0) - (a.round || 0))[0] : null);
+  const isFinalCompleted = (finalMatch && finalMatch.status === 'completed') || !!dbChampion;
+  
+  let username = '';
+  let avatar_url = null;
 
-  if (!isFinalCompleted || !championProfile) return null;
+  if (dbChampion) {
+    username = dbChampion.winner_username ? getPublicIdentity({ username: dbChampion.winner_username }) : 'Winner';
+    avatar_url = dbChampion.winner_avatar_url;
+  } else {
+    const championProfile = isFinalCompleted 
+      ? (finalMatch.winner_profile || (finalMatch.winner === finalMatch.player1 ? (finalMatch.player1_profile || finalMatch.p1_profile || finalMatch.p1) : (finalMatch.player2_profile || finalMatch.p2_profile || finalMatch.p2))) 
+      : null;
+
+    if (!isFinalCompleted || !championProfile) return null;
+    username = championProfile.username;
+    avatar_url = championProfile.avatar_url;
+  }
+
+  if (!isFinalCompleted || !username) return null;
 
   return (
     <motion.div
@@ -1444,16 +1754,16 @@ function ChampionCardSection({ matches }: { matches: any[] }) {
           </h3>
           
           <div className="mx-auto w-20 h-20 rounded-full overflow-hidden border-4 border-yellow-400/50 p-1 bg-zinc-900">
-            {championProfile.avatar_url ? (
-              <img src={championProfile.avatar_url} alt={championProfile.username} className="w-full h-full object-cover rounded-full" />
+            {avatar_url ? (
+              <img src={avatar_url} alt={username} className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
             ) : (
               <div className="w-full h-full rounded-full bg-zinc-850 flex items-center justify-center text-xl font-black text-zinc-500">
-                {championProfile.username?.substring(0, 2).toUpperCase()}
+                {(username || 'W').substring(0, 2).toUpperCase()}
               </div>
             )}
           </div>
 
-          <p className="text-xl font-black text-white uppercase italic tracking-tight">{championProfile.username}</p>
+          <p className="text-xl font-black text-white uppercase italic tracking-tight">{username}</p>
           <p className="text-[9px] text-zinc-500 font-extrabold uppercase tracking-widest">TOURNAMENT WINNER • GLORY SECURED</p>
         </div>
       </div>

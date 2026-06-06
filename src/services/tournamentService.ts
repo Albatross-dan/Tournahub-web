@@ -207,11 +207,11 @@ export const tournamentService = {
         const baseUsername = user.email?.split('@')[0] || 'user';
         const finalUsername = metadataUsername || `${baseUsername}_${user.id.slice(0, 4)}`;
         
-        await (supabase as any).from('profiles').insert({
+        await (supabase as any).from('profiles').upsert({
           id: user.id,
           username: finalUsername,
           role: 'user'
-        });
+        }, { onConflict: 'id' });
       }
 
       // Attempt 3-parameter RPC first, and fall back to 2-parameter if signature is not found

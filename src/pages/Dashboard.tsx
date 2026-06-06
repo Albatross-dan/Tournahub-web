@@ -3,12 +3,13 @@ import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { 
   Trophy, Users, Wallet, 
   ArrowUpRight, Gamepad2, Timer,
-  Loader2, Tv, Shield, HelpCircle
+  Loader2, Tv, Shield, HelpCircle,
+  ChevronDown, ChevronUp, Calendar, Play, CheckCircle2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatCurrency, cn, getPublicIdentity, formatFixtureTime } from '../lib/utils';
 import { Tournament, Match, Wallet as WalletType } from '../types/database';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Shell from '../components/layout/Shell';
 import { matchService } from '../services/matchService';
 import { walletService } from '../services/walletService';
@@ -28,6 +29,44 @@ import RecentChampions from '../components/home/RecentChampions';
 
 export default function Dashboard() {
   const { user, profile, isAdmin, refetchSignal } = useAuth();
+  const navigate = useNavigate();
+  const [checking, setChecking] = useState(false);
+
+  const handleAdminPress = async (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (checking) return;
+
+    if ((window as any).__isAdminConfirmed === true) {
+      navigate('/admin');
+      return;
+    }
+
+    setChecking(true);
+    try {
+      if (!user?.id) return;
+      const { data } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (!data || (data as any).role !== 'admin') {
+        return; // silently block non-admins
+      }
+
+      (window as any).__isAdminConfirmed = true;
+      navigate('/admin');
+    } catch (err) {
+      console.error('[Dashboard] Admin check error:', err);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const [isSchedulesExpanded, setIsSchedulesExpanded] = useState(false);
   const isInitialLoad = React.useRef(true);
   useRefetchOnFocus(loadDashboardData);
   
@@ -79,7 +118,7 @@ export default function Dashboard() {
   const scheduledMatches = React.useMemo(() => {
     return userMatches.filter((m: any) => 
       ['pending', 'ongoing', 'awaiting_result', 'match_in_progress', 'lobby_open', 'under_review'].includes(m.status)
-    ).slice(0, 5);
+    ).slice(0, 20);
   }, [userMatches]);
 
   const isDashboardLoading = (matchesStatus === 'pending' && userMatches.length === 0) || 
@@ -157,12 +196,20 @@ export default function Dashboard() {
                 <p className="text-[10px] text-primary/80 font-bold uppercase tracking-widest mt-0.5">Full administrative privilege mode enabled.</p>
               </div>
             </div>
-            <Link 
-              to="/admin" 
-              className="w-full sm:w-auto px-6 py-2.5 bg-primary hover:bg-white text-black font-black text-xs uppercase italic tracking-widest rounded-xl text-center transition-all shadow-md active:scale-95 duration-250 cursor-pointer"
+            <button 
+              disabled={checking}
+              onClick={handleAdminPress}
+              className="w-full sm:w-auto px-6 py-2.5 bg-primary hover:bg-white text-black font-black text-xs uppercase italic tracking-widest rounded-xl text-center transition-all shadow-md active:scale-95 duration-250 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
             >
-              Enter Admin Panel
-            </Link>
+              {checking ? (
+                <>
+                  <Loader2 className="w-4 h-4 text-black animate-spin" />
+                  <span>Verifying Operations...</span>
+                </>
+              ) : (
+                <span>Enter Admin Panel</span>
+              )}
+            </button>
           </motion.div>
         )}
 
@@ -227,32 +274,89 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-4">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 pt-4">
           {/* Main Feed: Scheduled Matches */}
-            <motion.div variants={item} className="lg:col-span-2 space-y-8">
-            
+          <motion.div variants={item} className="lg:col-span-2 space-y-8">
             <div>
               <SectionHeader title="Next Scheduled Battles" link="/matches" />
               <div className="space-y-4 mt-4">
-                <AnimatePresence mode="popLayout">
-                  {scheduledMatches.length > 0 ? (
-                    scheduledMatches.map((match) => (
-                      <motion.div key={match.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
-                        <MatchCard match={match} />
-                      </motion.div>
-                    ))
-                  ) : (
-                    <div className="card p-12 text-center text-text-muted italic rounded-3xl border-dashed border-2 border-border-main">
-                      No matches found. Go join a tournament!
-                    </div>
-                  )}
-                </AnimatePresence>
+                {scheduledMatches.length > 0 ? (
+                  <div className="space-y-4">
+                    <AnimatePresence mode="popLayout" initial={false}>
+                      {/* Show first 2 matches always */}
+                      {scheduledMatches.slice(0, 2).map((match) => (
+                        <motion.div key={match.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
+                          <MatchCard match={match} />
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+
+                    {/* Remaining matches container with AnimatePresence */}
+                    <AnimatePresence initial={false}>
+                      {isSchedulesExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.3, ease: "easeInOut" }}
+                          className="overflow-hidden space-y-4"
+                        >
+                          {scheduledMatches.slice(2).map((match) => (
+                            <motion.div key={match.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
+                              <MatchCard match={match} />
+                            </motion.div>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Expansion trigger card/button */}
+                    {scheduledMatches.length > 2 && (
+                      <button
+                        onClick={() => setIsSchedulesExpanded(!isSchedulesExpanded)}
+                        className={cn(
+                          "w-full py-3 px-4 bg-surface hover:bg-surface/80 border border-border-main hover:border-primary/20 rounded-2xl flex items-center justify-between transition-all duration-300 group cursor-pointer text-text-muted hover:text-text-main",
+                          isSchedulesExpanded && "border-primary/20 bg-primary/5 hover:bg-primary/5"
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="w-2.5 h-2.5 rounded-full bg-primary/20 flex items-center justify-center">
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                          </span>
+                          <span className="text-[10px] font-black uppercase tracking-wider italic">
+                            {isSchedulesExpanded ? `COLLAPSE MATCH LIST` : `EXPAND UPCOMING SCHEDULES (+${scheduledMatches.length - 2} MORE)`}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] font-black tracking-wider uppercase text-text-muted">
+                            {isSchedulesExpanded ? 'HIDE' : 'SHOW ALL'}
+                          </span>
+                          <div className={cn(
+                            "w-6 h-6 rounded-lg bg-surface border border-border-main flex items-center justify-center transition-transform duration-300",
+                            isSchedulesExpanded && "rotate-180"
+                          )}>
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </div>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="card p-12 text-center text-text-muted italic rounded-3xl border-dashed border-2 border-border-main">
+                    No matches found. Go join a tournament!
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>
 
+          {/* Hall of Fame Square Card */}
+          <motion.div variants={item} className="lg:col-span-1">
+            <RecentChampions />
+          </motion.div>
+
           {/* Sidebar Feed */}
-          <div className="space-y-8">
+          <div className="lg:col-span-1 space-y-8">
             <motion.div variants={item} className="card p-6 bg-gradient-to-br from-primary/10 to-transparent border-primary/20 rounded-3xl space-y-4 shadow-sm">
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
@@ -294,9 +398,6 @@ export default function Dashboard() {
             </motion.div>
           </div>
         </div>
-
-        {/* Prize Winners Slider (Hall of Fame) */}
-        <RecentChampions />
 
         {/* Professional Footer Section */}
         <div className="mt-16 pt-12 pb-8 border-t border-border-main w-full flex flex-col items-center">
@@ -543,66 +644,211 @@ function SectionHeader({ title, link }: { title: string; link: string }) {
 
 function MatchCard({ match }: { match: any }) {
   const { user } = useAuth();
+  const [isExpanded, setIsExpanded] = useState(false);
   const opponent = match.player1?.id === user?.id ? match.player2 : match.player1;
   const opponentName = getPublicIdentity(opponent);
   
   const verificationStatus = match.result_verification_status as VerificationStatus || 'none';
 
+  const toggleExpand = (e: React.MouseEvent) => {
+    // Prevent toggling when clicking buttons or links
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('a')) {
+      return;
+    }
+    setIsExpanded(!isExpanded);
+  };
+
   const getActionButton = () => {
     if (['lobby_open', 'match_in_progress'].includes(match.status)) {
-      return <button className="btn-primary py-2 px-6 text-[10px] shadow-none group-hover:shadow-lg group-hover:shadow-primary/20 rounded-xl bg-emerald-600 border-emerald-500">ENTER MATCH</button>;
+      return (
+        <Link 
+          to={`/matches/${match.id}`} 
+          className="btn-primary py-2 px-4 text-[10px] shadow-none group-hover:shadow-lg group-hover:shadow-primary/20 rounded-xl bg-emerald-600 border-emerald-500 text-center inline-block"
+        >
+          ENTER MATCH
+        </Link>
+      );
     }
     if (match.status === 'awaiting_result' && ['none', 'disputed'].includes(verificationStatus)) {
-      return <button className="btn-primary py-2 px-6 text-[10px] shadow-none group-hover:shadow-lg group-hover:shadow-primary/20 rounded-xl">SUBMIT RESULT</button>;
+      return (
+        <Link 
+          to={`/matches/${match.id}`} 
+          className="btn-primary py-2 px-4 text-[10px] shadow-none group-hover:shadow-lg group-hover:shadow-primary/20 rounded-xl text-center inline-block"
+        >
+          SUBMIT RESULT
+        </Link>
+      );
     }
     if (match.status === 'under_review' || verificationStatus === 'single_submission') {
       return (
-        <div className="flex items-center space-x-2 bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-xl">
+        <div className="flex items-center space-x-2 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl">
           <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
-          <span className="text-amber-500 text-[10px] font-black uppercase tracking-widest italic">Verification Pending</span>
+          <span className="text-amber-500 text-[10px] font-black uppercase tracking-widest italic leading-none">Verification Pending</span>
         </div>
       );
     }
-    return <button className="btn-primary py-2 px-6 text-[10px] shadow-none group-hover:shadow-lg group-hover:shadow-primary/20 rounded-xl">DEPLOY</button>;
+    return (
+      <Link 
+        to={`/matches/${match.id}`} 
+        className="btn-primary py-2 px-4 text-[10px] shadow-none group-hover:shadow-lg group-hover:shadow-primary/20 rounded-xl text-center inline-block"
+      >
+        DEPLOY
+      </Link>
+    );
+  };
+
+  const getInstructionsText = () => {
+    switch (match.status) {
+      case 'lobby_open':
+      case 'match_in_progress':
+        return 'Lobby is open! Join your opponent inside the game lobby, carry out your match, ensure you capture screenshots, and then submit the final results.';
+      case 'awaiting_result':
+        if (verificationStatus === 'disputed') {
+          return 'Discrepancy detected! You and your opponent submitted conflicting scores. Please submit clear screenshots for review by our moderation team.';
+        }
+        return 'Match finished! Both players need to upload screenshots and specify the scores to verify the win securely.';
+      case 'under_review':
+        return 'This match is currently flagged and under manual review by the Tournahub admin team. Results will be verified and resolved shortly.';
+      default:
+        return 'Make sure to be online and available at the scheduled time. Failure to show up within the grace period results in auto-forfeiture.';
+    }
   };
 
   return (
     <div className="relative">
-      <Link to={`/matches/${match.id}`} className={cn(
-        "card p-4 md:p-5 hover:border-primary/50 transition-all duration-300 group flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-2xl relative z-10",
-        verificationStatus === 'disputed' && "border-red-500/50 hover:border-red-500"
-      )}>
-        <div className="flex items-center space-x-4 md:space-x-6 w-full sm:w-auto">
-          <div className="text-center shrink-0 min-w-[3.5rem] bg-surface p-2 rounded-xl border border-border-main">
-            <p className="text-[9px] font-black text-text-muted uppercase tracking-widest">Round</p>
-            <p className="text-xl font-black text-primary italic leading-none">{match.round || '1'}</p>
-          </div>
-          <div className="h-10 w-px bg-border-main hidden sm:block" />
-          <div className="min-w-0">
-            <div className="flex items-center space-x-2 mb-1">
-              <p className="text-xs md:text-sm text-amber-500 font-black uppercase italic tracking-widest truncate max-w-[150px] sm:max-w-none">
-                {match.tournaments?.name || 'Tournament Event'}
-              </p>
-              <VerificationStatusBadge status={verificationStatus} size="sm" />
+      <div 
+        onClick={toggleExpand}
+        className={cn(
+          "card p-0 transition-all duration-300 group rounded-2xl relative z-10 flex flex-col overflow-hidden bg-gradient-to-br from-surface to-background border-border-main hover:border-primary/30",
+          isExpanded && "border-primary/50 shadow-xl shadow-primary/5",
+          verificationStatus === 'disputed' && "border-red-500/50 hover:border-red-500"
+        )}
+      >
+        {/* Main Brief Row */}
+        <div className="p-4 md:p-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 cursor-pointer select-none">
+          <div className="flex items-center space-x-4 md:space-x-6 w-full sm:w-auto">
+            <div className="text-center shrink-0 min-w-[3.5rem] bg-surface p-2 rounded-xl border border-border-main">
+              <p className="text-[9px] font-black text-text-muted uppercase tracking-widest">Round</p>
+              <p className="text-xl font-black text-primary italic leading-none">{match.round || '1'}</p>
             </div>
-            <p className="text-base md:text-lg font-black text-text-main italic tracking-tighter uppercase truncate">
-              {opponentName} <span className="text-text-muted px-2 italic font-medium tracking-normal text-sm">vs</span> YOU
-            </p>
+            <div className="h-10 w-px bg-border-main hidden sm:block" />
+            <div className="min-w-0 flex-1 sm:flex-initial">
+              <div className="flex items-center space-x-2 mb-1">
+                <p className="text-xs md:text-sm text-amber-500 font-black uppercase italic tracking-widest truncate max-w-[150px] sm:max-w-none">
+                  {match.tournaments?.name || 'Tournament Event'}
+                </p>
+                <VerificationStatusBadge status={verificationStatus} size="sm" />
+              </div>
+              <p className="text-base md:text-lg font-black text-text-main italic tracking-tighter uppercase truncate">
+                {opponentName} <span className="text-text-muted px-2 italic font-medium tracking-normal text-sm">vs</span> YOU
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex items-center justify-between sm:justify-end space-x-4 w-full sm:w-auto pt-3 sm:pt-0 border-t sm:border-t-0 border-border-main">
+            <div className="text-left sm:text-right">
+              <p className="text-[9px] font-black text-text-muted uppercase tracking-widest mb-1 sm:text-right">Schedule</p>
+              <p className="text-xs sm:text-sm font-black text-text-main flex items-center sm:justify-end italic uppercase tracking-tighter col-span-1">
+                <Timer className="w-3.5 h-3.5 mr-1.5 text-primary shrink-0" />
+                {((match as any).scheduled_date && (match as any).scheduled_time) 
+                  ? formatFixtureTime((match as any).scheduled_date, (match as any).scheduled_time, (match as any).timezone)
+                  : (match.scheduled_at ? new Date(match.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : 'Time TBD')}
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {getActionButton()}
+              <div className="w-8 h-8 rounded-xl bg-surface border border-border-main flex items-center justify-center text-text-muted hover:text-primary transition-colors">
+                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </div>
+            </div>
           </div>
         </div>
-        <div className="flex items-center justify-between sm:justify-end space-x-6 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-t-0 border-border-main">
-          <div className="text-left sm:text-right">
-            <p className="text-[9px] font-black text-text-muted uppercase tracking-widest mb-1 sm:text-right">Schedule</p>
-            <p className="text-xs sm:text-sm font-black text-text-main flex items-center sm:justify-end italic uppercase tracking-tighter">
-              <Timer className="w-3.5 h-3.5 mr-1.5 text-primary" />
-              {((match as any).scheduled_date && (match as any).scheduled_time) 
-                ? formatFixtureTime((match as any).scheduled_date, (match as any).scheduled_time, (match as any).timezone)
-                : (match.scheduled_at ? new Date(match.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : 'Time TBD')}
-            </p>
-          </div>
-          {getActionButton()}
-        </div>
-      </Link>
+
+        {/* Dropping Down Detailed Section */}
+        <AnimatePresence initial={false}>
+          {isExpanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              className="overflow-hidden border-t border-border-main/50"
+            >
+              <div className="p-5 space-y-4 bg-background/30">
+                {/* Visual Header / Card info */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-surface/50 border border-border-main rounded-xl p-3">
+                    <p className="text-[8px] font-black text-text-muted uppercase tracking-widest mb-1">STATION STAGE</p>
+                    <p className="text-xs font-black text-text-main uppercase italic truncate">
+                      {match.stage === 'group_stage' ? 'Group Stage' : 'Playoffs'}
+                    </p>
+                  </div>
+                  <div className="bg-surface/50 border border-border-main rounded-xl p-3">
+                    <p className="text-[8px] font-black text-text-muted uppercase tracking-widest mb-1">TOURNAMENT PRIZE</p>
+                    <p className="text-xs font-black text-emerald-500 uppercase italic truncate">
+                      {formatCurrency(match.tournaments?.prize_pool || 0)}
+                    </p>
+                  </div>
+                  <div className="bg-surface/50 border border-border-main rounded-xl p-3 col-span-1 sm:col-span-2">
+                    <p className="text-[8px] font-black text-text-muted uppercase tracking-widest mb-1">MAPS / MATCH TYPE</p>
+                    <p className="text-xs font-black text-text-main uppercase italic truncate">
+                      {match.tournaments?.type || 'Double Elimination'} • Best of 3
+                    </p>
+                  </div>
+                </div>
+
+                {/* Instructions Drawer */}
+                <div className="bg-primary/5 border border-primary/10 rounded-2xl p-4 flex gap-3.5">
+                  <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <Tv className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black text-primary uppercase tracking-wider">PREPARATION PROTOCOL</p>
+                    <p className="text-xs font-bold text-text-muted leading-relaxed">
+                      {getInstructionsText()}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Quick Opponent comparison card */}
+                {opponent && (
+                  <div className="flex items-center justify-between p-3 bg-surface/40 border border-border-main rounded-2xl">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-slate-800 border border-border-main overflow-hidden flex items-center justify-center font-black text-xs text-primary">
+                        {opponent.avatar_url ? (
+                          <img src={opponent.avatar_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          opponentName.slice(0, 2).toUpperCase()
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-text-main leading-none uppercase italic">{opponentName}</p>
+                        <p className="text-[9px] text-text-muted font-bold tracking-widest uppercase mt-1">Opponent Contender</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <span className="px-2.5 py-1 bg-surface border border-border-main rounded-lg text-[9px] font-black uppercase text-text-muted">
+                        VERIFIED
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Direct redirectional CTA link */}
+                <Link 
+                  to={`/matches/${match.id}`}
+                  className="w-full py-3 px-4 bg-primary text-black font-black uppercase italic tracking-wider text-xs rounded-xl flex items-center justify-center gap-2 hover:bg-primary-hover transition-all duration-200 active:scale-98 shadow-lg shadow-primary/10 mt-1"
+                >
+                  <Play className="w-4 h-4 fill-black" />
+                  <span>OPEN MATCH ACTION CENTER</span>
+                </Link>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
       
       <AnimatePresence>
         {verificationStatus !== 'none' && (

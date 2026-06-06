@@ -149,24 +149,72 @@ export const matchService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Authentication required');
 
-    const { data, error } = await (supabase as any).rpc('submit_match_result', {
-      p_submitter_id: user.id,
-      p_match_id: matchId,
-      p_score1: score1,
-      p_score2: score2,
-      p_screenshot_url: screenshotUrl
-    });
-    
-    if (error) {
-      console.error('[matchService] submitResult RPC error details:', error);
-      throw error;
+    // Check if a match_results row already exists for this (match_id, submitted_by) that is not rejected.
+    const { data: existingResults, error: checkError } = await (supabase as any)
+      .from('match_results')
+      .select('*')
+      .eq('match_id', matchId)
+      .eq('submitted_by', user.id)
+      .neq('status', 'rejected');
+
+    if (checkError) {
+      throw new Error(`Failed to check existing submissions: ${checkError.message}`);
     }
 
-    if (data?.error) {
-      throw new Error(data.error);
-    }
+    const existingRow = existingResults && existingResults.length > 0 ? existingResults[0] : null;
 
-    return data;
+    if (existingRow) {
+      if (existingRow.screenshot_url === null && screenshotUrl) {
+        // PATCH that row to set screenshot_url = uploadData.path
+        const { error: patchError } = await (supabase as any)
+          .from('match_results')
+          .update({ screenshot_url: screenshotUrl })
+          .eq('id', existingRow.id);
+
+        if (patchError) {
+          throw new Error(`Failed to update screenshot: ${patchError.message}`);
+        }
+      }
+      return { success: true, message: "Screenshot updated successfully for your existing submission." };
+    } else {
+      // If no row exists, INSERT with all required fields including screenshot_url.
+      // We do this via the secure RPC (or direct upsert fallback).
+      const { data, error } = await (supabase as any).rpc('submit_match_result', {
+        p_match_id: matchId,
+        p_submitter_id: user.id,
+        p_player1_score: score1,
+        p_player2_score: score2,
+        p_screenshot_url: screenshotUrl || null
+      });
+
+      if (error) {
+        // Fallback upsert
+        const { error: insertError } = await (supabase as any)
+          .from('match_results')
+          .upsert({
+            match_id: matchId,
+            submitted_by: user.id,
+            player1_score: score1,
+            player2_score: score2,
+            screenshot_url: screenshotUrl || null,
+            status: 'submitted',
+            submission_attempt: 1
+          }, {
+            onConflict: 'match_id,submitted_by'
+          });
+
+        if (insertError) {
+          throw new Error(`Database submission error: ${insertError.message} (RPC error: ${error.message})`);
+        }
+        return { success: true };
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      return data;
+    }
   },
 
   async getMatchVerificationState(matchId: string) {

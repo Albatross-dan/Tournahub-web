@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Upload, Check, AlertCircle, Loader2, Trophy, Users, Clock } from 'lucide-react';
 import { useMatchVerificationState } from '../../hooks/useMatchVerificationState';
-import { useSubmitResult } from '../../hooks/useSubmitResult';
+import { matchService } from '../../services/matchService';
 import { storageService } from '../../services/storageService';
 import { WaitingForOpponent } from './WaitingForOpponent';
 import { AutoVerifiedResult } from './AutoVerifiedResult';
@@ -9,6 +9,7 @@ import { DisputedResult } from './DisputedResult';
 import { AdminReviewBanner } from './AdminReviewBanner';
 import { cn, getPublicIdentity } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
+import { toast } from 'react-hot-toast';
 import StorageImage from '../common/StorageImage';
 
 interface SubmitResultPanelProps {
@@ -20,19 +21,46 @@ interface SubmitResultPanelProps {
 
 export function SubmitResultPanel({ matchId, currentUserId, playerName, match }: SubmitResultPanelProps) {
   const { state, isLoading, error, refetch, serverTimeOffsetMs } = useMatchVerificationState(matchId);
-  const { submit, isSubmitting, submitError: hookSubmitError } = useSubmitResult(matchId);
 
   const [score1, setScore1] = useState<string>('');
   const [score2, setScore2] = useState<string>('');
-  const [screenshotPath, setScreenshotPath] = useState<string | null>(null);
+  const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [publicUrl, setPublicUrl] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [formDisabled, setFormDisabled] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   // Player identity extraction
   const player1Id = typeof match?.player1 === 'object' ? match?.player1?.id : match?.player1;
   const isPlayer1 = currentUserId === player1Id;
+
+  // Pre-populate scores if user has already submitted to ensure inputs are populated and disabled
+  useEffect(() => {
+    if (state?.submissions) {
+      const mySub = state.submissions.find((s: any) => s.submitted_by === currentUserId);
+      if (mySub) {
+        const myScore = isPlayer1 ? (mySub.player1_score ?? mySub.score1) : (mySub.player2_score ?? mySub.score2);
+        const oppScore = isPlayer1 ? (mySub.player2_score ?? mySub.score2) : (mySub.player1_score ?? mySub.score1);
+        setScore1(String(myScore ?? ''));
+        setScore2(String(oppScore ?? ''));
+      }
+    }
+  }, [state?.submissions, currentUserId, isPlayer1]);
+
   const myName = isPlayer1 ? getPublicIdentity(match?.player1) : getPublicIdentity(match?.player2);
   const opponentName = isPlayer1 ? getPublicIdentity(match?.player2) : getPublicIdentity(match?.player1);
 
@@ -114,8 +142,8 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
 
   // Render appropriate state view
   if (ui_state === 'waiting_for_opponent') {
-    const mySub = submissions?.find((s: any) => s.username === playerName);
-    const opponent = submissions?.find((s: any) => s.username !== playerName);
+    const mySub = submissions?.find((s: any) => s.submitted_by === currentUserId);
+    const opponent = submissions?.find((s: any) => s.submitted_by !== currentUserId);
 
     if (mySub) {
       return (
@@ -140,6 +168,7 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
         matchId={matchId}
         playerName={playerName}
         tournamentId={match?.tournament_id}
+        currentUserId={currentUserId}
       />
     );
   }
@@ -162,27 +191,83 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploading(true);
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+    if (!allowedTypes.includes(file.type)) {
+      setUploadError('Invalid file type. Only image/jpeg, image/png, and image/jpg are allowed.');
+      toast.error('Invalid file type. Only JPEG, PNG, or JPG are allowed.');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('File too large. Max size 10MB.');
+      toast.error('File too large. Maximum size allowed is 10MB.');
+      return;
+    }
+
+    // Revoke previous object URL if any to clean memory
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    const generatedPreview = URL.createObjectURL(file);
+    setPreviewUrl(generatedPreview);
+    setScreenshotFile(file);
     setUploadError(null);
+    setPublicUrl(null);
+    setUploading(true);
 
     try {
-      const path = await storageService.uploadScreenshot(file, matchId, currentUserId);
-      setScreenshotPath(path);
-    } catch (err: any) {
-      setUploadError(err.message || 'Transmission failed. Signal lost during upload.');
+      // 2. Read the file as ArrayBuffer before uploading
+      const arrayBuffer = await file.arrayBuffer();
+
+      // 3. Upload path must be UID-prefixed
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("You must be logged in to upload evidence.");
+      }
+      
+      const fileExt = file.name ? (file.name.split('.').pop() || 'png') : 'png';
+      const filePath = `${user.id}/match_${matchId}_${Date.now()}.${fileExt}`;
+
+      // 4. Upload using ArrayBuffer with explicit content type
+      const { data, error: uploadErr } = await supabase.storage
+        .from('result-screenshots')
+        .upload(filePath, arrayBuffer, {
+          contentType: file.type,
+          upsert: true
+        });
+
+      if (uploadErr) {
+        throw uploadErr;
+      }
+
+      // 5. Get the URL immediately after upload
+      const { data: { publicUrl: loadedUrl } } = supabase.storage
+        .from('result-screenshots')
+        .getPublicUrl(filePath);
+
+      setPublicUrl(loadedUrl);
+      toast.success("Screenshot uploaded successfully!");
+    } catch (uError: any) {
+      const errMsg = uError?.message || uError?.toString() || 'Unknown upload error';
+      console.error('[SubmitResultPanel] Screenshot upload failed:', uError);
+      setUploadError(`Upload failed: ${errMsg}`);
+      toast.error(`Screenshot upload failed: ${errMsg}`);
     } finally {
       setUploading(false);
     }
   };
 
   // Error grouping & matching
-  const submitError = hookSubmitError || localError;
-  const isAlreadySubmitted = (submitError || '').toLowerCase().includes('already submitted');
-  const isDeadlineExpired = (submitError || '').toLowerCase().includes('deadline');
-  const isScreenshotError = (submitError || '').toLowerCase().includes('screenshot') || !!uploadError;
+  const finalSubmitError = submitError || localError;
+  const isAlreadySubmitted = (finalSubmitError || '').toLowerCase().includes('already submitted');
+  const isDeadlineExpired = (finalSubmitError || '').toLowerCase().includes('deadline');
+  const isScreenshotError = (finalSubmitError || '').toLowerCase().includes('screenshot') || !!uploadError;
+  const hasAlreadySubmitted = !!state?.submissions?.some((s: any) => s.submitted_by === currentUserId) || isAlreadySubmitted || formDisabled;
 
   const handleSubmit = async () => {
     setLocalError(null);
+    setSubmitError(null);
     const s1Val = parseFloat(score1);
     const s2Val = parseFloat(score2);
 
@@ -212,11 +297,52 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
 
   const handleFinalConfirmSubmit = async () => {
     setShowConfirm(false);
+    setIsSubmitting(true);
+    setSubmitError(null);
+    setLocalError(null);
+
     try {
-      await submit(parseInt(score1), parseInt(score2), screenshotPath);
-      refetch();
-    } catch (err) {
-      // Handled by hook
+      let currentPath = publicUrl;
+
+      // Map scores correctly based on player1 / player2
+      const finalPlayer1Score = isPlayer1 ? Number(score1) : Number(score2);
+      const finalPlayer2Score = isPlayer1 ? Number(score2) : Number(score1);
+
+      // Call the centralized service to submit the result
+      const resData = await matchService.submitResult(
+        matchId,
+        finalPlayer1Score,
+        finalPlayer2Score,
+        currentPath || null
+      );
+
+      // Handle the success state
+      let message = "Result submitted successfully.";
+      const pathVal = resData?.path;
+      if (pathVal === 'A' || pathVal === 'B') {
+        message = "Result submitted, waiting for opponent";
+      } else if (pathVal === 'C') {
+        message = "Scores conflict — admin will review";
+      } else if (resData?.message) {
+        message = resData.message;
+      }
+
+      toast.success(message);
+      setSuccessMsg(message);
+      setFormDisabled(true);
+      
+      // Delay to show success state before refetching/re-rendering
+      setTimeout(async () => {
+        await refetch();
+      }, 1000);
+
+    } catch (err: any) {
+      const errMsg = err?.message || "An unexpected transmission error occurred.";
+      console.error('[SubmitResultPanel] error:', err);
+      toast.error(errMsg);
+      setSubmitError(errMsg);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -271,13 +397,25 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
     if (isSubmitting) {
       return "Transmitting...";
     }
+    if (hasAlreadySubmitted) {
+      return "RESULT ALREADY SUBMITTED";
+    }
+    if (phase === 'PHASE_A') {
+      return "SUBMISSIONS NOT OPEN YET";
+    }
+    if (phase === 'PHASE_B') {
+      return "MATCH IN PROGRESS - SUBMITS NOT OPEN";
+    }
     if (phase === 'PHASE_D') {
-      return "SUBMISSION CLOSED";
+      return "SUBMISSIONS CLOSED";
     }
-    if (phase === 'PHASE_C') {
-      return "SUBMIT RESULT ✓";
+    if (screenshotFile && uploading) {
+      return "UPLOADING EVIDENCE...";
     }
-    return "SUBMIT RESULT";
+    if (screenshotFile && !publicUrl) {
+      return "AWAITING SCREENSHOT UPLOAD...";
+    }
+    return "SUBMIT RESULT ✓";
   };
 
   return (
@@ -340,7 +478,7 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
           )}
           {phase === 'PHASE_B' && (
             <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">
-              Submit your result once the play window closes
+              Match is live! Submit your score once physical play is complete.
             </p>
           )}
         </div>
@@ -359,7 +497,7 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
               step="1"
               value={score1}
               onChange={(e) => setScore1(e.target.value)}
-              disabled={phase !== 'PHASE_C' || isSubmitting || isAlreadySubmitted}
+              disabled={phase !== 'PHASE_C' || isSubmitting || formDisabled || hasAlreadySubmitted}
               aria-label="Your score"
               className="w-full h-16 bg-slate-950 border-2 border-slate-800 rounded-2xl text-3xl font-black text-center text-white focus:border-primary focus:ring-0 transition-all disabled:opacity-50"
               placeholder="0"
@@ -375,7 +513,7 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
               step="1"
               value={score2}
               onChange={(e) => setScore2(e.target.value)}
-              disabled={phase !== 'PHASE_C' || isSubmitting || isAlreadySubmitted}
+              disabled={phase !== 'PHASE_C' || isSubmitting || formDisabled || hasAlreadySubmitted}
               aria-label="Opponent score"
               className="w-full h-16 bg-slate-950 border-2 border-slate-800 rounded-2xl text-3xl font-black text-center text-white focus:border-primary focus:ring-0 transition-all disabled:opacity-50"
               placeholder="0"
@@ -390,18 +528,31 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-white/5">Recommended</span>
           </div>
           
-          {screenshotPath ? (
+          {screenshotFile ? (
             <div className="relative group rounded-2xl overflow-hidden border-2 border-primary/20 aspect-video bg-slate-950">
-              <StorageImage 
-                bucket="result-screenshots" 
-                path={screenshotPath} 
-                alt="Match proof" 
+              <img 
+                src={previewUrl || ''} 
+                alt="Match proof preview" 
                 className="w-full h-full object-cover" 
               />
+              {uploading && (
+                <div className="absolute inset-0 bg-slate-950/70 flex flex-col items-center justify-center space-y-2 z-10 transition-all">
+                  <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                  <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Uploading Encrypted Intel...</span>
+                </div>
+              )}
               <button 
-                onClick={() => { setScreenshotPath(null); }}
+                onClick={() => { 
+                  if (previewUrl) {
+                    URL.revokeObjectURL(previewUrl);
+                  }
+                  setPreviewUrl(null);
+                  setScreenshotFile(null); 
+                  setPublicUrl(null);
+                  setUploadError(null);
+                }}
                 className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
-                disabled={phase !== 'PHASE_C' || isAlreadySubmitted}
+                disabled={phase !== 'PHASE_C' || formDisabled || isSubmitting || hasAlreadySubmitted}
               >
                 <div className="bg-red-600 p-2 rounded-lg text-white text-[10px] font-black uppercase tracking-widest">Remove</div>
               </button>
@@ -410,13 +561,13 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
             <div className={cn(
               "relative border-2 border-dashed rounded-2xl p-12 transition-all group",
               isScreenshotError ? "border-red-500/50 bg-red-500/5" : "border-slate-800",
-              phase === 'PHASE_C' && !isAlreadySubmitted ? "hover:border-primary/50 cursor-pointer" : "opacity-50 cursor-not-allowed"
+              phase === 'PHASE_C' && !hasAlreadySubmitted && !formDisabled ? "hover:border-primary/50 cursor-pointer" : "opacity-50 cursor-not-allowed"
             )}>
               <input 
                 type="file"
                 accept="image/*"
                 onChange={handleFileUpload}
-                disabled={phase !== 'PHASE_C' || uploading || isSubmitting || isAlreadySubmitted}
+                disabled={phase !== 'PHASE_C' || uploading || isSubmitting || formDisabled || hasAlreadySubmitted}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
               />
               <div className="flex flex-col items-center justify-center text-center">
@@ -443,13 +594,32 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
           )}
         </div>
 
+        {/* Inform user they already submitted */}
+        {hasAlreadySubmitted && !successMsg && (
+          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center space-x-3">
+            <Check className="w-4 h-4 text-amber-500 shrink-0" />
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-500">
+              Your results are successfully logged. Double submissions are locked.
+            </p>
+          </div>
+        )}
+
         {/* Submission Error Message Displays */}
-        {submitError && (
+        {finalSubmitError && !isAlreadySubmitted && (
           <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center space-x-3">
             <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
             <p className="text-[10px] font-black uppercase tracking-widest text-red-500">
-              {isAlreadySubmitted ? "You have already submitted a result for this match." : 
-               isDeadlineExpired ? "Submission deadline has passed." : submitError}
+               {isDeadlineExpired ? "Submission deadline has passed." : finalSubmitError}
+            </p>
+          </div>
+        )}
+
+        {/* Submission Success Message Display */}
+        {successMsg && (
+          <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center space-x-3">
+            <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500">
+              {successMsg}
             </p>
           </div>
         )}
@@ -457,10 +627,10 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
         {/* Submit Button */}
         <button 
           onClick={handleSubmit}
-          disabled={phase !== 'PHASE_C' || !isFormValid || isSubmitting || uploading || isAlreadySubmitted}
+          disabled={phase !== 'PHASE_C' || !isFormValid || isSubmitting || uploading || formDisabled || hasAlreadySubmitted || (screenshotFile !== null && (!publicUrl || uploading))}
           className={cn(
             "w-full h-16 flex items-center justify-center space-x-3 rounded-2xl font-black uppercase italic tracking-widest transition-all cursor-pointer",
-            phase === 'PHASE_C' && isFormValid && !isAlreadySubmitted
+            phase === 'PHASE_C' && isFormValid && !hasAlreadySubmitted && !formDisabled && !(screenshotFile !== null && (!publicUrl || uploading))
               ? "bg-primary text-black hover:bg-white hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-primary/20"
               : "bg-slate-800 text-slate-600 cursor-not-allowed"
           )}
@@ -473,14 +643,24 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
           ) : (
             <>
               <span>{getSubmitButtonLabel()}</span>
-              {phase === 'PHASE_C' && !isAlreadySubmitted && <Check className="w-5 h-5" />}
+              {phase === 'PHASE_C' && !hasAlreadySubmitted && <Check className="w-5 h-5" />}
             </>
           )}
         </button>
 
-        {phase !== 'PHASE_C' && (
+        {phase === 'PHASE_A' && (
           <p className="text-center text-slate-600 text-[10px] font-black uppercase tracking-widest italic animate-pulse">
-            {phase === 'PHASE_D' ? 'Submissions have been locked for this deployment' : 'Submissions window is not yet active'}
+            Submissions window is not yet active (Match starts soon)
+          </p>
+        )}
+        {phase === 'PHASE_B' && (
+          <p className="text-center text-slate-600 text-[10px] font-black uppercase tracking-widest italic animate-pulse">
+            Physical play active. Submissions will open after the match play window.
+          </p>
+        )}
+        {phase === 'PHASE_D' && (
+          <p className="text-center text-red-500 text-[10px] font-black uppercase tracking-widest italic animate-pulse">
+            The deadline for submitting results has expired.
           </p>
         )}
       </div>

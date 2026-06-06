@@ -256,7 +256,66 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
               return aOrder - bOrder;
             });
 
+            // Calculate expected number of matches in this round
+            const expectedCount = Math.pow(2, roundKeys.length - 1 - colIdx);
+            
+            // Build the padded list of match objects
+            const paddedColMatches = Array.from({ length: expectedCount }, () => null as any);
+            
+            // First pass: assign matches with valid bracket_slot
+            const unassignedMatches: any[] = [];
+            colMatches.forEach((match) => {
+              const slot = match.bracket_slot;
+              if (slot !== undefined && slot !== null && slot >= 1 && slot <= expectedCount) {
+                if (!paddedColMatches[slot - 1]) {
+                  paddedColMatches[slot - 1] = match;
+                } else {
+                  unassignedMatches.push(match);
+                }
+              } else {
+                unassignedMatches.push(match);
+              }
+            });
+            
+            // Second pass: fill remaining null slots with unassigned matches
+            let unassignedIdx = 0;
+            for (let i = 0; i < expectedCount; i++) {
+              if (!paddedColMatches[i] && unassignedIdx < unassignedMatches.length) {
+                paddedColMatches[i] = unassignedMatches[unassignedIdx];
+                unassignedIdx++;
+              }
+            }
+            
+            // Third pass: fill remaining slots with placeholder objects to prevent missing branches
             const isFinalCol = colIdx === finalColIdx;
+            for (let i = 0; i < expectedCount; i++) {
+              if (!paddedColMatches[i]) {
+                const isSemi = (roundKeys.length - 1 - colIdx) === 1;
+                let tbdPlayer1 = 'TBD';
+                let tbdPlayer2 = 'TBD';
+                
+                if (isSemi) {
+                  tbdPlayer1 = `Winner QF Match ${i * 2 + 1}`;
+                  tbdPlayer2 = `Winner QF Match ${i * 2 + 2}`;
+                } else if (isFinalCol) {
+                  tbdPlayer1 = `Winner SF Match 1`;
+                  tbdPlayer2 = `Winner SF Match 2`;
+                }
+
+                paddedColMatches[i] = {
+                  id: `placeholder-match-${roundKey}-${i + 1}`,
+                  status: 'scheduled',
+                  round: roundKey,
+                  bracket_slot: i + 1,
+                  player1_username: tbdPlayer1,
+                  player2_username: tbdPlayer2,
+                  score1: null,
+                  score2: null,
+                  is_placeholder: true
+                };
+              }
+            }
+
             const xOffset = colIdx * colStep;
 
             return (
@@ -272,7 +331,7 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
                 </div>
 
                 {/* Match Cards of the current round */}
-                {colMatches.map((match, i) => {
+                {paddedColMatches.map((match, i) => {
                   const childFirstOffset = (Math.pow(2, colIdx) - 1) * (cardHeight / 2) + (Math.pow(2, colIdx) - 1) * (baseGap / 2);
                   const childGap = (Math.pow(2, colIdx) - 1) * cardHeight + Math.pow(2, colIdx) * baseGap;
                   const topPos = childFirstOffset + i * (cardHeight + childGap);
@@ -299,7 +358,7 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
                       top: '0px'
                     }}
                   >
-                    {colMatches.map((childMatch, i) => {
+                    {paddedColMatches.map((childMatch, i) => {
                       const parentIdx = Math.floor(i / 2);
                       const parentColIdx = colIdx + 1;
 
@@ -480,12 +539,20 @@ function MatchNode({ match, roundLabel, isFinal }: { match: any; roundLabel?: st
 
   return (
     <div 
-      onClick={() => navigate(`/matches/${match.match_id || match.id}`)}
+      onClick={() => {
+        if (match.is_placeholder || !match.id || String(match.id).startsWith('placeholder')) {
+          return;
+        }
+        navigate(`/matches/${match.match_id || match.id}`);
+      }}
       className={cn(
-        "bg-surface/90 backdrop-blur-md border rounded-2xl w-full shadow-lg transition-all duration-300 hover:scale-[1.03] relative z-10 cursor-pointer overflow-hidden group/card",
-        isFinal 
-          ? (isCompleted ? "border-amber-400/90 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-[#1e1503]/90" : "border-amber-500/40 hover:border-amber-400")
-          : (isCompleted ? "border-border-main hover:border-primary/40" : "border-primary/20 hover:border-primary")
+        "bg-surface/90 backdrop-blur-md border rounded-2xl w-full shadow-lg transition-all duration-300 relative z-10 overflow-hidden group/card",
+        match.is_placeholder 
+          ? "border-dashed border-border-main/50 cursor-default opacity-50 bg-[#1e293b]/10" 
+          : "cursor-pointer hover:scale-[1.03]" + (isFinal 
+              ? (isCompleted ? " border-amber-400/90 shadow-[0_0_25px_rgba(245,158,11,0.25)] bg-[#1e1503]/90" : " border-amber-500/40 hover:border-amber-400")
+              : (isCompleted ? " border-border-main hover:border-primary/40" : " border-primary/20 hover:border-primary")
+            )
       )}
     >
       {isFinal && isCompleted && championName && (

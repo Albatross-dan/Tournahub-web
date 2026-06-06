@@ -15,16 +15,16 @@ import { supabase } from '../../lib/supabase';
 const logoUrl = '/android-chrome-512x512.png';
 
 export default function Navbar() {
-  const { profile, user, isAdmin } = useAuth();
+  const { profile, user, isAdmin, walletSummary, unreadNotificationsCount, unreadChatCount } = useAuth();
   const location = useLocation();
-  const [balance, setBalance] = useState<number | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>(new Date().toLocaleTimeString());
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const initial = React.useMemo(() => 
     (profile?.username || user?.email || 'U')[0].toUpperCase(), 
   [profile?.username, user?.email]);
+
+  const balance = walletSummary?.balance_usd ?? null;
+  const unreadCount = unreadNotificationsCount;
 
   const navItems = React.useMemo(() => {
     const items = [
@@ -43,116 +43,10 @@ export default function Navbar() {
   }, [isAdmin]);
 
   useEffect(() => {
-    if (user) {
-      fetchBalance();
-      fetchUnread();
-      fetchChatUnread();
-      // Refresh balance every 30 seconds
-      const interval = setInterval(fetchBalance, 30000);
-
-      const notificationsChannel = supabase
-        .channel(`nav-notifications-${Math.random().toString(36).substring(7)}`)
-        .on('postgres_changes', { 
-          event: '*', 
-          schema: 'public', 
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`
-        }, () => {
-          fetchUnread();
-        })
-        .subscribe();
-
-      const messagesChannel = supabase
-        .channel(`nav-messages-${Math.random().toString(36).substring(7)}`)
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'messages'
-        }, () => {
-          fetchChatUnread();
-        })
-        .subscribe();
-
-      const walletChannel = supabase
-        .channel(`nav-wallet-${Math.random().toString(36).substring(7)}`)
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'wallets',
-          filter: `user_id=eq.${user.id}`
-        }, (payload) => {
-          setBalance(payload.new.balance);
-          setLastUpdated(new Date().toLocaleTimeString());
-        })
-        .subscribe();
-
-      return () => {
-        clearInterval(interval);
-        supabase.removeChannel(notificationsChannel);
-        supabase.removeChannel(messagesChannel);
-        supabase.removeChannel(walletChannel);
-      };
-    }
-  }, [user]);
-
-  async function fetchBalance() {
-    if (!user) return;
-    try {
-      const summary = await walletService.getWalletSummary();
-      if (summary) {
-        setBalance(summary.balance_usd);
-      }
+    if (walletSummary) {
       setLastUpdated(new Date().toLocaleTimeString());
-    } catch (err) {
-      console.error('Failed to fetch balance in Navbar:', err);
     }
-  }
-
-  async function fetchUnread() {
-    if (!user) return;
-    const { count } = await (supabase as any)
-      .from('notifications')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('read', false);
-    setUnreadCount(count || 0);
-  }
-
-  async function fetchChatUnread() {
-    if (!user) return;
-    try {
-      // Find all conversations the user is in through matches
-      // RLS (match_conv_select_v3) already restricts this to the user's matches
-      const { data: conversations } = await (supabase as any)
-        .from('match_conversations')
-        .select(`
-          id,
-          matches!inner:match_id (
-            player1,
-            player2
-          )
-        `);
-
-      if (!conversations || conversations.length === 0) {
-        setUnreadChatCount(0);
-        return;
-      }
-
-      const conversationIds = conversations.map((c: any) => c.id);
-
-      // Count unread messages in those conversations
-      const { count } = await (supabase as any)
-        .from('messages')
-        .select('*', { count: 'exact', head: true })
-        .in('conversation_id', conversationIds)
-        .neq('sender_id', user.id)
-        .not('read_by', 'cs', `["${user.id}"]`);
-      
-      setUnreadChatCount(count || 0);
-    } catch (err) {
-      console.error('Error fetching chat unread count:', err);
-    }
-  }
+  }, [walletSummary]);
 
   return (
     <header className="px-6 py-4 border-b border-border-main bg-background/80 backdrop-blur-2xl sticky top-0 z-50">

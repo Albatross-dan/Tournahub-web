@@ -58,19 +58,23 @@ export const storageService = {
     // Force session hydration for RLS propagation in storage and fix token race conditions
     await ensureAuthenticated();
 
-    const extension = file.name.split('.').pop();
-    const path = `${userId}/${matchId}/screenshot_${Date.now()}.${extension}`;
+    const ext = file.name ? (file.name.split('.').pop() || 'png') : 'png';
+    const path = `${userId}/match_${matchId}.${ext}`;
     
     const { data, error } = await supabase.storage
       .from('result-screenshots')
-      .upload(path, file, { cacheControl: '3600', upsert: false });
+      .upload(path, file, { cacheControl: '3600', upsert: true, contentType: file.type || 'image/jpeg' });
     
     if (error) {
       console.error('Upload error for result-screenshots:', error);
       throw error;
     }
     
-    return path;
+    const { data: { publicUrl } } = supabase.storage
+      .from('result-screenshots')
+      .getPublicUrl(path);
+      
+    return publicUrl;
   },
 
   async getScreenshotUrl(path: string) {

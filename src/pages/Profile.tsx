@@ -3,7 +3,7 @@ import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { profileService } from '../services/profileService';
 import { matchService } from '../services/matchService';
 import Shell from '../components/layout/Shell';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   User as UserIcon, Camera, Save, 
   Settings, Shield, Loader2, Trophy,
@@ -17,6 +17,43 @@ import SettingsMenu from '../components/profile/SettingsMenu';
 
 export default function Profile() {
   const { profile, user, signOut, refetchSignal, refreshAuth, isAdmin } = useAuth();
+  const navigate = useNavigate();
+  const [checking, setChecking] = useState(false);
+
+  const handleAdminPress = async (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (checking) return;
+
+    if ((window as any).__isAdminConfirmed === true) {
+      navigate('/admin');
+      return;
+    }
+
+    setChecking(true);
+    try {
+      if (!user?.id) return;
+      const { data } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (!data || (data as any).role !== 'admin') {
+        return; // silently block non-admins
+      }
+
+      (window as any).__isAdminConfirmed = true;
+      navigate('/admin');
+    } catch (err) {
+      console.error('[Profile] Admin check error:', err);
+    } finally {
+      setChecking(false);
+    }
+  };
+
   useRefetchOnFocus(loadStats);
   const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
   const [username, setUsername] = useState(profile?.username || '');
@@ -221,18 +258,32 @@ export default function Profile() {
               <h3 className="text-xl font-black text-text-main uppercase italic tracking-tighter">Operations</h3>
               
               {isAdmin && (
-                <Link to="/admin" className="card p-6 bg-primary/10 border-primary/20 flex items-center justify-between group hover:bg-primary/20 transition-all cursor-pointer mb-4">
+                <div 
+                  onClick={handleAdminPress}
+                  className={cn(
+                    "card p-6 bg-primary/10 border-primary/20 flex items-center justify-between group hover:bg-primary/20 transition-all cursor-pointer mb-4",
+                    checking ? "opacity-70 cursor-not-allowed" : ""
+                  )}
+                >
                   <div className="flex items-center space-x-6">
                     <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30">
-                      <Shield className="w-6 h-6 text-primary" />
+                      {checking ? (
+                        <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                      ) : (
+                        <Shield className="w-6 h-6 text-primary" />
+                      )}
                     </div>
                     <div>
-                      <h4 className="text-lg font-black text-text-main italic uppercase tracking-tighter leading-tight">Admin Control</h4>
-                      <p className="text-xs font-bold text-primary uppercase tracking-widest">Access Management Hub</p>
+                      <h4 className="text-lg font-black text-text-main italic uppercase tracking-tighter leading-tight">
+                        {checking ? "Verifying Credentials" : "Admin Control"}
+                      </h4>
+                      <p className="text-xs font-bold text-primary uppercase tracking-widest">
+                        {checking ? "Checking Security Authorization" : "Access Management Hub"}
+                      </p>
                     </div>
                   </div>
                   <ArrowRight className="w-6 h-6 text-primary group-hover:translate-x-1 transition-all" />
-                </Link>
+                </div>
               )}
 
               <div 

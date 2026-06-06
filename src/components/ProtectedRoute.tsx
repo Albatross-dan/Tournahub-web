@@ -9,65 +9,9 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowAdminOnly = false }) => {
-  const { user, loading, isAdmin, signOut } = useAuth();
-  const [checkingStatus, setCheckingStatus] = useState(true);
-  const [accountStatus, setAccountStatus] = useState<any>(null);
+  const { user, loading, isAdmin, signOut, accountStatus } = useAuth();
 
-  useEffect(() => {
-    if (!user) {
-      setCheckingStatus(false);
-      return;
-    }
-
-    async function checkAccountStatus() {
-      try {
-        const fetchPromise = (async () => {
-          const { data, error } = await supabase.rpc('get_my_account_status');
-          if (error) {
-            console.error('[ProtectedRoute] get_my_account_status error:', error);
-            
-            // Fallback to profiles table query for robustness
-            const { data: profileData } = await supabase
-              .from('profiles')
-              .select('status, banned_reason, suspension_reason, suspended_until')
-              .eq('id', user.id)
-              .single();
-            return profileData || { status: 'active' };
-          }
-          return data;
-        })();
-
-        const timeoutPromise = new Promise<any>((resolve) =>
-          setTimeout(() => {
-            console.warn('[ProtectedRoute] Account status RPC check timed out. Proceeding with active status.');
-            resolve({ status: 'active' });
-          }, 3000)
-        );
-
-        const statusData = await Promise.race([fetchPromise, timeoutPromise]);
-        setAccountStatus(statusData);
-      } catch (err) {
-        console.error('[ProtectedRoute] Failed to fetch account standing:', err);
-      } finally {
-        setCheckingStatus(false);
-      }
-    }
-
-    checkAccountStatus();
-  }, [user]);
-
-  if (loading) {
-    if (!user) {
-      return null;
-    }
-    return <Outlet />;
-  }
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (checkingStatus) {
+  if (loading || (user && !accountStatus)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white">
         <div className="flex flex-col items-center space-y-4">
@@ -76,6 +20,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowAdminOnly =
         </div>
       </div>
     );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
   }
 
   // Evaluate current user status

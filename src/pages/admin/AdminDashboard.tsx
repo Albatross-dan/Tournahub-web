@@ -108,8 +108,17 @@ export default function AdminDashboard() {
   const [modLoading, setModLoading] = useState(true);
 
   useEffect(() => {
-    loadAdminData();
-    loadModSummary();
+    const loadAllSequential = async () => {
+      setLoading(true);
+      // Load the most critical section first (moderation disputes/verifications summary)
+      await loadModSummary();
+      // Unblock UI immediately after the first priority fetch
+      setLoading(false);
+
+      // Then load other platform stats sequentially in the background
+      await loadAdminStatsSeq();
+    };
+    loadAllSequential();
   }, [tournaments]);
 
   async function loadModSummary() {
@@ -124,28 +133,25 @@ export default function AdminDashboard() {
     }
   }
 
-  async function loadAdminData() {
+  async function loadAdminStatsSeq() {
     try {
-      const [players, results, platformRev] = await Promise.all([
-        supabase.from('profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('match_results').select('*', { count: 'exact', head: true }).eq('status', 'submitted'),
-        supabase.from('platform_revenue').select('amount_usd').eq('status', 'completed')
-      ]);
+      // Fetch stats sequentially rather than wrapping them in Promise.all to avoid blocking UI with multiple concurrent queries
+      const playersRes = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+      const resultsRes = await supabase.from('match_results').select('*', { count: 'exact', head: true }).eq('status', 'submitted');
+      const platformRevRes = await supabase.from('platform_revenue').select('amount_usd').eq('status', 'completed');
 
       const pool = tournaments.reduce((acc, curr) => acc + (curr.prize_pool || 0), 0);
-      const totalRev = platformRev.data ? (platformRev.data as any[]).reduce((sum, r) => sum + (r.amount_usd || 0), 0) : 0;
+      const totalRev = platformRevRes.data ? (platformRevRes.data as any[]).reduce((sum, r) => sum + (r.amount_usd || 0), 0) : 0;
 
       setStats({
-        totalPlayers: (players as any)?.count || 0,
+        totalPlayers: (playersRes as any)?.count || 0,
         activeTournaments: (tournaments || []).filter(t => t?.status === 'ongoing').length,
-        pendingVerifications: (results as any)?.count || 0,
+        pendingVerifications: (resultsRes as any)?.count || 0,
         totalPrizePool: pool || 0,
         totalPlatformRevenue: totalRev
       });
     } catch (err) {
-      console.error('Error loading admin stats:', err);
-    } finally {
-      setLoading(false);
+      console.error('Error loading admin stats sequentially:', err);
     }
   }
 

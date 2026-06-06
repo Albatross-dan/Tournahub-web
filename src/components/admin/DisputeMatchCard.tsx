@@ -35,8 +35,21 @@ export default function DisputeMatchCard({
   const p1Name = getPublicIdentity(dispute.player1_username);
   const p2Name = getPublicIdentity(dispute.player2_username);
 
+  const player1Id = typeof (dispute as any)?.player1 === 'object' ? ((dispute as any)?.player1?.id || (dispute as any)?.player1) : (dispute as any)?.player1;
+  const player2Id = typeof (dispute as any)?.player2 === 'object' ? ((dispute as any)?.player2?.id || (dispute as any)?.player2) : (dispute as any)?.player2;
+  const isMyMatch = !!(adminId && (adminId === player1Id || adminId === player2Id));
+  const isAlreadyFinalised = (dispute.verification_status as any) === 'completed' || (dispute.verification_status as any) === 'verified' || (dispute as any).match_status === 'completed' || (dispute as any).match_status === 'verified';
+
   const handleApproveSubmission = async (notes: string) => {
     if (!selectedSub) return;
+    if (isMyMatch) {
+      alert("Unauthorized: Admins cannot resolve disputes for their own matches.");
+      return;
+    }
+    if (isAlreadyFinalised) {
+      alert("This match is already finalised.");
+      return;
+    }
     try {
       await onResolve({
         adminId,
@@ -52,6 +65,14 @@ export default function DisputeMatchCard({
   };
 
   const handleOverride = async () => {
+    if (isMyMatch) {
+      alert("Unauthorized: Admins cannot resolve disputes for their own matches.");
+      return;
+    }
+    if (isAlreadyFinalised) {
+      alert("This match is already finalised.");
+      return;
+    }
     if (dispute.tournament_type === 'knockout' && overrideScore1 === overrideScore2) {
       alert('Knockout matches cannot end in a draw');
       return;
@@ -78,6 +99,12 @@ export default function DisputeMatchCard({
       className="card bg-slate-900 border-l-4 border-red-500 overflow-hidden relative shadow-2xl"
     >
       <div className="p-6 md:p-8">
+        {isMyMatch && (
+          <div className="mb-6 bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-2xl p-4 text-xs font-bold uppercase tracking-tight flex items-center space-x-2">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <span>You cannot resolve or override disputes for your own match. Please request another administrator to audit this conflict.</span>
+          </div>
+        )}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div className="space-y-1">
             <div className="flex items-center space-x-3">
@@ -154,16 +181,18 @@ export default function DisputeMatchCard({
                 </div>
               </div>
 
-              <div className="mt-8">
-                <button
-                  onClick={() => setSelectedSub(sub)}
-                  disabled={isResolving}
-                  className="w-full py-4 border-2 border-emerald-500/20 text-emerald-500 rounded-2xl font-black uppercase italic tracking-tighter text-xs flex items-center justify-center space-x-2 hover:bg-emerald-500/10 transition-all disabled:opacity-50"
-                >
-                  <ThumbsUp className="w-4 h-4" />
-                  <span>Approve This Score</span>
-                </button>
-              </div>
+              {!isAlreadyFinalised && !isMyMatch && (
+                <div className="mt-8">
+                  <button
+                    onClick={() => setSelectedSub(sub)}
+                    disabled={isResolving}
+                    className="w-full py-4 border-2 border-emerald-500/20 text-emerald-500 rounded-2xl font-black uppercase italic tracking-tighter text-xs flex items-center justify-center space-x-2 hover:bg-emerald-500/10 transition-all disabled:opacity-50"
+                  >
+                    <ThumbsUp className="w-4 h-4" />
+                    <span>Approve This Score</span>
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -181,56 +210,58 @@ export default function DisputeMatchCard({
           />
         </div>
 
-        <div className="flex flex-col space-y-4 pt-6 border-t border-white/5">
-          <button
-            onClick={() => setShowOverride(!showOverride)}
-            className="flex items-center space-x-2 text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-white transition-colors w-fit"
-          >
-            {showOverride ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            <span>✏️ Manual Override Score</span>
-          </button>
+        {!isAlreadyFinalised && !isMyMatch && (
+          <div className="flex flex-col space-y-4 pt-6 border-t border-white/5">
+            <button
+              onClick={() => setShowOverride(!showOverride)}
+              className="flex items-center space-x-2 text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-white transition-colors w-fit"
+            >
+              {showOverride ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              <span>✏️ Manual Override Score</span>
+            </button>
 
-          <AnimatePresence>
-            {showOverride && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="p-6 bg-white/[0.02] border border-white/5 rounded-3xl space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase">{p1Name} Goals</label>
-                      <input 
-                        type="number" 
-                        value={overrideScore1}
-                        onChange={(e) => setOverrideScore1(parseInt(e.target.value) || 0)}
-                        className="w-full bg-black border border-white/10 rounded-xl p-4 text-white text-2xl font-black italic outline-none focus:border-primary"
-                      />
+            <AnimatePresence>
+              {showOverride && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="p-6 bg-white/[0.02] border border-white/5 rounded-3xl space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">{p1Name} Goals</label>
+                        <input 
+                          type="number" 
+                          value={overrideScore1}
+                          onChange={(e) => setOverrideScore1(parseInt(e.target.value) || 0)}
+                          className="w-full bg-black border border-white/10 rounded-xl p-4 text-white text-2xl font-black italic outline-none focus:border-primary"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-bold text-slate-400 uppercase">{p2Name} Goals</label>
+                         <input 
+                          type="number" 
+                          value={overrideScore2}
+                          onChange={(e) => setOverrideScore2(parseInt(e.target.value) || 0)}
+                          className="w-full bg-black border border-white/10 rounded-xl p-4 text-white text-2xl font-black italic outline-none focus:border-primary"
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-bold text-slate-400 uppercase">{p2Name} Goals</label>
-                       <input 
-                        type="number" 
-                        value={overrideScore2}
-                        onChange={(e) => setOverrideScore2(parseInt(e.target.value) || 0)}
-                        className="w-full bg-black border border-white/10 rounded-xl p-4 text-white text-2xl font-black italic outline-none focus:border-primary"
-                      />
-                    </div>
+                    <button
+                      onClick={handleOverride}
+                      disabled={isResolving}
+                      className="w-full py-4 bg-primary text-slate-900 rounded-2xl font-black uppercase italic tracking-tighter"
+                    >
+                      Apply Absolute Override
+                    </button>
                   </div>
-                  <button
-                    onClick={handleOverride}
-                    disabled={isResolving}
-                    className="w-full py-4 bg-primary text-slate-900 rounded-2xl font-black uppercase italic tracking-tighter"
-                  >
-                    Apply Absolute Override
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
       </div>
 
       {isResolving && (

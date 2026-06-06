@@ -8,7 +8,7 @@ interface AnnouncementNotification {
   title: string;
   body: string;
   priority: 'high' | 'urgent';
-  is_read: boolean;
+  read: boolean;
   created_at: string;
 }
 
@@ -75,10 +75,10 @@ export function PlatformStatusProvider({ children }: { children: React.ReactNode
     try {
       const { data, error } = await supabase
         .from('notifications')
-        .select('id, title, body, priority, is_read, created_at')
+        .select('id, title, body, priority, read, created_at')
         .eq('user_id', user.id)
         .eq('type', 'announcement')
-        .eq('is_read', false)
+        .eq('read', false)
         .in('priority', ['high', 'urgent'])
         .order('created_at', { ascending: false });
 
@@ -96,7 +96,7 @@ export function PlatformStatusProvider({ children }: { children: React.ReactNode
   const dismissAnnouncement = async (id: string) => {
     try {
       const { error } = await (supabase.from('notifications') as any)
-        .update({ is_read: true })
+        .update({ read: true })
         .eq('id', id);
 
       if (error) {

@@ -37,7 +37,6 @@ export function useNotifications(): UseNotificationsReturn {
         .from('notifications')
         .select('*')
         .eq('user_id', userId)
-        .neq('status', 'archived')
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -72,7 +71,6 @@ interface NotificationUpdateBuilder {
       const { error } = await (supabase.from('notifications') as unknown as NotificationUpdateBuilder)
         .update({
           read: true,
-          status: 'read',
           read_at: new Date().toISOString()
         })
         .eq('id', id);
@@ -97,7 +95,6 @@ interface NotificationUpdateBuilder {
       const { error } = await (supabase.from('notifications') as unknown as NotificationUpdateBuilder)
         .update({
           read: true,
-          status: 'read',
           read_at: new Date().toISOString()
         })
         .eq('user_id', userId)
