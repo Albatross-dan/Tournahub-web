@@ -250,9 +250,14 @@ export default function SettingsMenu() {
                 const nextValue = !preferences?.[pref.id];
                 
                 if (pref.id === 'in_app_enabled' && nextValue) {
-                  // Prompt browsner permission popup
+                  console.log('[SettingsMenu] Push Notifications toggle turned ON by user:', user.id);
+                  console.log('[SettingsMenu] Requesting permission dynamically...');
                   const token = await requestNotificationPermission(user!.id);
+                  const currentPerm = 'Notification' in window ? Notification.permission : 'not_supported';
+                  console.log('[SettingsMenu] Permission request completed. Resulting status:', currentPerm);
+                  
                   if (!token) {
+                    console.warn('[SettingsMenu] No token retrieved. Permission denied or initialization failed.');
                     if ('Notification' in window && Notification.permission === 'denied') {
                       toast.error('Notification access is blocked in this browser. Please enable notifications in your browser settings to allow updates.');
                       return;
@@ -261,6 +266,7 @@ export default function SettingsMenu() {
                       return;
                     }
                   } else {
+                    console.log('[SettingsMenu] Token acquired and saved successfully:', token.substring(0, 10) + '...');
                     toast.success('System notifications successfully authorized!');
                   }
                 }

@@ -43,23 +43,33 @@ export default function Notifications() {
 
   const handleRequestPermission = async () => {
     if (!user) return;
+    console.log('[Notifications Page] "Enable Push Notifications" button clicked by user:', user.id);
     setRequestingPermission(true);
     try {
+      console.log('[Notifications Page] Invoking requestNotificationPermission...');
       const token = await requestNotificationPermission(user.id);
+      
+      const currentPerm = 'Notification' in window ? Notification.permission : 'not_supported';
+      console.log('[Notifications Page] Permission requested. Resulting status:', currentPerm);
+
       if (token) {
+        console.log('[Notifications Page] FCM Token successfully generated and verified:', token.substring(0, 10) + '...');
         setFcmToken(token);
         setPermissionStatus('granted');
         toast.success("Push Notification Token Registered Successfully!");
+        console.log('[Notifications Page] Token syncing and local persistence are successfully completed.');
       } else {
-        const currentPerm = 'Notification' in window ? Notification.permission : 'not_supported';
         setPermissionStatus(currentPerm);
         if (currentPerm !== 'granted') {
+          console.warn('[Notifications Page] Permission was denied or not granted. Token generation cancelled.');
           toast.error(`Permission denied or blocked. Permission level: ${currentPerm}`);
         } else {
+          console.warn('[Notifications Page] Permission is granted, but no FCM Token could be generated. Check configuration.');
           toast.error("Could not obtain Push Token. Check console warnings or environment configuration.");
         }
       }
     } catch (err: any) {
+      console.error('[Notifications Page] Unexpected exception in permission request flow:', err);
       toast.error(err.message || "Failed to trigger permission dialog.");
     } finally {
       setRequestingPermission(false);
