@@ -608,6 +608,17 @@ export const matchService = {
     return data;
   },
 
+  async submitNoShowReport(matchId: string, screenshotUrl: string, notes: string | null) {
+    const { data, error } = await (supabase as any).rpc('submit_no_show_report', {
+      p_match_id: matchId,
+      p_screenshot_url: screenshotUrl,
+      p_notes: notes
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return data;
+  },
+
   async verifyResult(matchId: string, winnerId: string, score1: number, score2: number) {
     const { data, error } = await (supabase as any).rpc('verify_match_result_old', {
       p_match_id: matchId,

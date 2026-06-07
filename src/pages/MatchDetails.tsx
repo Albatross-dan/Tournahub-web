@@ -7,9 +7,10 @@ import { supabase } from '../lib/supabase';
 import Shell from '../components/layout/Shell';
 import { 
   Info, ArrowLeft, Trophy,
-  Shield, ArrowUpRight
+  Shield, ArrowUpRight, X, XCircle,
+  Upload, Loader2, CheckCircle, AlertCircle
 } from 'lucide-react';
-import { getPublicIdentity } from '../lib/utils';
+import { getPublicIdentity, cn } from '../lib/utils';
 import LoadingState from '../components/ui/LoadingState';
 import MatchChat from '../components/messages/MatchChat';
 import { SubmitResultPanel } from '../components/match/SubmitResultPanel';
@@ -18,6 +19,7 @@ import { motion } from 'motion/react';
 import { useTournamentBadges } from '../hooks/useTournamentBadges';
 import { VerificationStatus } from '../types/verification.types';
 import { PlayerBadge } from '../components/ui/PlayerBadge';
+import { NoShowUnderReview } from '../components/match/NoShowUnderReview';
 
 export default function MatchDetails() {
   const { id } = useParams<{ id: string }>();
@@ -30,6 +32,7 @@ export default function MatchDetails() {
   const navigate = useNavigate();
   const [match, setMatch] = useState<Match | null>(null);
   const [loading, setLoading] = useState(true);
+  const [noShowReport, setNoShowReport] = useState<any>(null);
   const { badges } = useTournamentBadges(match?.tournament_id || '');
 
   // Live stream states
@@ -37,6 +40,103 @@ export default function MatchDetails() {
   const [myStreamUrlInput, setMyStreamUrlInput] = useState('');
   const [submittingStream, setSubmittingStream] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
+
+  // No-Show Report States
+  const [showNoShowModal, setShowNoShowModal] = useState(false);
+  const [noShowScreenshot, setNoShowScreenshot] = useState<File | null>(null);
+  const [noShowPreviewUrl, setNoShowPreviewUrl] = useState<string | null>(null);
+  const [noShowNotes, setNoShowNotes] = useState('');
+  const [noShowUploading, setNoShowUploading] = useState(false);
+  const [noShowError, setNoShowError] = useState<string | null>(null);
+  const [noShowSuccess, setNoShowSuccess] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (noShowPreviewUrl) {
+        URL.revokeObjectURL(noShowPreviewUrl);
+      }
+    };
+  }, [noShowPreviewUrl]);
+
+  const handleNoShowFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
+      setNoShowError('Invalid file type. Only JPEG, PNG, or JPG images allowed.');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setNoShowError('File is too large. Max size 10MB.');
+      return;
+    }
+
+    if (noShowPreviewUrl) {
+      URL.revokeObjectURL(noShowPreviewUrl);
+    }
+    setNoShowPreviewUrl(URL.createObjectURL(file));
+    setNoShowScreenshot(file);
+    setNoShowError(null);
+  };
+
+  const closeNoShowModal = () => {
+    setShowNoShowModal(false);
+    setNoShowScreenshot(null);
+    if (noShowPreviewUrl) {
+      URL.revokeObjectURL(noShowPreviewUrl);
+    }
+    setNoShowPreviewUrl(null);
+    setNoShowNotes('');
+    setNoShowError(null);
+    setNoShowSuccess(false);
+  };
+
+  const handleNoShowSubmit = async () => {
+    if (!noShowScreenshot) {
+      setNoShowError("Screenshot is required.");
+      return;
+    }
+    if (!match || !user) return;
+    setNoShowUploading(true);
+    setNoShowError(null);
+
+    try {
+      const file = noShowScreenshot;
+      const arrayBuffer = await file.arrayBuffer();
+
+      const timestamp = Date.now();
+      const filePath = `${user.id}/${timestamp}.jpg`;
+
+      // Upload to 'no-show-evidence' bucket as user/timestamp.jpg
+      const { error: uploadErr } = await supabase.storage
+        .from('no-show-evidence')
+        .upload(filePath, arrayBuffer, {
+          contentType: file.type || 'image/jpeg',
+          upsert: true
+        });
+
+      if (uploadErr) {
+        throw uploadErr;
+      }
+
+      // Get public Url
+      const { data: { publicUrl } } = supabase.storage
+        .from('no-show-evidence')
+        .getPublicUrl(filePath);
+
+      // Call submit_no_show_report RPC function
+      await matchService.submitNoShowReport(match.id, publicUrl, noShowNotes.trim() || null);
+
+      setNoShowSuccess(true);
+      await loadMatchData(false);
+    } catch (err: any) {
+      console.error('[NoShowReport] Error submitting report:', err);
+      setNoShowError(err.message || 'An unexpected error occurred during submission.');
+    } finally {
+      setNoShowUploading(false);
+    }
+  };
 
   const activePlayer1Id = typeof match?.player1 === 'object' ? (match.player1 as any)?.id : match?.player1;
   const activePlayer2Id = typeof match?.player2 === 'object' ? (match.player2 as any)?.id : match?.player2;
@@ -178,8 +278,19 @@ export default function MatchDetails() {
     if (!id) return;
     try {
       if (showLoading) setLoading(true);
-      const matchData = await matchService.getById(id);
+      const [matchData, { data: nsReport }] = await Promise.all([
+        matchService.getById(id),
+        supabase
+          .from('match_no_show_reports')
+          .select('id, status, reported_by, absent_player')
+          .eq('match_id', id)
+          .eq('status', 'pending')
+          .maybeSingle()
+      ]);
       setMatch(matchData);
+      setNoShowReport(nsReport);
+    } catch (err) {
+      console.error('[MatchDetails] loadMatchData failed:', err);
     } finally {
       if (showLoading) setLoading(false);
       isInitialLoad.current = false;
@@ -395,20 +506,188 @@ export default function MatchDetails() {
 
             {isParticipant ? (
               <div className="space-y-6">
-                <SubmitResultPanel 
-                  matchId={match.id}
-                  currentUserId={user.id}
-                  playerName={getPublicIdentity(profile || { id: user.id, username: user.user_metadata?.username })}
-                  match={match}
-                />
+                {noShowReport && noShowReport.status === 'pending' ? (
+                  <NoShowUnderReview
+                    reportedBy={noShowReport.reported_by}
+                    absentPlayer={noShowReport.absent_player}
+                    currentUserId={user.id}
+                    tournamentId={match.tournament_id}
+                  />
+                ) : (
+                  <>
+                    <SubmitResultPanel 
+                      matchId={match.id}
+                      currentUserId={user.id}
+                      playerName={getPublicIdentity(profile || { id: user.id, username: user.user_metadata?.username })}
+                      match={match}
+                    />
                 
+                {/* No-Show Report Action */}
+                {match && ['scheduled', 'match_in_progress', 'lobby_open', 'awaiting_result', 'under_review'].includes(match.status) && (
+                  <button
+                    disabled={match.status === 'under_review'}
+                    onClick={() => setShowNoShowModal(true)}
+                    className={cn(
+                      "w-full h-14 flex items-center justify-center gap-2 rounded-2xl font-black uppercase italic tracking-widest transition-all text-xs border cursor-pointer",
+                      match.status === 'under_review'
+                        ? "bg-zinc-950 border-zinc-900 text-zinc-650 cursor-not-allowed"
+                        : "bg-red-500/5 border-red-500/20 text-red-500 hover:bg-red-500/10 hover:border-red-500/40"
+                    )}
+                  >
+                    <XCircle className="w-4 h-4" />
+                    {match.status === 'under_review' ? "No-Show Under Review" : "Opponent Didn't Show Up"}
+                  </button>
+                )}
+
+                {showNoShowModal && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+                    <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 max-w-md w-full relative space-y-6 overflow-hidden shadow-2xl text-left">
+                      {/* Close Header button */}
+                      <button 
+                        onClick={closeNoShowModal}
+                        className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+
+                      {!noShowSuccess ? (
+                        <>
+                          <div className="space-y-2">
+                            <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500">
+                              <XCircle className="w-6 h-6" />
+                            </div>
+                            <h3 className="text-lg font-black text-white uppercase italic tracking-wider">Report Opponent No-Show</h3>
+                            <p className="text-xs text-zinc-400 leading-relaxed font-bold">
+                              If your opponent did not show up or communicate within the tournament window, you can submit a report. Proof of unanswered WhatsApp coordination is required.
+                            </p>
+                          </div>
+
+                          {/* Screenshot File upload */}
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 block">WhatsApp Screenshot Proof (Required)</label>
+                            
+                            {noShowScreenshot ? (
+                              <div className="relative rounded-2xl overflow-hidden border border-zinc-805 aspect-video bg-zinc-900">
+                                <img 
+                                  src={noShowPreviewUrl || ''} 
+                                  alt="WhatsApp screenshot proof" 
+                                  className="w-full h-full object-cover" 
+                                />
+                                {noShowUploading && (
+                                  <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center space-y-2">
+                                    <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block text-center">Uploading Evidence...</span>
+                                  </div>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setNoShowScreenshot(null);
+                                    if (noShowPreviewUrl) URL.revokeObjectURL(noShowPreviewUrl);
+                                    setNoShowPreviewUrl(null);
+                                  }}
+                                  disabled={noShowUploading}
+                                  className="absolute top-2 right-2 bg-red-600/90 hover:bg-red-700/95 text-white text-[10px] px-2.5 py-1 rounded font-bold uppercase tracking-widest cursor-pointer transition-colors z-20"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="border border-zinc-800 hover:border-zinc-700 transition-colors border-dashed rounded-2xl p-8 bg-zinc-900/40 relative cursor-pointer group flex flex-col items-center justify-center text-center">
+                                <input 
+                                  type="file" 
+                                  accept="image/*"
+                                  onChange={handleNoShowFileChange}
+                                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                />
+                                <Upload className="w-6 h-6 text-zinc-650 group-hover:text-primary transition-colors mb-2 animate-pulse" />
+                                <span className="text-xs font-bold text-zinc-400 group-hover:text-zinc-200 transition-colors">Select WhatsApp Screenshot</span>
+                                <span className="text-[9px] font-black uppercase tracking-wider text-zinc-600 mt-1">JPEG, PNG, or JPG up to 10MB</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Notes field */}
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 block">Additional Notes (Optional)</label>
+                            <textarea
+                              rows={3}
+                              placeholder="Describe the context (e.g. 'I messaged the opponent 15 mins ago and got no response...')"
+                              value={noShowNotes}
+                              onChange={(e) => setNoShowNotes(e.target.value)}
+                              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-red-500 transition-colors placeholder:text-zinc-655 resize-none font-bold"
+                            />
+                          </div>
+
+                          {/* Error message */}
+                          {noShowError && (
+                            <div className="p-3.5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+                              <AlertCircle className="w-4 h-4 shrink-0" />
+                              <span>{noShowError}</span>
+                            </div>
+                          )}
+
+                          {/* Buttons flow */}
+                          <div className="flex gap-3 pt-2">
+                            <button
+                              type="button"
+                              onClick={closeNoShowModal}
+                              className="flex-1 h-12 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl text-xs font-black uppercase tracking-widest cursor-pointer transition-colors border border-zinc-800"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!noShowScreenshot || noShowUploading}
+                              onClick={handleNoShowSubmit}
+                              className="flex-1 h-12 bg-red-500 text-black hover:bg-white disabled:bg-zinc-900 disabled:text-zinc-600 disabled:cursor-not-allowed rounded-xl text-xs font-black uppercase tracking-widest cursor-pointer transition-all flex items-center justify-center gap-2"
+                            >
+                              {noShowUploading ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  <span>Submitting...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span>Submit Report</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center text-center py-6 space-y-4 animate-in zoom-in-95 duration-250">
+                          <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500">
+                             <CheckCircle className="w-8 h-8" />
+                          </div>
+                          <div className="space-y-2">
+                            <h3 className="text-base font-black text-white uppercase italic tracking-wider animate-pulse">Report Received</h3>
+                            <p className="text-xs text-zinc-400 max-w-xs leading-relaxed font-bold animate-pulse">
+                              Report submitted. An admin will review within 24 hours.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={closeNoShowModal}
+                            className="h-11 px-8 bg-zinc-900 hover:bg-zinc-800 hover:text-white rounded-xl text-xs font-black uppercase tracking-widest cursor-pointer transition-colors border border-zinc-800 text-zinc-400"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <MatchChat 
                   matchId={match.id} 
                   currentUserId={user.id} 
                   tournamentId={match.tournament_id} 
                 />
-              </div>
-            ) : (
+              </>
+            )}
+          </div>
+        ) : (
               <div className="bg-zinc-950 rounded-3xl border border-zinc-900 overflow-hidden shadow-2xl p-12 text-center h-[500px] flex flex-col items-center justify-center space-y-4">
                 <div className="w-16 h-16 rounded-2xl bg-zinc-900 flex items-center justify-center border border-zinc-800">
                   <Shield className="w-8 h-8 text-zinc-700" />
