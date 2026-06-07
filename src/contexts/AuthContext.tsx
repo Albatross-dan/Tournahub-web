@@ -511,11 +511,36 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
           if (!isMounted) return;
           setUser(null);
           setProfile(null);
+          setNeedsUsernameSetup(false);
+          setAccountStatus(null);
+          setWalletSummary(null);
+          setUnreadNotificationsCount(0);
+          setUnreadChatCount(0);
+          lastUserIdRef.current = null;
+          try {
+            queryClient.clear();
+            sessionStorage.clear();
+          } catch (err) {
+            console.warn('[Auth] Failed to clear caches on empty session in applySession:', err);
+          }
           return;
         }
 
         const user = session.user;
         if (!isMounted) return;
+
+        // Detect user change
+        if (lastUserIdRef.current && lastUserIdRef.current !== user.id) {
+          console.log('[AuthContext] User change detected in applySession:', lastUserIdRef.current, 'to', user.id);
+          try {
+            queryClient.clear();
+            sessionStorage.clear();
+          } catch (qcErr) {
+            console.warn('[Auth] Failed to clear caches on user change in applySession:', qcErr);
+          }
+        }
+        
+        lastUserIdRef.current = user.id;
         setUser(user);
 
         const profileData = (await fetchProfile(user.id)) as Profile | null;
@@ -601,6 +626,18 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         if (!isMounted) return;
         setUser(null);
         setProfile(null);
+        setNeedsUsernameSetup(false);
+        setAccountStatus(null);
+        setWalletSummary(null);
+        setUnreadNotificationsCount(0);
+        setUnreadChatCount(0);
+        lastUserIdRef.current = null;
+        try {
+          queryClient.clear();
+          sessionStorage.clear();
+        } catch (qcErr) {
+          console.warn('[Auth] Failed to clear caches on SIGNED_OUT event:', qcErr);
+        }
         setLoading(false);
         return;
       }
@@ -792,6 +829,18 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     setUser(null);
     setProfile(null);
     setNeedsUsernameSetup(false);
+    setAccountStatus(null);
+    setWalletSummary(null);
+    setUnreadNotificationsCount(0);
+    setUnreadChatCount(0);
+    lastUserIdRef.current = null;
+    
+    try {
+      queryClient.clear();
+      sessionStorage.clear();
+    } catch (err) {
+      console.warn('[Auth] Failed to clear queryClient or sessionStorage on signOut:', err);
+    }
     
     if (currentUserId) {
       deleteFcmTokenOnLogout(currentUserId).catch(err => {
