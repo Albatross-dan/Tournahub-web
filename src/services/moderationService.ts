@@ -435,8 +435,7 @@ export const moderationService = {
           .update({
             username: `deleted_user_${userId.slice(0, 8)}`,
             avatar_url: null,
-            status: 'permanently_deleted',
-            role: 'user'
+            status: 'permanently_deleted'
           })
           .eq('id', userId);
 

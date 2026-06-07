@@ -209,8 +209,7 @@ export const tournamentService = {
         
         await (supabase as any).from('profiles').upsert({
           id: user.id,
-          username: finalUsername,
-          role: 'user'
+          username: finalUsername
         }, { onConflict: 'id' });
       }
 

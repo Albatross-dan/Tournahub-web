@@ -757,7 +757,6 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         const insertPromise = (supabase as any).from('profiles').upsert({
           id: user.id,
           username: finalUsername,
-          role: isDevAdmin ? 'admin' : 'user',
           whatsapp_number: user.user_metadata?.whatsapp_number || null,
           timezone: user.user_metadata?.timezone || 'Africa/Nairobi'
         }, { onConflict: 'id' });
@@ -776,11 +775,6 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
            if (pendingUsername) {
              localStorage.removeItem('pending_oauth_username');
            }
-        }
-        
-        if (isDevAdmin && existingProfile.role !== 'admin') {
-          const updateRolePromise = (supabase as any).from('profiles').update({ role: 'admin' }).eq('id', user.id);
-          await withTimeout(updateRolePromise, 3000, null);
         }
       }
     } catch (err) {

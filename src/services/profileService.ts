@@ -14,9 +14,11 @@ export const profileService = {
 
   async updateProfile(userId: string, updates: any) {
     await ensureAuthenticated();
+    // Prevent updating role field from frontend
+    const { role, ...sanitizedUpdates } = updates || {};
     const { data, error } = await (supabase as any)
       .from('profiles')
-      .update(updates)
+      .update(sanitizedUpdates)
       .eq('id', userId)
       .select()
       .single();

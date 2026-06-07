@@ -4,7 +4,7 @@ import {
   Trophy, Users, Wallet, 
   ArrowUpRight, Gamepad2, Timer,
   Loader2, Tv, Shield, HelpCircle,
-  ChevronDown, ChevronUp, Calendar, Play, CheckCircle2
+  ChevronDown, ChevronUp, Calendar, Play, CheckCircle2, Download
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatCurrency, cn, getPublicIdentity, formatFixtureTime } from '../lib/utils';
@@ -21,6 +21,7 @@ import { TournamentStatus } from '../constants';
 
 import { useQuery } from '@tanstack/react-query';
 import { useRealtimeTournaments } from '../hooks/useRealtimeTournaments';
+import { usePWAInstall } from '../hooks/usePWAInstall';
 
 import VerificationStatusBadge from '../components/match/VerificationStatusBadge';
 import VerificationStatusBanner from '../components/match/VerificationStatusBanner';
@@ -31,6 +32,7 @@ export default function Dashboard() {
   const { user, profile, isAdmin, refetchSignal } = useAuth();
   const navigate = useNavigate();
   const [checking, setChecking] = useState(false);
+  const { isInstallable, installApp } = usePWAInstall();
 
   const handleAdminPress = async (e?: React.MouseEvent) => {
     if (e) {
@@ -378,6 +380,37 @@ export default function Dashboard() {
                 </div>
               </div>
             </motion.div>
+
+            <AnimatePresence>
+              {isInstallable && (
+                <motion.div 
+                  variants={item}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="card p-5 bg-gradient-to-br from-primary/10 to-transparent border border-primary/20 rounded-3xl space-y-3.5 shadow-sm"
+                >
+                  <div className="flex items-start space-x-3">
+                    <div className="w-8 h-8 rounded-xl bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
+                      <Download className="text-primary w-4 h-4" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <h4 className="font-extrabold text-white text-[10px] uppercase tracking-wider italic">Install Tournahub App</h4>
+                      <p className="text-[9px] text-text-muted font-bold uppercase tracking-widest leading-relaxed">
+                        Optimize matchmaking speed and enable native real-time notifications.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={installApp}
+                    className="w-full h-10 bg-primary hover:bg-white text-black font-black text-[9px] uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-95 duration-200 cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>INSTALL PWA</span>
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <motion.div variants={item} className="card p-6 bg-surface border-border-main rounded-3xl shadow-sm">
               <h3 className="text-xs font-black text-text-main uppercase italic tracking-widest mb-4">Quick Links</h3>
