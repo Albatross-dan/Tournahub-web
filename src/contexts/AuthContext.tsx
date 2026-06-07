@@ -544,9 +544,8 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         setUser(user);
 
         const profileData = (await fetchProfile(user.id)) as Profile | null;
-        const isDevAdmin = user.email?.toLowerCase().trim() === 'danieloguda11221@gmail.com';
 
-        if (!profileData || (isDevAdmin && (profileData as Profile).role !== 'admin')) {
+        if (!profileData) {
           await ensureProfile(user);
           await fetchProfile(user.id);
         }
@@ -772,31 +771,45 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     provisioningRef.current[user.id] = true;
 
     try {
-      const isDevAdmin = user.email?.toLowerCase().trim() === 'danieloguda11221@gmail.com';
-      
-      const profilePromise = (supabase as any)
-        .from('profiles')
-        .select('id, username, role')
-        .eq('id', user.id)
-        .maybeSingle()
-        .then((res: any) => {
-          if (res.error) throw res.error;
-          return res.data;
-        });
+      let existingProfile: any = null;
+      let querySuccessful = false;
 
-      const existingProfile = await withTimeout(profilePromise, 3000, null);
+      try {
+        const profilePromise = (supabase as any)
+          .from('profiles')
+          .select('id, username, role')
+          .eq('id', user.id)
+          .maybeSingle()
+          .then((res: any) => {
+            if (res.error) throw res.error;
+            return res.data;
+          });
+
+        const tempProfileResult = await withTimeout(profilePromise, 3000, undefined);
+        if (tempProfileResult !== undefined) {
+          existingProfile = tempProfileResult;
+          querySuccessful = true;
+        }
+      } catch (err) {
+        console.error('[ensureProfile] Error checking existing profile:', err);
+      }
+
+      if (!querySuccessful) {
+        console.warn('[ensureProfile] Profile check timed out or failed. Aborting to prevent overwriting existing username.');
+        return;
+      }
 
       if (!existingProfile) {
         const pendingUsername = localStorage.getItem('pending_oauth_username');
         const metadataUsername = user.user_metadata?.username;
         const finalUsername = pendingUsername || metadataUsername || `temp_user_${user.id.slice(0, 8)}`;
 
-        const insertPromise = (supabase as any).from('profiles').upsert({
+        const insertPromise = (supabase as any).from('profiles').insert({
           id: user.id,
           username: finalUsername,
           whatsapp_number: user.user_metadata?.whatsapp_number || null,
           timezone: user.user_metadata?.timezone || 'Africa/Nairobi'
-        }, { onConflict: 'id' });
+        });
         await withTimeout(insertPromise, 3000, null);
 
         if (pendingUsername) {
