@@ -49,6 +49,14 @@ export default function MatchDetails() {
   const [noShowUploading, setNoShowUploading] = useState(false);
   const [noShowError, setNoShowError] = useState<string | null>(null);
   const [noShowSuccess, setNoShowSuccess] = useState(false);
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -305,6 +313,31 @@ export default function MatchDetails() {
   
   if (!match || !user) return <Shell>Match not found</Shell>;
 
+  const scheduledAt = match?.scheduled_at;
+  const playWindowMinutes = match?.play_window_minutes ?? 30;
+
+  let isNoShowButtonEnabled = true;
+  let unlockTimeStr = '';
+  let timeRemainingStr = '';
+
+  if (scheduledAt) {
+    const matchStart = new Date(scheduledAt);
+    const matchEnd = new Date(matchStart.getTime() + playWindowMinutes * 60000);
+    const unlockTime = new Date(matchEnd.getTime() - 15 * 60000);
+    isNoShowButtonEnabled = now >= unlockTime;
+
+    if (!isNoShowButtonEnabled) {
+      const diffMs = unlockTime.getTime() - now.getTime();
+      const minutesRemaining = Math.ceil(diffMs / 60000);
+      if (minutesRemaining > 60) {
+        unlockTimeStr = unlockTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } else {
+        const secs = Math.floor((diffMs % 60000) / 1000).toString().padStart(2, '0');
+        timeRemainingStr = `${Math.floor(diffMs / 60000)}m ${secs}s`;
+      }
+    }
+  }
+
   return (
     <Shell>
       <div className="space-y-8 min-h-screen pb-20">
@@ -525,17 +558,21 @@ export default function MatchDetails() {
                 {/* No-Show Report Action */}
                 {match && ['scheduled', 'match_in_progress', 'lobby_open', 'awaiting_result', 'under_review'].includes(match.status) && (
                   <button
-                    disabled={match.status === 'under_review'}
+                    disabled={match.status === 'under_review' || !isNoShowButtonEnabled}
                     onClick={() => setShowNoShowModal(true)}
                     className={cn(
                       "w-full h-14 flex items-center justify-center gap-2 rounded-2xl font-black uppercase italic tracking-widest transition-all text-xs border cursor-pointer",
-                      match.status === 'under_review'
-                        ? "bg-zinc-950 border-zinc-900 text-zinc-650 cursor-not-allowed"
+                      match.status === 'under_review' || !isNoShowButtonEnabled
+                        ? "bg-zinc-950 border-zinc-900 text-zinc-500 cursor-not-allowed"
                         : "bg-red-500/5 border-red-500/20 text-red-500 hover:bg-red-500/10 hover:border-red-500/40"
                     )}
                   >
                     <XCircle className="w-4 h-4" />
-                    {match.status === 'under_review' ? "No-Show Under Review" : "Opponent Didn't Show Up"}
+                    {match.status === 'under_review' 
+                      ? "No-Show Under Review" 
+                      : !isNoShowButtonEnabled
+                        ? `Opponent Didn't Show Up (${timeRemainingStr ? `Unlocks in ${timeRemainingStr}` : unlockTimeStr ? `Unlocks at ${unlockTimeStr}` : 'Locked'})`
+                        : "Opponent Didn't Show Up"}
                   </button>
                 )}
 
