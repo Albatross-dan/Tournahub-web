@@ -39,8 +39,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     }
   }, [user, profile, loading, navigate]);
 
-  const { disputedMatches = [], singleSubmissionMatches = [], abandonedMatches = [] } = useAdminDisputes(user?.id || '');
-  const totalAlerts = disputedMatches.length + singleSubmissionMatches.length + abandonedMatches.length;
+  const { disputedMatches = [], singleSubmissionMatches = [], abandonedMatches = [], noShowCount = 0 } = useAdminDisputes(user?.id || '');
+  const totalAlerts = disputedMatches.length + singleSubmissionMatches.length + abandonedMatches.length + noShowCount;
 
   if (loading) {
     return (

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ShieldAlert, RefreshCw, Loader2, Search, Filter, History } from 'lucide-react';
 import AdminShell from '../../components/layout/AdminShell';
 import { MatchDisputeCard } from '../../components/admin/MatchDisputeCard';
+import { MatchNoShowReportCard } from '../../components/admin/MatchNoShowReportCard';
 import { matchService } from '../../services/matchService';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,14 +10,16 @@ import { useAuth } from '../../contexts/AuthContext';
 export default function Moderation() {
   const { user } = useAuth();
   const [matches, setMatches] = useState<any[]>([]);
+  const [noShowReports, setNoShowReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'disputed' | 'awaiting' | 'abandoned' | 'history'>('disputed');
+  const [activeTab, setActiveTab] = useState<'disputed' | 'awaiting' | 'abandoned' | 'no_show' | 'history'>('disputed');
   const [cutoff] = useState(() => new Date().toISOString());
   const [counts, setCounts] = useState({
     disputed: 0,
     awaiting: 0,
     abandoned: 0,
+    noShow: 0,
     history: 0
   });
 
@@ -33,16 +36,71 @@ export default function Moderation() {
       if (error) throw error;
       const rpcData = data as any;
 
+      // 1.5 Fetch pending no-show reports
+      let noShowReportsList: any[] = [];
+      try {
+        const { data: noShowsData, error: noShowsErr } = await supabase
+          .from('no_shows')
+          .select(`
+            *,
+            matches:match_id (
+              *,
+              tournaments:tournament_id ( name ),
+              player1:profiles!matches_player1_fkey ( id, username, avatar_url ),
+              player2:profiles!matches_player2_fkey ( id, username, avatar_url )
+            )
+          `)
+          .eq('status', 'pending');
+
+        if (!noShowsErr && noShowsData) {
+          noShowReportsList = noShowsData.map((ns: any) => ({
+            ...ns,
+            report_id: ns.report_id || ns.id,
+            whatsapp_screenshot_url: ns.whatsapp_screenshot_url || ns.screenshot_url,
+            additional_notes: ns.additional_notes || ns.notes
+          }));
+        } else {
+          const { data: fallbackData, error: fallbackErr } = await supabase
+            .from('match_no_show_reports')
+            .select(`
+              *,
+              matches:match_id (
+                *,
+                tournaments:tournament_id ( name ),
+                player1:profiles!matches_player1_fkey ( id, username, avatar_url ),
+                player2:profiles!matches_player2_fkey ( id, username, avatar_url )
+              )
+            `)
+            .eq('status', 'pending');
+
+          if (fallbackData) {
+            noShowReportsList = fallbackData.map((ns: any) => ({
+              ...ns,
+              report_id: ns.report_id || ns.id,
+              whatsapp_screenshot_url: ns.whatsapp_screenshot_url || ns.screenshot_url,
+              additional_notes: ns.additional_notes || ns.notes
+            }));
+          } else {
+            console.error('[Moderation] Error fetching no show reports:', noShowsErr, fallbackErr);
+          }
+        }
+      } catch (err) {
+        console.error('[Moderation] Exception fetching no shows:', err);
+      }
+      setNoShowReports(noShowReportsList);
+
       // Section badge counts
       const disCount = rpcData?.disputed_count ?? 0;
       const awCount = rpcData?.awaiting_count ?? 0;
       const abCount = rpcData?.abandoned_count ?? 0;
+      const noShowCount = noShowReportsList.length;
       const histCount = rpcData?.history_count ?? 0;
 
       setCounts({
         disputed: disCount,
         awaiting: awCount,
         abandoned: abCount,
+        noShow: noShowCount,
         history: histCount
       });
 
@@ -117,6 +175,7 @@ export default function Moderation() {
     if (status === 'disputed') return counts.disputed;
     if (status === 'awaiting_admin_review' || status === 'awaiting' || status === 'single_submission') return counts.awaiting;
     if (status === 'abandoned') return counts.abandoned;
+    if (status === 'no_show') return counts.noShow;
     if (status === 'completed' || status === 'history' || status === 'verified') return counts.history;
     return 0;
   };
@@ -139,7 +198,7 @@ export default function Moderation() {
                 ))}
               </div>
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 italic">
-                Scanning global frequency... {counts.disputed + counts.awaiting + counts.abandoned} anomalies detected
+                Scanning global frequency... {counts.disputed + counts.awaiting + counts.abandoned + counts.noShow} anomalies detected
               </span>
             </div>
           </div>
@@ -161,6 +220,7 @@ export default function Moderation() {
           {[
             { id: 'disputed', label: 'Disputed Conflicts', count: getCount('disputed'), color: 'red' },
             { id: 'awaiting', label: 'Awaiting Extraction', count: getCount('awaiting_admin_review'), color: 'orange' },
+            { id: 'no_show', label: 'No-Show Reports', count: getCount('no_show'), color: 'amber' },
             { id: 'abandoned', label: 'Abandoned Signals', count: getCount('abandoned'), color: 'slate' },
             { id: 'history', label: 'Results History', count: getCount('completed'), color: 'emerald' }
           ].map(tab => (
@@ -173,6 +233,7 @@ export default function Moderation() {
                     ? tab.id === 'disputed' ? "bg-red-500/10 border-red-500/50 text-white shadow-xl shadow-red-500/10" :
                       tab.id === 'awaiting' ? "bg-orange-500/10 border-orange-500/50 text-white shadow-xl shadow-orange-500/10" :
                       tab.id === 'abandoned' ? "bg-slate-500/10 border-slate-500/50 text-white shadow-xl shadow-slate-500/10" :
+                      tab.id === 'no_show' ? "bg-amber-500/10 border-amber-500/50 text-white shadow-xl shadow-amber-500/10" :
                       "bg-emerald-500/10 border-emerald-500/50 text-white shadow-xl shadow-emerald-500/10"
                     : "bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700 hover:text-slate-300"
               )}
@@ -194,6 +255,27 @@ export default function Moderation() {
             <Loader2 className="w-12 h-12 text-primary animate-spin mb-6" />
             <span className="text-slate-500 font-black uppercase tracking-[0.3em] text-xs">Decrypting Tactical Data...</span>
           </div>
+        ) : activeTab === 'no_show' ? (
+          noShowReports.length > 0 ? (
+            <div className="grid grid-cols-1 gap-6">
+              {noShowReports.map(report => (
+                <MatchNoShowReportCard
+                  key={report.id}
+                  report={report}
+                  onResolved={fetchMatches}
+                  adminId={user?.id || ''}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="py-32 flex flex-col items-center justify-center text-center bg-slate-900/30 rounded-[3rem] border border-slate-800/50 border-dashed">
+              <div className="w-20 h-20 bg-emerald-500/10 rounded-3xl flex items-center justify-center mb-6 border border-emerald-500/20">
+                <ShieldAlert className="w-10 h-10 text-emerald-500/30" />
+              </div>
+              <h3 className="text-xl font-black text-white italic uppercase tracking-tighter mb-2 leading-none">Sector Clear</h3>
+              <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">No pending no-show reports in this sector.</p>
+            </div>
+          )
         ) : filteredMatches.length > 0 ? (
           <div className="grid grid-cols-1 gap-6">
             {filteredMatches.map(match => (

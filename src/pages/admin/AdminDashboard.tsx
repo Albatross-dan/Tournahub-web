@@ -108,17 +108,55 @@ export default function AdminDashboard() {
   const [modLoading, setModLoading] = useState(true);
 
   useEffect(() => {
-    const loadAllSequential = async () => {
+    const loadDashboardData = async () => {
       setLoading(true);
-      // Load the most critical section first (moderation disputes/verifications summary)
-      await loadModSummary();
-      // Unblock UI immediately after the first priority fetch
-      setLoading(false);
+      setModLoading(true);
+      try {
+        const { data, error } = await (supabase as any).rpc('get_admin_dashboard');
+        
+        if (error) {
+          throw error;
+        }
 
-      // Then load other platform stats sequentially in the background
-      await loadAdminStatsSeq();
+        const resData = data as any;
+        if (resData && resData.error) {
+          throw new Error(resData.error);
+        }
+
+        // Successfully loaded from get_admin_dashboard single cached call
+        setStats({
+          totalPlayers: resData.users?.total || 0,
+          activeTournaments: resData.tournaments?.ongoing || 0,
+          pendingVerifications: resData.matches?.pending_verifications || 0,
+          totalPrizePool: resData.tournaments?.total_prize_pool || 0,
+          totalPlatformRevenue: resData.financial?.total_platform_revenue || 0
+        });
+
+        setModSummary({
+          user_counts: {
+            total: resData.users?.total || 0,
+            active: resData.users?.active || 0,
+            banned: resData.users?.banned || 0,
+            suspended: resData.users?.suspended || 0
+          },
+          recent_actions: resData.recent_actions || []
+        });
+
+        setModLoading(false);
+        setLoading(false);
+        
+        console.log('[AdminDashboard] Loaded stats via get_admin_dashboard cached RPC successfully!');
+      } catch (err) {
+        console.warn('[AdminDashboard] Failed to load cached get_admin_dashboard, falling back to sequential loads:', err);
+        
+        // Fallback sequentially
+        await loadModSummary();
+        setLoading(false);
+        await loadAdminStatsSeq();
+      }
     };
-    loadAllSequential();
+
+    loadDashboardData();
   }, [tournaments]);
 
   async function loadModSummary() {

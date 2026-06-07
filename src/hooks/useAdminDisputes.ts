@@ -7,6 +7,7 @@ export function useAdminDisputes(adminId: string) {
   const [disputes, setDisputes] = useState<DisputedMatch[]>([]);
   const [count, setCount] = useState(0);
   const [abandonedMatches, setAbandonedMatches] = useState<any[]>([]);
+  const [noShowCount, setNoShowCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isResolving, setIsResolving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,13 +18,38 @@ export function useAdminDisputes(adminId: string) {
     if (!adminId) return;
     setIsLoading(true);
     try {
-      const { data, error: rpcError } = await (supabase as any).rpc('get_disputed_matches', {
+      let pendingNoShowVal = 0;
+      try {
+        const { count: nsCount, error: nsErr } = await supabase
+          .from('no_shows')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'pending');
+        
+        if (!nsErr && nsCount !== null) {
+          pendingNoShowVal = nsCount;
+        } else {
+          const { count: fallbackCount } = await supabase
+            .from('match_no_show_reports')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'pending');
+          pendingNoShowVal = fallbackCount || 0;
+        }
+      } catch (e) {
+        const { count: fallbackCount } = await supabase
+          .from('match_no_show_reports')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'pending');
+        pendingNoShowVal = fallbackCount || 0;
+      }
+
+      const rpcResponse = await (supabase as any).rpc('get_disputed_matches', {
         p_admin_id: adminId
       });
 
-      if (rpcError) throw rpcError;
+      if (rpcResponse.error) throw rpcResponse.error;
 
-      const rpcData = data as any;
+      const rpcData = rpcResponse.data as any;
+      setNoShowCount(pendingNoShowVal);
 
       const mapMatch = (m: any, defaultStatus: string) => {
         const isRpc = 'match_id' in m;
@@ -60,7 +86,8 @@ export function useAdminDisputes(adminId: string) {
       
       const totalAlerts = (rpcData?.disputed_count ?? disputedList.length) + 
                           (rpcData?.awaiting_count ?? awaitingList.length) + 
-                          (rpcData?.abandoned_count ?? abandonedList.length);
+                          (rpcData?.abandoned_count ?? abandonedList.length) +
+                          pendingNoShowVal;
       setCount(totalAlerts);
     } catch (err: any) {
       setError(err.message || 'Failed to load disputes');
@@ -140,6 +167,7 @@ export function useAdminDisputes(adminId: string) {
   return {
     disputes,
     count,
+    noShowCount,
     isLoading,
     isResolving,
     error,
