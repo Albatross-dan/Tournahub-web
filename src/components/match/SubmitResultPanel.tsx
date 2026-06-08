@@ -11,6 +11,7 @@ import { cn, getPublicIdentity } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
 import StorageImage from '../common/StorageImage';
+import { useCountdown } from '../../hooks/useCountdown';
 
 interface SubmitResultPanelProps {
   matchId: string;
@@ -65,52 +66,33 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
   const opponentName = isPlayer1 ? getPublicIdentity(match?.player2) : getPublicIdentity(match?.player1);
 
   const scheduledAt = match?.scheduled_at;
-  const playWindowMinutes = match?.play_window_minutes ?? 30;
-  const submissionGraceMinutes = match?.submission_grace_minutes ?? 10;
-  const matchStatus = match?.status;
+  const preMatchCountdown = useCountdown(scheduledAt || '', serverTimeOffsetMs);
 
-  const matchStart = scheduledAt ? new Date(scheduledAt) : null;
-  const playWindowEndObj = matchStart ? new Date(matchStart.getTime() + playWindowMinutes * 60000) : null;
-  const submissionCloseObj = playWindowEndObj ? new Date(playWindowEndObj.getTime() + submissionGraceMinutes * 60000) : null;
-
-  const [currentNow, setCurrentNow] = useState(() => new Date(Date.now() + (serverTimeOffsetMs || 0)));
+  const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
 
   useEffect(() => {
-    setCurrentNow(new Date(Date.now() + (serverTimeOffsetMs || 0)));
-  }, [serverTimeOffsetMs]);
+    if (state && typeof state.seconds_until_deadline === 'number') {
+      setSecondsRemaining(state.seconds_until_deadline);
+    }
+  }, [state?.seconds_until_deadline]);
 
   useEffect(() => {
-    if (!matchStart) return;
+    if (state?.countdown_state !== 'active') return;
 
     const interval = setInterval(() => {
-      const updatedNow = new Date(Date.now() + (serverTimeOffsetMs || 0));
-      setCurrentNow(updatedNow);
-
-      const isPhaseD = playWindowEndObj && submissionCloseObj && updatedNow >= submissionCloseObj;
-      if (isPhaseD) {
-        clearInterval(interval);
-      }
+      setSecondsRemaining((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [scheduledAt, playWindowMinutes, submissionGraceMinutes, serverTimeOffsetMs]);
+  }, [state?.countdown_state]);
 
-  const phase = (() => {
-    if (!matchStart || !playWindowEndObj || !submissionCloseObj) return 'UNKNOWN';
-    if (currentNow < matchStart) return 'PHASE_A';
-    if (currentNow >= matchStart && currentNow < playWindowEndObj) return 'PHASE_B';
-    if (currentNow >= playWindowEndObj && currentNow < submissionCloseObj) return 'PHASE_C';
-    return 'PHASE_D';
-  })();
-
-  // Trigger refetch on boundary crossing to ensure backend state updates are fetched
-  const prevPhaseRef = React.useRef(phase);
   useEffect(() => {
-    if (prevPhaseRef.current !== phase) {
+    const pollInterval = setInterval(() => {
       refetch();
-      prevPhaseRef.current = phase;
-    }
-  }, [phase, refetch]);
+    }, 30000);
+
+    return () => clearInterval(pollInterval);
+  }, [refetch]);
 
   if (isLoading) {
     return (
@@ -134,8 +116,10 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
     verification_status,
     ui_state,
     can_submit,
-    play_window_end,
-    submission_deadline,
+    total_window_minutes,
+    match_deadline,
+    seconds_until_deadline,
+    countdown_state,
     submissions,
     match_status
   } = state;
@@ -149,7 +133,7 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
       return (
         <WaitingForOpponent 
           submission={mySub}
-          deadline={submission_deadline}
+          deadline={match_deadline || ''}
           opponentUsername={opponent?.username || 'Opponent'}
           serverTimeOffsetMs={serverTimeOffsetMs}
         />
@@ -348,50 +332,15 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
 
   const isFormValid = score1 !== '' && score2 !== '';
 
-  const formatHHMMSS = (totalSecs: number) => {
-    const h = Math.floor(totalSecs / 3600);
-    const m = Math.floor((totalSecs % 3600) / 60);
-    const s = totalSecs % 60;
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  const formatSecondsRemaining = (secs: number) => {
+    const totalSeconds = Math.max(0, Math.floor(secs));
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    return [h, m, s]
+      .map(v => String(v).padStart(2, '0'))
+      .join(':');
   };
-
-  const formatMMSS = (totalSecs: number) => {
-    const m = Math.floor(totalSecs / 60);
-    const s = totalSecs % 60;
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${pad(m)}:${pad(s)}`;
-  };
-
-  let leftLabel = "Submit Match Result";
-  let clockText = "";
-  let clockColorClass = "";
-  let showClock = false;
-
-  if (phase === 'PHASE_A') {
-    leftLabel = "MATCH STARTS IN";
-    const diffSecs = Math.max(0, Math.floor((matchStart!.getTime() - currentNow.getTime()) / 1000));
-    clockText = formatHHMMSS(diffSecs);
-    clockColorClass = "text-slate-400";
-    showClock = true;
-  } else if (phase === 'PHASE_B') {
-    leftLabel = "PLAY NOW  •  SUBMITS OPEN IN";
-    const diffSecs = Math.max(0, Math.floor((playWindowEndObj!.getTime() - currentNow.getTime()) / 1000));
-    clockText = formatMMSS(diffSecs);
-    clockColorClass = "text-slate-400";
-    showClock = true;
-  } else if (phase === 'PHASE_C') {
-    leftLabel = "SUBMIT MATCH RESULT  •  CLOSES IN";
-    const diffSecs = Math.max(0, Math.floor((submissionCloseObj!.getTime() - currentNow.getTime()) / 1000));
-    clockText = formatMMSS(diffSecs);
-    clockColorClass = "text-amber-500 animate-pulse";
-    showClock = true;
-  } else if (phase === 'PHASE_D') {
-    leftLabel = "SUBMISSION CLOSED";
-    clockText = "";
-    clockColorClass = "";
-    showClock = false;
-  }
 
   const getSubmitButtonLabel = () => {
     if (isSubmitting) {
@@ -400,14 +349,18 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
     if (hasAlreadySubmitted) {
       return "RESULT ALREADY SUBMITTED";
     }
-    if (phase === 'PHASE_A') {
-      return "SUBMISSIONS NOT OPEN YET";
+    const countdownState = state?.countdown_state || 'not_scheduled';
+    if (countdownState === 'not_scheduled') {
+      return "AWAITING SCHEDULE";
     }
-    if (phase === 'PHASE_B') {
-      return "MATCH IN PROGRESS - SUBMITS NOT OPEN";
+    if (countdownState === 'pre_match') {
+      return "MATCH STARTS SOON - CANNOT SUBMIT";
     }
-    if (phase === 'PHASE_D') {
-      return "SUBMISSIONS CLOSED";
+    if (countdownState === 'deadline_expired') {
+      return "TIME'S UP - SUBMISSIONS CLOSED";
+    }
+    if (countdownState === 'finished') {
+      return "MATCH FINISHED - SUBMISSIONS CLOSED";
     }
     if (screenshotFile && uploading) {
       return "UPLOADING EVIDENCE...";
@@ -461,30 +414,61 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
 
       <div className="p-6 border-b border-slate-800 flex items-center justify-between">
         <div className="flex flex-col">
-          <h3 className="text-sm font-black text-white uppercase italic tracking-widest flex items-center text-xs">
-            <Trophy className="w-4 h-4 mr-2 text-primary" />
-            Submit Match Result
+          <h3 className="text-sm font-black text-white uppercase italic tracking-widest flex items-center text-[10px] sm:text-xs">
+            <Trophy className="w-4 h-4 mr-2 text-primary shrink-0" />
+            Play your Match and submit results here
           </h3>
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">
             {myName} vs {opponentName}
           </p>
         </div>
-        <div className="text-right flex flex-col items-end">
-          {showClock && (
-            <div className={cn("flex items-center space-x-2 font-mono text-base font-black italic tracking-tighter sm:text-lg", clockColorClass)}>
-              <Clock className="w-4 h-4" />
-              <span>{clockText}</span>
-            </div>
-          )}
-          {phase === 'PHASE_B' && (
-            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">
-              Match is live! Submit your score once physical play is complete.
-            </p>
-          )}
-        </div>
       </div>
 
       <div className="p-8 space-y-8">
+        {/* State Status Card Mapping */}
+        {(() => {
+          const countdownState = state?.countdown_state || 'not_scheduled';
+          switch (countdownState) {
+            case 'not_scheduled':
+              return (
+                <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-center space-x-2 text-slate-400 font-mono text-xs font-black uppercase italic tracking-wider">
+                  <Clock className="w-4 h-4 text-slate-500" />
+                  <span>Awaiting schedule</span>
+                </div>
+              );
+            case 'pre_match':
+              return (
+                <div className="p-4 bg-sky-500/5 border border-sky-500/20 rounded-2xl flex items-center justify-center space-x-2 text-sky-400 font-mono text-xs font-black uppercase italic tracking-wider">
+                  <Clock className="w-4 h-4 text-sky-400" />
+                  <span>Match starts in {preMatchCountdown.formatted}</span>
+                </div>
+              );
+            case 'active':
+              return (
+                <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl flex items-center justify-center space-x-2 text-emerald-400 animate-pulse font-mono text-xs font-black uppercase italic tracking-wider">
+                  <Clock className="w-4 h-4 text-emerald-400" />
+                  <span>{formatSecondsRemaining(secondsRemaining)} remaining</span>
+                </div>
+              );
+            case 'deadline_expired':
+              return (
+                <div className="p-4 bg-rose-500/5 border border-rose-500/20 rounded-2xl flex items-center justify-center space-x-2 text-rose-400 font-mono text-xs font-black uppercase italic tracking-wider">
+                  <Clock className="w-4 h-4 text-rose-400" />
+                  <span>Time's up — awaiting admin review</span>
+                </div>
+              );
+            case 'finished':
+              return (
+                <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-center space-x-2 text-slate-500 font-mono text-xs font-black uppercase italic tracking-wider">
+                  <Clock className="w-4 h-4 text-slate-500" />
+                  <span>Match complete</span>
+                </div>
+              );
+            default:
+              return null;
+          }
+        })()}
+
         {/* Scores */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div className="space-y-3">
@@ -497,7 +481,7 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
               step="1"
               value={score1}
               onChange={(e) => setScore1(e.target.value)}
-              disabled={phase !== 'PHASE_C' || isSubmitting || formDisabled || hasAlreadySubmitted}
+              disabled={!can_submit || isSubmitting || formDisabled || hasAlreadySubmitted}
               aria-label="Your score"
               className="w-full h-16 bg-slate-950 border-2 border-slate-800 rounded-2xl text-3xl font-black text-center text-white focus:border-primary focus:ring-0 transition-all disabled:opacity-50"
               placeholder="0"
@@ -513,7 +497,7 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
               step="1"
               value={score2}
               onChange={(e) => setScore2(e.target.value)}
-              disabled={phase !== 'PHASE_C' || isSubmitting || formDisabled || hasAlreadySubmitted}
+              disabled={!can_submit || isSubmitting || formDisabled || hasAlreadySubmitted}
               aria-label="Opponent score"
               className="w-full h-16 bg-slate-950 border-2 border-slate-800 rounded-2xl text-3xl font-black text-center text-white focus:border-primary focus:ring-0 transition-all disabled:opacity-50"
               placeholder="0"
@@ -552,7 +536,7 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
                   setUploadError(null);
                 }}
                 className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
-                disabled={phase !== 'PHASE_C' || formDisabled || isSubmitting || hasAlreadySubmitted}
+                disabled={!can_submit || formDisabled || isSubmitting || hasAlreadySubmitted}
               >
                 <div className="bg-red-600 p-2 rounded-lg text-white text-[10px] font-black uppercase tracking-widest">Remove</div>
               </button>
@@ -561,13 +545,13 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
             <div className={cn(
               "relative border-2 border-dashed rounded-2xl p-12 transition-all group",
               isScreenshotError ? "border-red-500/50 bg-red-500/5" : "border-slate-800",
-              phase === 'PHASE_C' && !hasAlreadySubmitted && !formDisabled ? "hover:border-primary/50 cursor-pointer" : "opacity-50 cursor-not-allowed"
+              can_submit && !hasAlreadySubmitted && !formDisabled ? "hover:border-primary/50 cursor-pointer" : "opacity-50 cursor-not-allowed"
             )}>
               <input 
                 type="file"
                 accept="image/*"
                 onChange={handleFileUpload}
-                disabled={phase !== 'PHASE_C' || uploading || isSubmitting || formDisabled || hasAlreadySubmitted}
+                disabled={!can_submit || uploading || isSubmitting || formDisabled || hasAlreadySubmitted}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
               />
               <div className="flex flex-col items-center justify-center text-center">
@@ -627,10 +611,10 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
         {/* Submit Button */}
         <button 
           onClick={handleSubmit}
-          disabled={phase !== 'PHASE_C' || !isFormValid || isSubmitting || uploading || formDisabled || hasAlreadySubmitted || (screenshotFile !== null && (!publicUrl || uploading))}
+          disabled={!can_submit || !isFormValid || isSubmitting || uploading || formDisabled || hasAlreadySubmitted || (screenshotFile !== null && (!publicUrl || uploading))}
           className={cn(
             "w-full h-16 flex items-center justify-center space-x-3 rounded-2xl font-black uppercase italic tracking-widest transition-all cursor-pointer",
-            phase === 'PHASE_C' && isFormValid && !hasAlreadySubmitted && !formDisabled && !(screenshotFile !== null && (!publicUrl || uploading))
+            can_submit && isFormValid && !hasAlreadySubmitted && !formDisabled && !(screenshotFile !== null && (!publicUrl || uploading))
               ? "bg-primary text-black hover:bg-white hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-primary/20"
               : "bg-slate-800 text-slate-600 cursor-not-allowed"
           )}
@@ -643,24 +627,24 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
           ) : (
             <>
               <span>{getSubmitButtonLabel()}</span>
-              {phase === 'PHASE_C' && !hasAlreadySubmitted && <Check className="w-5 h-5" />}
+              {can_submit && !hasAlreadySubmitted && <Check className="w-5 h-5" />}
             </>
           )}
         </button>
 
-        {phase === 'PHASE_A' && (
+        {state?.countdown_state === 'pre_match' && (
           <p className="text-center text-slate-600 text-[10px] font-black uppercase tracking-widest italic animate-pulse">
             Submissions window is not yet active (Match starts soon)
           </p>
         )}
-        {phase === 'PHASE_B' && (
-          <p className="text-center text-slate-600 text-[10px] font-black uppercase tracking-widest italic animate-pulse">
-            Physical play active. Submissions will open after the match play window.
-          </p>
-        )}
-        {phase === 'PHASE_D' && (
+        {state?.countdown_state === 'deadline_expired' && (
           <p className="text-center text-red-500 text-[10px] font-black uppercase tracking-widest italic animate-pulse">
             The deadline for submitting results has expired.
+          </p>
+        )}
+        {state?.countdown_state === 'finished' && (
+          <p className="text-center text-slate-600 text-[10px] font-black uppercase tracking-widest italic animate-pulse">
+            The match has been completed or expired.
           </p>
         )}
       </div>

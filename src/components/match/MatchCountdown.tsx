@@ -12,19 +12,19 @@ interface MatchCountdownProps {
 export function MatchCountdown({ state, onExpired, serverTimeOffsetMs = 0 }: MatchCountdownProps) {
   if (!state) return null;
 
-  const { countdown_state, scheduled_at, play_window_end, submission_deadline } = state;
+  const { countdown_state, scheduled_at, match_deadline } = state;
 
   switch (countdown_state) {
     case 'not_scheduled':
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200">
-          Not scheduled
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-850 text-slate-400 border border-slate-850">
+          Awaiting schedule
         </span>
       );
 
     case 'pre_match':
       return (
-        <div className="flex items-center space-x-2 text-slate-400 font-bold uppercase tracking-tighter italic">
+        <div className="flex items-center space-x-2 text-sky-400 font-bold uppercase tracking-tighter italic">
           <Clock className="w-4 h-4" />
           <span>Starts in</span>
           <CountdownTimer 
@@ -34,12 +34,12 @@ export function MatchCountdown({ state, onExpired, serverTimeOffsetMs = 0 }: Mat
         </div>
       );
 
-    case 'play_window':
+    case 'active':
       return (
         <div className="p-4 bg-green-500/5 border border-green-500/20 rounded-2xl flex flex-col items-center">
-          <span className="text-[10px] font-black uppercase tracking-widest text-green-500/60 mb-1">Play window closes in</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-green-500/60 mb-1">Time remaining</span>
           <CountdownTimer 
-            target={play_window_end}
+            target={match_deadline}
             urgentAt={300} // pulse last 5 min
             serverTimeOffsetMs={serverTimeOffsetMs}
             className="text-green-500 font-mono text-3xl font-black italic tracking-tighter"
@@ -48,35 +48,21 @@ export function MatchCountdown({ state, onExpired, serverTimeOffsetMs = 0 }: Mat
         </div>
       );
 
-    case 'submission_window':
-      return (
-        <div className="p-5 bg-orange-500/5 border border-orange-500/30 rounded-2xl flex flex-col items-center animate-pulse-border">
-          <div className="flex items-center space-x-2 mb-2">
-            <AlertTriangle className="w-4 h-4 text-orange-500" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-orange-500/70">Submit your result within</span>
-          </div>
-          <CountdownTimer 
-            target={submission_deadline}
-            urgentAt={120} // red pulse last 2 min
-            serverTimeOffsetMs={serverTimeOffsetMs}
-            className="text-orange-500 font-mono text-4xl font-black italic tracking-tight"
-            onExpired={onExpired}
-          />
-          <p className="mt-3 text-[10px] text-orange-500/60 font-medium text-center uppercase tracking-wide">
-            ⚠️ Results not submitted before this time will require admin review.
-          </p>
-        </div>
-      );
-
     case 'deadline_expired':
       return (
         <div className="px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-[10px] font-black uppercase tracking-widest flex items-center">
           <Clock className="w-3 h-3 mr-2" />
-          Deadline passed
+          Time's up
         </div>
       );
 
     case 'finished':
+      return (
+        <div className="px-4 py-2 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-400 text-[10px] font-black uppercase tracking-widest flex items-center">
+          Match complete
+        </div>
+      );
+
     default:
       return null;
   }

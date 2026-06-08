@@ -38,6 +38,11 @@ export interface MatchVerificationState {
   locked: boolean
   submission_count: number
   submissions: ResultSubmission[]
+  total_window_minutes?: number
+  match_deadline?: string | null
+  seconds_until_deadline?: number | null
+  countdown_state?: 'not_scheduled' | 'pre_match' | 'active' | 'deadline_expired' | 'finished'
+  can_submit?: boolean
 }
 
 export interface DisputedMatch {
