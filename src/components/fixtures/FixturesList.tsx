@@ -87,7 +87,21 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
   const groupedMatches = matches.reduce((acc: any, match) => {
     const stage = match.stage || 'knockout';
     if (!acc[stage]) acc[stage] = {};
-    const roundLabel = match.round ? `Round ${match.round}` : 'General';
+    
+    let roundLabel = 'General';
+    if (match.round) {
+      const isPlayoffs = stage === 'playoffs' || stage === 'playoff' || stage === 'play_off';
+      if (isPlayoffs) {
+        const rNum = Number(match.round);
+        if (rNum === 1) roundLabel = 'Quarter Final';
+        else if (rNum === 2) roundLabel = 'Semi Final';
+        else if (rNum === 3) roundLabel = 'Final';
+        else roundLabel = `Round ${match.round}`;
+      } else {
+        roundLabel = `Round ${match.round}`;
+      }
+    }
+
     if (!acc[stage][roundLabel]) acc[stage][roundLabel] = [];
     acc[stage][roundLabel].push(match);
     return acc;

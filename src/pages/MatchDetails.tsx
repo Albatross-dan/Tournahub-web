@@ -354,7 +354,12 @@ export default function MatchDetails() {
                   {(match as any).tournaments?.name || 'BATTLE HUB'}
                 </h1>
                </div>
-               <p className="text-zinc-500 text-[10px] md:text-xs font-bold uppercase tracking-[0.15em] md:tracking-[0.3em] leading-none">Round {match.round} • Match #{match.match_order}</p>
+               <p className="text-zinc-500 text-[10px] md:text-xs font-bold uppercase tracking-[0.15em] md:tracking-[0.3em] leading-none">
+                 {((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 1) ? 'Quarter Final' :
+                  ((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 2) ? 'Semi Final' :
+                  ((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 3) ? 'Final' :
+                  `Round ${match.round}`} • Match #{match.match_order}
+               </p>
              </div>
            </div>
            

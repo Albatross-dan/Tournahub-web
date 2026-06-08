@@ -72,7 +72,12 @@ export const ResultReviewPanel: React.FC<ResultReviewPanelProps> = ({ match, onC
            </div>
            <div>
               <h3 className="text-xl font-black text-white italic uppercase tracking-tighter leading-none mb-1">Verify Outcome</h3>
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic">{match.stage?.replace('_', ' ')} • Round {match.round}</p>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic">
+                {match.stage?.replace('_', ' ')} • {((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 1) ? 'Quarter Final' :
+                 ((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 2) ? 'Semi Final' :
+                 ((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 3) ? 'Final' :
+                 `Round ${match.round}`}
+              </p>
            </div>
         </div>
         <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 transition-colors">

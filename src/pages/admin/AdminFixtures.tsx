@@ -212,7 +212,12 @@ function FixtureCard({ match, onUpdate, result }: { match: any; onUpdate: (id: s
       match.status === 'completed' ? 'opacity-80' : ''
     )}>
       <div className="flex items-center justify-between mb-6">
-        <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest italic">Round {match.round} • {match.stage?.replace('_', ' ')}</span>
+        <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest italic">
+          {((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 1) ? 'Quarter Final' :
+           ((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 2) ? 'Semi Final' :
+           ((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 3) ? 'Final' :
+           `Round ${match.round}`} • {match.stage?.replace('_', ' ')}
+        </span>
         {match.status === 'completed' ? (
           <div className="flex items-center text-emerald-500 text-[10px] font-black uppercase tracking-widest italic">
             <CheckCircle2 className="w-3 h-3 mr-1" /> Verified

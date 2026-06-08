@@ -230,7 +230,12 @@ export default function Matches() {
                               {match.tournaments?.name || 'Tournament'}
                             </span>
                             <span className="w-1 h-1 bg-slate-700 rounded-full shrink-0" />
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest shrink-0">Round {match.round}</span>
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest shrink-0">
+                              {((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 1) ? 'Quarter Final' :
+                               ((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 2) ? 'Semi Final' :
+                               ((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 3) ? 'Final' :
+                               `Round ${match.round}`}
+                            </span>
                           </div>
                           
                           <div className="flex items-baseline justify-between gap-4">
@@ -325,9 +330,21 @@ function MatchCard({ match }: { match: any; key?: string }) {
       >
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div className="flex items-center space-x-6">
-            <div className="text-center w-16">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Round</p>
-              <p className="text-2xl font-black text-white italic">{match.round}</p>
+            <div className="text-center min-w-[64px]">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                {(match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') ? 'Playoff' : 'Round'}
+              </p>
+              <p className={cn(
+                "font-black text-white italic leading-tight",
+                (match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') ? "text-[11px] uppercase tracking-[0.05em]" : "text-2xl"
+              )}>
+                {(match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') ? (
+                  Number(match.round) === 1 ? 'Quarter Final' :
+                  Number(match.round) === 2 ? 'Semi Final' :
+                  Number(match.round) === 3 ? 'Final' :
+                  match.round
+                ) : match.round}
+              </p>
             </div>
             <div className="h-12 w-px bg-slate-800" />
             <div className="space-y-1 min-w-0">
