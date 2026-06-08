@@ -113,13 +113,33 @@ export const matchService = {
       const conversationsWithDetails = await Promise.all(
         (conversations || []).map(async (conv: any) => {
           // Last message from view
-          const { data: lastMessage } = await (supabase as any)
+          let { data: lastMessage } = await (supabase as any)
             .from('v_messages_with_sender')
             .select('content, created_at, sender_id, sender_username')
             .eq('conversation_id', conv.id)
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
+
+          // Safe fallback direct query to the messages table if the view returns nothing
+          if (!lastMessage) {
+            const { data: rawMsg } = await (supabase as any)
+              .from('messages')
+              .select('content, created_at, sender_id')
+              .eq('conversation_id', conv.id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (rawMsg) {
+              lastMessage = {
+                content: rawMsg.content,
+                created_at: rawMsg.created_at,
+                sender_id: rawMsg.sender_id,
+                sender_username: 'Player'
+              };
+            }
+          }
 
           // Unread count
           const { count } = await (supabase as any)

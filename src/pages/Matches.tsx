@@ -87,45 +87,85 @@ export default function Matches() {
   }, [user?.id, activeTab, refetchSignal]);
 
   async function loadMatches(showLoading = isInitialLoad.current) {
+    if (!user?.id) return;
+    const cacheKey = `tournahub-matches-${user.id}`;
+    
+    // Try rendering from cache first to avoid blank screens/loaders
     try {
-      if (showLoading) setLoading(true);
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMatches(parsed);
+          if (showLoading) setLoading(false);
+        }
+      }
+    } catch (e) {
+      console.warn('[Matches] Error reading cached matches:', e);
+    }
+
+    try {
+      if (showLoading && matches.length === 0) setLoading(true);
       
       const timeoutId = setTimeout(() => {
-        if (showLoading) {
+        if (showLoading && matches.length === 0) {
           setLoading(false);
           console.warn('[Matches] Matches loading timed out after 10s');
         }
       }, 10000);
       
-      const data = await matchService.getUserMatches(user!.id);
-      setMatches(data || []);
+      const data = await matchService.getUserMatches(user.id);
+      if (data && Array.isArray(data)) {
+        setMatches(data);
+        localStorage.setItem(cacheKey, JSON.stringify(data));
+      }
       clearTimeout(timeoutId);
     } catch (err) {
       console.error(err);
     } finally {
-      if (showLoading) setLoading(false);
+      setLoading(false);
       isInitialLoad.current = false;
     }
   }
 
   async function loadConversations(showLoading = isInitialLoad.current) {
+    if (!user?.id) return;
+    const cacheKey = `tournahub-conversations-${user.id}`;
+
+    // Try rendering from cache first to avoid blank screens/loaders
     try {
-      if (showLoading) setLoading(true);
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setConversations(parsed);
+          if (showLoading) setLoading(false);
+        }
+      }
+    } catch (e) {
+      console.warn('[Matches] Error reading cached conversations:', e);
+    }
+
+    try {
+      if (showLoading && conversations.length === 0) setLoading(true);
       
       const timeoutId = setTimeout(() => {
-        if (showLoading) {
+        if (showLoading && conversations.length === 0) {
           setLoading(false);
           console.warn('[Matches] Conversations loading timed out after 10s');
         }
       }, 10000);
       
-      const data = await matchService.getConversations(user!.id);
-      setConversations(data || []);
+      const data = await matchService.getConversations(user.id);
+      if (data && Array.isArray(data)) {
+        setConversations(data);
+        localStorage.setItem(cacheKey, JSON.stringify(data));
+      }
       clearTimeout(timeoutId);
     } catch (err) {
       console.error(err);
     } finally {
-      if (showLoading) setLoading(false);
+      setLoading(false);
       isInitialLoad.current = false;
     }
   }

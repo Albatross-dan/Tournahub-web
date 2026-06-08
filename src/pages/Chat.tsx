@@ -41,14 +41,33 @@ export default function Chat() {
 
   async function loadConversations(showLoading = isInitialLoad.current) {
     if (!user) return;
+    const cacheKey = `tournahub-conversations-${user.id}`;
+    
+    // Warm screen instantly by loading cached data
     try {
-      if (showLoading) setLoading(true);
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setConversations(parsed);
+          if (showLoading) setLoading(false);
+        }
+      }
+    } catch (e) {
+      console.warn('[Chat] Error reading conversations cache:', e);
+    }
+
+    try {
+      if (showLoading && conversations.length === 0) setLoading(true);
       const data = await matchService.getConversations(user.id);
-      setConversations(data);
+      if (data && Array.isArray(data)) {
+        setConversations(data);
+        localStorage.setItem(cacheKey, JSON.stringify(data));
+      }
     } catch (err) {
       console.error('Error loading conversations:', err);
     } finally {
-      if (showLoading) setLoading(false);
+      setLoading(false);
       isInitialLoad.current = false;
     }
   }

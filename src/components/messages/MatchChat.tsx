@@ -270,11 +270,52 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+    if (conversationId && messages.length > 0) {
+      const messagesToCache = messages.filter(m => !m.isOptimistic);
+      if (messagesToCache.length > 0) {
+        try {
+          localStorage.setItem(`tournahub-chat-msgs-${conversationId}`, JSON.stringify(messagesToCache));
+        } catch (e) {
+          console.warn('[MatchChat] Proactive message caching failed:', e);
+        }
+      }
+    }
+  }, [messages, conversationId]);
 
   async function loadChat() {
+    const metaCacheKey = `tournahub-conv-meta-${matchId}`;
+    let cachedConv: any = null;
+    
+    // Attempt cache read for conversation metadata and messages first
     try {
-      setLoading(true);
+      const cached = localStorage.getItem(metaCacheKey);
+      if (cached) {
+        cachedConv = JSON.parse(cached);
+        if (cachedConv && cachedConv.id) {
+          setConversationId(cachedConv.id);
+          if (cachedConv.opponent) {
+            setOpponent(cachedConv.opponent);
+          }
+          // Load cached messages for this conversation
+          const msgsCacheKey = `tournahub-chat-msgs-${cachedConv.id}`;
+          const cachedMsgs = localStorage.getItem(msgsCacheKey);
+          if (cachedMsgs) {
+            const parsedMsgs = JSON.parse(cachedMsgs);
+            if (Array.isArray(parsedMsgs)) {
+              setMessages(parsedMsgs.map((m: any) => ({ ...m, isDelivered: true })));
+              setLoading(false); // Instantly show cached messages
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[MatchChat] Error loading cached metadata:', e);
+    }
+
+    try {
+      if (messages.length === 0 && !cachedConv) {
+        setLoading(true);
+      }
       setError(null);
       const conv = await matchService.getConversationId(matchId);
 
@@ -282,6 +323,13 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
         setConversationId(conv.id);
         if (conv.opponent) {
           setOpponent(conv.opponent);
+        }
+        
+        // Cache conversation metadata mapping
+        try {
+          localStorage.setItem(metaCacheKey, JSON.stringify(conv));
+        } catch (e) {
+          console.warn('[MatchChat] Could not cache metadata:', e);
         }
         
         // Mark as read immediately when loading the chat
@@ -299,7 +347,6 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
             
             if (joinErr) {
               console.warn('[MatchChat] Auto-join insertion error (likely RLS/Recursion):', joinErr.message);
-              // Non-fatal: if this fails, we rely on the match-level RLS to allow reading/sending anyway
             } else {
               console.log('[MatchChat] Auto-join successful');
             }
@@ -309,13 +356,28 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
         }
         
         const msgs = await matchService.loadMessages(conv.id);
-        // Mark existing messages as confirmed/delivered
-        setMessages(msgs?.map(m => ({ ...m, isDelivered: true })) || []);
+        if (msgs) {
+          const finalMsgs = msgs.map((m: any) => ({ ...m, isDelivered: true }));
+          setMessages(finalMsgs);
+          
+          // Save loaded messages back to local cache
+          try {
+            localStorage.setItem(`tournahub-chat-msgs-${conv.id}`, JSON.stringify(finalMsgs));
+          } catch (e) {
+            console.warn('[MatchChat] Message caching failed:', e);
+          }
+        }
       } else {
-        setError('Communication channel not established. Please contact support.');
+        if (!cachedConv) {
+          setError('Communication channel not established. Please contact support.');
+        }
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to initialize match chat');
+      if (!cachedConv) {
+        setError(err.message || 'Failed to initialize match chat');
+      } else {
+        console.warn('[MatchChat] Offline error when loading fresh chat data. Continuing with cached content:', err);
+      }
     } finally {
       setLoading(false);
     }
