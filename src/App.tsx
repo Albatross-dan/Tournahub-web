@@ -12,6 +12,8 @@ import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Legal from './pages/Legal';
+import VerifyEmail from './pages/VerifyEmail';
+import VerifyCallback from './pages/VerifyCallback';
 import Dashboard from './pages/Dashboard';
 import Tournaments from './pages/Tournaments';
 import TournamentDetails from './pages/TournamentDetails';
@@ -98,7 +100,7 @@ function RootPlatformGate({ children }: { children: React.ReactNode }) {
     return <LoadingState fullPage />;
   }
 
-  const isPublicRoute = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/terms', '/privacy-policy', '/privacy', '/legal', '/rules', '/help'].includes(location.pathname);
+  const isPublicRoute = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/terms', '/privacy-policy', '/privacy', '/legal', '/rules', '/help', '/verify-email', '/verify-callback'].includes(location.pathname);
 
   if (status?.is_blocked && !isPublicRoute && !isAdmin) {
     return <MaintenanceScreen />;
@@ -133,6 +135,8 @@ function AppRoutes() {
                 <Route path="/legal" element={<Navigate to="/privacy-policy" replace />} />
                 <Route path="/rules" element={<Rules />} />
                 <Route path="/help" element={<Help />} />
+                <Route path="/verify-email" element={<VerifyEmail />} />
+                <Route path="/verify-callback" element={<VerifyCallback />} />
                 
                 <Route element={<ProtectedRoute />}>
                   <Route path="/dashboard" element={<Dashboard />} />

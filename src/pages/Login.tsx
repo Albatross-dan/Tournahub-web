@@ -184,10 +184,14 @@ export default function Login() {
           throw new Error('Tournaments username is already taken. Try another one, champion.');
         }
 
+        // Save pending signup email in localStorage for seamless recovery
+        localStorage.setItem('pending_signup_email', email);
+
         const { error: signUpErr, data } = await supabase.auth.signUp({ 
           email, 
           password,
           options: {
+            emailRedirectTo: `${window.location.origin}/verify-callback`,
             data: {
               username: username,
               role: 'user',
@@ -216,11 +220,20 @@ export default function Login() {
           // Auto-logged in
           navigate('/dashboard');
         } else {
-          setSuccess('We sent a verification link to your email inbox! Please check your email to activate and verify your profile.');
+          // Immediately redirect users to the dedicated Verify Email page
+          navigate('/verify-email', { state: { email, username } });
         }
       } else {
         const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
-        if (signInErr) throw signInErr;
+        if (signInErr) {
+          if (signInErr.message?.toLowerCase().includes('email not confirmed')) {
+            // Friendly redirect for unverified users trying to log in
+            localStorage.setItem('pending_signup_email', email);
+            navigate(`/verify-email?email=${encodeURIComponent(email)}&fromLogin=true`);
+            return;
+          }
+          throw signInErr;
+        }
         navigate('/dashboard');
       }
     } catch (err: any) {
