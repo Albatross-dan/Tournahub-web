@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { Trophy, Mail, Lock, Loader2, Phone, Globe } from 'lucide-react';
+import { Trophy, Mail, Lock, Loader2, Phone, Globe, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react';
 import SEO from '../components/common/SEO';
 
 const logoUrl = '/android-chrome-512x512.png';
@@ -41,16 +41,41 @@ const getTimezones = () => {
 
 const SYSTEM_TIMEZONES = getTimezones();
 
+const GLOBAL_COUNTRIES = [
+  { name: 'Kenya', code: 'KE', prefix: '+254', length: [9], placeholder: '712345678', flag: '🇰🇪' },
+  { name: 'Nigeria', code: 'NG', prefix: '+234', length: [9], placeholder: '803123456', flag: '🇳🇬' },
+  { name: 'South Africa', code: 'ZA', prefix: '+27', length: [9], placeholder: '821234567', flag: '🇿🇦' },
+  { name: 'United Kingdom', code: 'GB', prefix: '+44', length: [9], placeholder: '770090007', flag: '🇬🇧' },
+  { name: 'United States', code: 'US', prefix: '+1', length: [9], placeholder: '202555014', flag: '🇺🇸' },
+  { name: 'Uganda', code: 'UG', prefix: '+256', length: [9], placeholder: '712345678', flag: '🇺🇬' },
+  { name: 'Tanzania', code: 'TZ', prefix: '+255', length: [9], placeholder: '712345678', flag: '🇹🇿' },
+  { name: 'Ghana', code: 'GH', prefix: '+233', length: [9], placeholder: '241234567', flag: '🇬🇭' },
+  { name: 'Rwanda', code: 'RW', prefix: '+250', length: [9], placeholder: '788123456', flag: '🇷🇼' },
+  { name: 'India', code: 'IN', prefix: '+91', length: [9], placeholder: '987654321', flag: '🇮🇳' },
+  { name: 'Egypt', code: 'EG', prefix: '+20', length: [9], placeholder: '101234567', flag: '🇪🇬' },
+  { name: 'Saudi Arabia', code: 'SA', prefix: '+966', length: [9], placeholder: '501234567', flag: '🇸🇦' },
+  { name: 'UAE', code: 'AE', prefix: '+971', length: [9], placeholder: '501234567', flag: '🇦🇪' },
+  { name: 'Germany', code: 'DE', prefix: '+49', length: [9], placeholder: '170123456', flag: '🇩🇪' },
+  { name: 'France', code: 'FR', prefix: '+33', length: [9], placeholder: '612345678', flag: '🇫🇷' },
+  { name: 'Australia', code: 'AU', prefix: '+61', length: [9], placeholder: '412345678', flag: '🇦🇺' },
+  { name: 'Custom Code', code: 'OTH', prefix: '+', length: [9], placeholder: 'Enter 9-digit local number', flag: '🌐' }
+];
+
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [username, setUsername] = useState('');
-  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [countryIndex, setCountryIndex] = useState(0);
+  const [whatsappLocal, setWhatsappLocal] = useState('');
   const [timezone, setTimezone] = useState('Africa/Nairobi');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [usernameAvailability, setUsernameAvailability] = useState<'checking' | 'available' | 'taken' | 'invalid' | 'too_short' | null>(null);
+
   const navigate = useNavigate();
   const location = useLocation();
   const initialIsSignUp = location.pathname === '/signup' || location.state?.signUp || new URLSearchParams(location.search).get('signup') === 'true';
@@ -59,6 +84,46 @@ export default function Login() {
   const [success, setSuccess] = useState<string | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
+
+  // Live username checker guard
+  useEffect(() => {
+    if (!isSignUp || !username) {
+      setUsernameAvailability(null);
+      return;
+    }
+
+    if (username.length < 3) {
+      setUsernameAvailability('too_short');
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      setUsernameAvailability('invalid');
+      return;
+    }
+
+    setUsernameAvailability('checking');
+    const timer = setTimeout(async () => {
+      try {
+        const { data, error: checkError } = await (supabase as any)
+          .from('profiles')
+          .select('username')
+          .eq('username', username)
+          .maybeSingle();
+        if (checkError) throw checkError;
+        if (data) {
+          setUsernameAvailability('taken');
+        } else {
+          setUsernameAvailability('available');
+        }
+      } catch (err) {
+        console.error('Error checking username:', err);
+        setUsernameAvailability(null);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [username, isSignUp]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,6 +155,23 @@ export default function Login() {
           throw new Error('Tournaments username can only contain letters, numbers, and underscores');
         }
 
+        if (usernameAvailability === 'taken') {
+          throw new Error('Tournaments username is already taken. Try another one, champion.');
+        }
+
+        // Enforce WhatsApp requirements
+        const country = GLOBAL_COUNTRIES[countryIndex];
+        const cleanLocal = whatsappLocal.replace(/^0+/, ''); // strip leading zeroes
+        if (!cleanLocal) {
+          throw new Error('WhatsApp number is required.');
+        }
+
+        if (cleanLocal.length !== 9) {
+          throw new Error('WhatsApp number must be exactly 9 digits long (excluding any leading zero).');
+        }
+
+        const fullWhatsAppNumber = `${country.prefix}${cleanLocal}`;
+
         // Check uniqueness before signing up (quick pre-check)
         const { data: existing, error: checkError } = await (supabase as any)
           .from('profiles')
@@ -102,34 +184,26 @@ export default function Login() {
           throw new Error('Tournaments username is already taken. Try another one, champion.');
         }
 
-        if (!whatsappNumber) {
-          throw new Error('WhatsApp number is required for match coordination coordination signup.');
-        }
-
-        if (!/^\+[1-9]\d{1,14}$/.test(whatsappNumber)) {
-          throw new Error('WhatsApp Number must be in E.164 format (e.g. +254712345678)');
-        }
-
-        const { error, data } = await supabase.auth.signUp({ 
+        const { error: signUpErr, data } = await supabase.auth.signUp({ 
           email, 
           password,
           options: {
             data: {
               username: username,
               role: 'user',
-              whatsapp_number: whatsappNumber,
+              whatsapp_number: fullWhatsAppNumber,
               timezone: timezone
             }
           }
         });
-        if (error) throw error;
+        if (signUpErr) throw signUpErr;
         
         if (data.user) {
           // Explicitly update profiles table to ensure whatsapp_number and timezone are stored
           const { error: profileError } = await (supabase as any)
             .from('profiles')
             .update({ 
-              whatsapp_number: whatsappNumber,
+              whatsapp_number: fullWhatsAppNumber,
               timezone: timezone
             })
             .eq('id', data.user.id);
@@ -142,11 +216,11 @@ export default function Login() {
           // Auto-logged in
           navigate('/dashboard');
         } else {
-          setSuccess('Check your email for a verification link!');
+          setSuccess('We sent a verification link to your email inbox! Please check your email to activate and verify your profile.');
         }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInErr) throw signInErr;
         navigate('/dashboard');
       }
     } catch (err: any) {
@@ -205,12 +279,38 @@ export default function Login() {
                   <input
                     type="text"
                     required
-                    className="w-full bg-background/40 border border-border-main rounded-2xl pl-12 pr-4 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-text-main font-medium relative z-10"
+                    className="w-full bg-background/40 border border-border-main rounded-2xl pl-12 pr-4 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-text-main font-medium relative z-10 animate-fade-in"
                     placeholder="Enter your Tournaments username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value.trim())}
                   />
                 </div>
+                {/* Real-time username validation checks */}
+                {usernameAvailability === 'checking' && (
+                  <p className="text-[10px] text-text-muted animate-pulse font-bold uppercase tracking-wider ml-1 mt-1 flex items-center">
+                    <Loader2 className="w-3 h-3 mr-1 animate-spin text-primary shrink-0" /> Checking availability...
+                  </p>
+                )}
+                {usernameAvailability === 'available' && (
+                  <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider ml-1 mt-1 flex items-center">
+                    <CheckCircle className="w-3.5 h-3.5 mr-1 text-emerald-400 shrink-0" /> Username not taken
+                  </p>
+                )}
+                {usernameAvailability === 'taken' && (
+                  <p className="text-[10px] text-red-500 font-bold uppercase tracking-wider ml-1 mt-1 flex items-center">
+                    <XCircle className="w-3.5 h-3.5 mr-1 text-red-500 shrink-0" /> Username is already taken. Try another.
+                  </p>
+                )}
+                {usernameAvailability === 'too_short' && (
+                  <p className="text-[10px] text-amber-500 font-bold uppercase tracking-wider ml-1 mt-1">
+                    Username must be at least 3 characters.
+                  </p>
+                )}
+                {usernameAvailability === 'invalid' && (
+                  <p className="text-[10px] text-red-500 font-bold uppercase tracking-wider ml-1 mt-1">
+                    Can only contain letters, numbers, and underscores.
+                  </p>
+                )}
               </div>
             )}
 
@@ -233,25 +333,34 @@ export default function Login() {
             <div className="space-y-2">
               <div className="flex items-center justify-between ml-1">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em]">Password</label>
-                <button
-                  type="button"
-                  onClick={() => navigate('/forgot-password')}
-                  className="text-[9px] uppercase font-black tracking-widest text-text-muted hover:text-primary transition-colors relative z-20"
-                >
-                  Forgot Password?
-                </button>
+                {!isSignUp && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/forgot-password')}
+                    className="text-[9px] uppercase font-black tracking-widest text-[#9ca3af] hover:text-primary transition-colors relative z-20"
+                  >
+                    Forgot Password?
+                  </button>
+                )}
               </div>
               <div className="relative group">
                 <div className="absolute inset-0 bg-primary/5 rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-text-muted group-focus-within:text-primary transition-colors pointer-events-none z-20" />
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   required
-                  className="w-full bg-background/40 border border-border-main rounded-2xl pl-12 pr-4 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-text-main font-medium relative z-10"
+                  className="w-full bg-background/40 border border-border-main rounded-2xl px-4 pr-12 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-text-main font-medium relative z-10"
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition-colors z-30"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
             </div>
 
@@ -260,15 +369,22 @@ export default function Login() {
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em] ml-1">Confirm Password</label>
                 <div className="relative group">
                   <div className="absolute inset-0 bg-primary/5 rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-text-muted group-focus-within:text-primary transition-colors pointer-events-none z-20" />
                   <input
-                    type="password"
+                    type={showConfirmPassword ? "text" : "password"}
                     required
-                    className="w-full bg-background/40 border border-border-main rounded-2xl pl-12 pr-4 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-text-main font-medium relative z-10"
+                    className="w-full bg-background/40 border border-border-main rounded-2xl px-4 pr-12 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-text-main font-medium relative z-10"
                     placeholder="Confirm your password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition-colors z-30"
+                    tabIndex={-1}
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
                 </div>
               </div>
             )}
@@ -278,20 +394,40 @@ export default function Login() {
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em] ml-1">
                   WhatsApp Number (for match coordination)
                 </label>
-                <div className="relative group">
+                <div className="relative group flex items-center bg-background/40 border border-border-main rounded-2xl relative z-10 h-14">
                   <div className="absolute inset-0 bg-primary/5 rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
-                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-text-muted group-focus-within:text-primary transition-colors pointer-events-none z-20" />
+                  
+                  {/* Country Prefix Selector */}
+                  <div className="relative flex items-center h-full pl-4 border-r border-[#1a1b24] pr-2 shrink-0">
+                    <span className="text-[14px]">{GLOBAL_COUNTRIES[countryIndex].flag}</span>
+                    <select
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full text-base"
+                      value={countryIndex}
+                      onChange={(e) => setCountryIndex(Number(e.target.value))}
+                    >
+                      {GLOBAL_COUNTRIES.map((c, idx) => (
+                        <option key={c.code} value={idx} className="bg-[#111218] text-white text-xs">
+                          {c.flag} {c.name} ({c.prefix})
+                        </option>
+                      ))}
+                    </select>
+                    <span className="ml-1 text-xs font-black text-text-main font-mono">{GLOBAL_COUNTRIES[countryIndex].prefix}</span>
+                  </div>
+
+                  {/* Local Number Input */}
                   <input
-                    type="tel"
+                    type="text"
+                    inputMode="numeric"
                     required
-                    className="w-full bg-background/40 border border-border-main rounded-2xl pl-12 pr-4 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-text-main font-medium relative z-10"
-                    placeholder="e.g. +254712345678"
-                    value={whatsappNumber}
-                    onChange={(e) => setWhatsappNumber(e.target.value.trim())}
+                    maxLength={9}
+                    className="flex-1 bg-transparent border-none outline-none text-text-main font-medium py-3 px-4 placeholder:text-text-muted/50 focus:ring-0 focus:border-none text-sm h-full"
+                    placeholder={`e.g. ${GLOBAL_COUNTRIES[countryIndex].placeholder}`}
+                    value={whatsappLocal}
+                    onChange={(e) => setWhatsappLocal(e.target.value.replace(/[^0-9]/g, '').slice(0, 9))}
                   />
                 </div>
                 <p className="text-[9px] text-text-muted italic ml-1 mt-1">
-                  Your number will only be shared with your matched opponents.
+                  Excluding any leading zero. Must be exactly 9 digits.
                 </p>
               </div>
             )}
@@ -331,7 +467,7 @@ export default function Login() {
                     id="agree-terms"
                     checked={agreedToTerms}
                     onChange={(e) => setAgreedToTerms(e.target.checked)}
-                    className="h-4 w-4 bg-background/40 border border-border-main rounded text-primary focus:ring-1 focus:ring-primary/50 accent-primary cursor-pointer relative z-20"
+                    className="h-4 w-4 bg-background/40 border border-border-main rounded text-primary focus:ring-1 focus:ring-primary/50 accent-primary cursor-pointer relative z-20 animate-fade-in"
                   />
                   <label htmlFor="agree-terms" className="text-[10px] font-black text-text-muted hover:text-text-main uppercase tracking-wider leading-none cursor-pointer select-none relative z-20">
                     I agree to the{" "}
@@ -350,7 +486,7 @@ export default function Login() {
                     id="agree-privacy"
                     checked={agreedToPrivacy}
                     onChange={(e) => setAgreedToPrivacy(e.target.checked)}
-                    className="h-4 w-4 bg-background/40 border border-border-main rounded text-primary focus:ring-1 focus:ring-primary/50 accent-primary cursor-pointer relative z-20"
+                    className="h-4 w-4 bg-background/40 border border-border-main rounded text-primary focus:ring-1 focus:ring-primary/50 accent-primary cursor-pointer relative z-20 animate-fade-in"
                   />
                   <label htmlFor="agree-privacy" className="text-[10px] font-black text-text-muted hover:text-text-main uppercase tracking-wider leading-none cursor-pointer select-none relative z-20">
                     I agree to the{" "}
@@ -365,9 +501,22 @@ export default function Login() {
               </div>
             )}
 
+            {/* Verification Success Box */}
+            {success && (
+              <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-bold p-5 rounded-2xl flex flex-col space-y-2 animate-fade-in">
+                <div className="flex items-center space-x-3">
+                  <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping shrink-0" />
+                  <span className="uppercase tracking-wider text-xs">Verify your Profile</span>
+                </div>
+                <p className="text-[10px] text-text-muted normal-case font-medium leading-relaxed">
+                  {success}
+                </p>
+              </div>
+            )}
+
             {error && (
-              <div className="bg-red-500/5 border border-red-500/10 text-red-500 text-[11px] font-bold p-4 rounded-xl flex items-center space-x-3">
-                <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+              <div className="bg-red-500/5 border border-red-500/10 text-red-500 text-[11px] font-bold p-4 rounded-xl flex items-center space-x-3 animate-fade-in">
+                <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse shrink-0" />
                 <span>{error}</span>
               </div>
             )}
@@ -406,12 +555,29 @@ export default function Login() {
 
                     // Enforce username requirements
                     if (!username || username.length < 3) {
-                      throw new Error('Please enter a Tournaments username (at least 3 characters) above first to sign up with Google.');
+                      throw new Error('Please enter a Tournaments username (at least 3 characters) first.');
                     }
 
                     if (!/^[a-zA-Z0-9_]+$/.test(username)) {
                       throw new Error('Tournaments username can only contain letters, numbers, and underscores.');
                     }
+
+                    if (usernameAvailability === 'taken') {
+                      throw new Error('This Tournaments username is already taken. Try another one, champion.');
+                    }
+
+                    // Enforce WhatsApp requirements
+                    const country = GLOBAL_COUNTRIES[countryIndex];
+                    const cleanLocal = whatsappLocal.replace(/^0+/, '');
+                    if (!cleanLocal) {
+                      throw new Error('WhatsApp number is required for match coordination signup.');
+                    }
+
+                    if (cleanLocal.length !== 9) {
+                      throw new Error('Local WhatsApp number must be exactly 9 digits.');
+                    }
+
+                    const fullWhatsAppNumber = `${country.prefix}${cleanLocal}`;
 
                     // Check uniqueness
                     const { data: existing, error: checkError } = await (supabase as any)
@@ -427,11 +593,13 @@ export default function Login() {
                       throw new Error('This Tournaments username is already taken. Try another one, champion.');
                     }
 
-                    // Save username to local storage so AuthContext can pick it up on redirect back
+                    // Save settings to local storage so AuthContext can pick them up on redirect back
                     localStorage.setItem('pending_oauth_username', username);
+                    localStorage.setItem('pending_oauth_whatsapp_number', fullWhatsAppNumber);
+                    localStorage.setItem('pending_oauth_timezone', timezone);
                   }
 
-                  const { data, error } = await supabase.auth.signInWithOAuth({ 
+                  const { error: oauthErr } = await supabase.auth.signInWithOAuth({ 
                     provider: 'google',
                     options: {
                       redirectTo: window.location.origin,
@@ -439,8 +607,8 @@ export default function Login() {
                     }
                   });
                   
-                  if (error) {
-                    throw error;
+                  if (oauthErr) {
+                    throw oauthErr;
                   }
                 } catch (err: any) {
                   setError(err.message);
@@ -472,7 +640,7 @@ export default function Login() {
                   setSuccess(null);
                   navigate(targetSignUp ? '/signup' : '/login', { replace: true });
                 }}
-                className="text-[11px] font-black uppercase tracking-widest text-text-muted hover:text-primary transition-all underline underline-offset-8 decoration-border-main hover:decoration-primary/30"
+                className="text-[11px] font-black uppercase tracking-widest text-[#9ca3af] hover:text-primary transition-all underline underline-offset-8 decoration-border-main hover:decoration-primary/30"
               >
                 {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
               </button>

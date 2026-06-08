@@ -802,30 +802,59 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
 
       if (!existingProfile) {
         const pendingUsername = localStorage.getItem('pending_oauth_username');
+        const pendingWhatsapp = localStorage.getItem('pending_oauth_whatsapp_number');
+        const pendingTimezone = localStorage.getItem('pending_oauth_timezone');
         const metadataUsername = user.user_metadata?.username;
         const finalUsername = pendingUsername || metadataUsername || `temp_user_${user.id.slice(0, 8)}`;
 
         const insertPromise = (supabase as any).from('profiles').insert({
           id: user.id,
           username: finalUsername,
-          whatsapp_number: user.user_metadata?.whatsapp_number || null,
-          timezone: user.user_metadata?.timezone || 'Africa/Nairobi'
+          whatsapp_number: pendingWhatsapp || user.user_metadata?.whatsapp_number || null,
+          timezone: pendingTimezone || user.user_metadata?.timezone || 'Africa/Nairobi'
         });
         await withTimeout(insertPromise, 3000, null);
 
         if (pendingUsername) {
           localStorage.removeItem('pending_oauth_username');
         }
+        if (pendingWhatsapp) {
+          localStorage.removeItem('pending_oauth_whatsapp_number');
+        }
+        if (pendingTimezone) {
+          localStorage.removeItem('pending_oauth_timezone');
+        }
       } else {
         const pendingUsername = localStorage.getItem('pending_oauth_username');
+        const pendingWhatsapp = localStorage.getItem('pending_oauth_whatsapp_number');
+        const pendingTimezone = localStorage.getItem('pending_oauth_timezone');
         const metadataUsername = user.user_metadata?.username;
         const targetUsername = pendingUsername || metadataUsername;
+        
+        const updateParams: any = {};
         if (targetUsername && (!existingProfile.username || existingProfile.username.includes('_') || existingProfile.username.startsWith('temp_user_'))) {
-           const updatePromise = (supabase as any).from('profiles').update({ username: targetUsername }).eq('id', user.id);
-           await withTimeout(updatePromise, 3000, null);
-           if (pendingUsername) {
-             localStorage.removeItem('pending_oauth_username');
-           }
+          updateParams.username = targetUsername;
+        }
+        if (pendingWhatsapp && !existingProfile.whatsapp_number) {
+          updateParams.whatsapp_number = pendingWhatsapp;
+        }
+        if (pendingTimezone && !existingProfile.timezone) {
+          updateParams.timezone = pendingTimezone;
+        }
+
+        if (Object.keys(updateParams).length > 0) {
+          const updatePromise = (supabase as any).from('profiles').update(updateParams).eq('id', user.id);
+          await withTimeout(updatePromise, 3000, null);
+        }
+
+        if (pendingUsername) {
+          localStorage.removeItem('pending_oauth_username');
+        }
+        if (pendingWhatsapp) {
+          localStorage.removeItem('pending_oauth_whatsapp_number');
+        }
+        if (pendingTimezone) {
+          localStorage.removeItem('pending_oauth_timezone');
         }
       }
     } catch (err) {
