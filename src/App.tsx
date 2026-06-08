@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import LoadingState from './components/ui/LoadingState';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
@@ -181,7 +182,9 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <Router>
-        <AppRoutes />
+        <ErrorBoundary>
+          <AppRoutes />
+        </ErrorBoundary>
       </Router>
     </QueryClientProvider>
   );

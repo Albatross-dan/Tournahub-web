@@ -11,6 +11,20 @@ interface ProtectedRouteProps {
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowAdminOnly = false }) => {
   const { user, loading, isAdmin, signOut, accountStatus } = useAuth();
 
+  useEffect(() => {
+    console.log('[ProtectedRoute] Security Gate Checked:', {
+      timestamp: new Date().toISOString(),
+      path: window.location.pathname,
+      allowAdminOnly,
+      loading,
+      hasUser: !!user,
+      userId: user?.id,
+      userEmail: user?.email,
+      isAdmin,
+      accountStatusSummary: accountStatus ? { status: accountStatus.status } : 'none'
+    });
+  }, [allowAdminOnly, loading, user, isAdmin, accountStatus]);
+
   if (loading || (user && !accountStatus)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white">

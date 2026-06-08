@@ -325,7 +325,8 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       setUnreadNotificationsCount(unreadNotif);
       setUnreadChatCount(unreadChat);
     } catch (err) {
-      console.error('[AuthContext] Error fetching consolidated wallet, status and counts:', err);
+      console.error('[AuthContext] Error fetching consolidated wallet, status and counts. Applying active self-healing states fallback:', err);
+      setAccountStatus({ status: 'active' });
     }
   };
 

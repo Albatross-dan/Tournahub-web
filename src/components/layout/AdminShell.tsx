@@ -31,18 +31,30 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, isAdmin } = useAuth();
 
   useEffect(() => {
-    if (!loading && (!user || profile?.role !== 'admin')) {
-      navigate('/', { replace: true });
+    console.log('[AdminShell] Route Entry Evaluation:', {
+      timestamp: new Date().toISOString(),
+      path: location.pathname,
+      loading,
+      hasUser: !!user,
+      userId: user?.id,
+      userRole: profile?.role,
+      isAdmin
+    });
+
+    if (!loading && (!user || !isAdmin)) {
+      console.warn('[AdminShell] Missing admin rights. Redirecting user to /dashboard:', { email: user?.email, isAdmin, role: profile?.role });
+      navigate('/dashboard', { replace: true });
     }
-  }, [user, profile, loading, navigate]);
+  }, [user, profile, isAdmin, loading, navigate, location.pathname]);
 
   const { disputedMatches = [], singleSubmissionMatches = [], abandonedMatches = [], noShowCount = 0 } = useAdminDisputes(user?.id || '');
   const totalAlerts = disputedMatches.length + singleSubmissionMatches.length + abandonedMatches.length + noShowCount;
 
   if (loading) {
+    console.log('[AdminShell] Loading admin shell credentials verification...');
     return (
       <div className="min-h-screen bg-[#0a0b1e] flex flex-col items-center justify-center space-y-4">
         <div className="w-8 h-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
@@ -51,7 +63,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     );
   }
 
-  if (!profile || profile.role !== 'admin') {
+  if (!isAdmin) {
+    console.warn('[AdminShell] Rendering null because isAdmin is FALSE. A redirect is initiated.', { email: user?.email, isAdmin });
     return null; // Don't show anything during redirect
   }
 
