@@ -7,7 +7,7 @@
  * - Safely bypasses mutating API calls (POST/PUT/DELETE) and active third-party integrations (Supabase, Firebase, FCM).
  */
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v5';
 const STATIC_CACHE = `tournahub-static-${CACHE_VERSION}`;
 const SHELL_CACHE = `tournahub-public-${CACHE_VERSION}`;
 const EXTERNAL_CACHE = `tournahub-external-${CACHE_VERSION}`;
