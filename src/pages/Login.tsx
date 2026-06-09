@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Trophy, Mail, Lock, Loader2, Phone, Globe, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react';
 import SEO from '../components/common/SEO';
+import { useAuth } from '../contexts/AuthContext';
 
 const logoUrl = '/android-chrome-512x512.png';
 
@@ -78,12 +79,38 @@ export default function Login() {
 
   const navigate = useNavigate();
   const location = useLocation();
+  const { refreshAuth } = useAuth();
   const initialIsSignUp = location.pathname === '/signup' || location.state?.signUp || new URLSearchParams(location.search).get('signup') === 'true';
   const [isSignUp, setIsSignUp] = useState(initialIsSignUp);
   
   const [success, setSuccess] = useState<string | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
+
+  // Setup Listener for successful Google OAuth Completion via Popup
+  useEffect(() => {
+    const handleOauthMessage = async (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+
+      if (e.data?.type === 'SUPABASE_OAUTH_SUCCESS') {
+        console.log('[Login] Google OAuth success signal received. Logging user in...');
+        setLoading(true);
+        try {
+          await refreshAuth();
+          window.location.reload();
+        } catch (err: any) {
+          setError(err.message || 'Verification state coordination failed.');
+          setLoading(false);
+        }
+      } else if (e.data?.type === 'SUPABASE_OAUTH_ERROR') {
+        setError(e.data.error || 'Authentication denied or cancelled inside verification window.');
+        setLoading(false);
+      }
+    };
+
+    window.addEventListener('message', handleOauthMessage);
+    return () => window.removeEventListener('message', handleOauthMessage);
+  }, [refreshAuth]);
 
   // Live username checker guard
   useEffect(() => {
@@ -612,20 +639,34 @@ export default function Login() {
                     localStorage.setItem('pending_oauth_timezone', timezone);
                   }
 
-                  const { error: oauthErr } = await supabase.auth.signInWithOAuth({ 
+                  const redirectUrl = `${window.location.origin}/verify-callback`;
+                  const { data: oauthData, error: oauthErr } = await supabase.auth.signInWithOAuth({ 
                     provider: 'google',
                     options: {
-                      redirectTo: window.location.origin,
-                      skipBrowserRedirect: false
+                      redirectTo: redirectUrl,
+                      skipBrowserRedirect: true
                     }
                   });
                   
                   if (oauthErr) {
                     throw oauthErr;
                   }
+
+                  if (oauthData?.url) {
+                    const popup = window.open(
+                      oauthData.url,
+                      'tournahub_google_oauth',
+                      'width=500,height=600,resizable=yes,scrollbars=yes,status=yes'
+                    );
+
+                    if (!popup) {
+                      throw new Error('Popup blocker active. Please allow popups for TournaHub to authenticate with Google.');
+                    }
+                  } else {
+                    throw new Error('Could not request Google OAuth securely.');
+                  }
                 } catch (err: any) {
                   setError(err.message);
-                } finally {
                   setLoading(false);
                 }
               }}

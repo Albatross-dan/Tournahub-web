@@ -44,10 +44,21 @@ export default function VerifyCallback() {
           console.warn('[VerifyCallback] Error parameters found in URL:', { errType, errDesc });
           setStatus('error');
           setErrorTitle(errType === 'access_denied' ? 'Verification Link Expired' : 'Invalid Verification Link');
-          setErrorDesc(
-            errDesc?.replace(/\+/g, ' ') || 
-            'This verification key is either invalid, malformed, or has already been used. Please request a new confirmation link.'
-          );
+          const finalError = errDesc?.replace(/\+/g, ' ') || 'This verification key is either invalid, malformed, or has already been used. Please request a new confirmation link.';
+          setErrorDesc(finalError);
+
+          // If inside a popup, notify the opener with an error message and close
+          if (window.opener) {
+            console.error('[VerifyCallback] Inside popup, sending SUPABASE_OAUTH_ERROR message to opener...');
+            try {
+              window.opener.postMessage({ type: 'SUPABASE_OAUTH_ERROR', error: finalError }, window.location.origin);
+              setTimeout(() => {
+                window.close();
+              }, 400);
+            } catch (msgErr) {
+              console.error('[VerifyCallback] failed error message dispatch:', msgErr);
+            }
+          }
           return;
         }
 
@@ -77,6 +88,19 @@ export default function VerifyCallback() {
           await refreshAuth();
           
           setStatus('success');
+
+          // If inside a popup, notify the opener and close
+          if (window.opener) {
+            console.log('[VerifyCallback] Inside popup, sending SUPABASE_OAUTH_SUCCESS message to opener...');
+            try {
+              window.opener.postMessage({ type: 'SUPABASE_OAUTH_SUCCESS' }, window.location.origin);
+              setTimeout(() => {
+                window.close();
+              }, 400);
+            } catch (msgErr) {
+              console.error('[VerifyCallback] failed message dispatch:', msgErr);
+            }
+          }
         } else {
           // If no session resides, check if we has any authenticated user immediately
           const { data: { user } } = await supabase.auth.getUser();
@@ -85,6 +109,19 @@ export default function VerifyCallback() {
             localStorage.removeItem('pending_signup_email');
             await refreshAuth();
             setStatus('success');
+
+            // If inside a popup, notify the opener and close
+            if (window.opener) {
+              console.log('[VerifyCallback] Inside popup, sending SUPABASE_OAUTH_SUCCESS message to opener...');
+              try {
+                window.opener.postMessage({ type: 'SUPABASE_OAUTH_SUCCESS' }, window.location.origin);
+                setTimeout(() => {
+                  window.close();
+                }, 400);
+              } catch (msgErr) {
+                console.error('[VerifyCallback] failed message dispatch:', msgErr);
+              }
+            }
           } else {
             console.warn('[VerifyCallback] No authenticated user or session detected after waiting.');
             setStatus('error');
