@@ -8,9 +8,11 @@ import Shell from '../components/layout/Shell';
 import { 
   Trophy, Users, Calendar, Info, 
   ChevronRight, ArrowLeft, CheckCircle2, Shield, Loader2,
-  Clock, Wifi, Ban, Scale, X, ExternalLink, ShieldAlert
+  Clock, Wifi, Ban, Scale, X, ExternalLink, ShieldAlert,
+  Share2
 } from 'lucide-react';
 import { formatCurrency, formatDate, cn, getStorageUrl } from '../lib/utils';
+import { shareContent } from '../utils/share';
 import { supabase } from '../lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import LoadingState from '../components/ui/LoadingState';
@@ -427,6 +429,34 @@ export default function TournamentDetails() {
             alt={tournament.name}
             fallbackUrl="https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=1200"
           />
+
+          <div className="absolute top-6 right-6 z-10">
+            <button 
+              type="button"
+              title="Share Tournament"
+              onClick={async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const shortDesc = tournament.description 
+                  ? (tournament.description.length > 120 
+                      ? tournament.description.slice(0, 117) + '...' 
+                      : tournament.description)
+                  : 'Join this exciting tournament on TournaHub!';
+                const currentPlayers = regStatus?.players_registered ?? registrations.length ?? 0;
+                const maxPlayers = regStatus?.max_players ?? tournament.max_players ?? 16;
+                await shareContent({
+                  title: `🏆 ${tournament.name}`,
+                  text: `${shortDesc}\n\nJoin this ${(tournament as any).format || tournament.type || 'eFootball'} event on TournaHub.\n🎮 Slots: ${currentPlayers}/${maxPlayers}\n💰 Prize Pool: ${tournament.prize_pool ? formatCurrency(tournament.prize_pool) : 'N/A'}\n🎟️ Entry Fee: ${tournament.entry_fee ? formatCurrency(tournament.entry_fee) : 'Free'}`,
+                  url: `${window.location.origin}/tournaments?q=${encodeURIComponent(tournament.name)}`,
+                  imageUrl: tournament.banner_url ? getStorageUrl('tournament-banners', tournament.banner_url) : null
+                });
+              }}
+              className="w-10 h-10 rounded-full border border-border-main bg-background/80 hover:bg-primary hover:text-black hover:border-transparent text-text-main flex items-center justify-center shadow-lg transition-all duration-300 pointer-events-auto cursor-pointer hover:scale-110 active:scale-95"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+          </div>
+
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
           <div className="absolute bottom-6 left-6 right-6 sm:bottom-10 sm:left-10 sm:right-10 flex flex-col md:flex-row md:items-end justify-between gap-6 sm:gap-8">
             <div className="space-y-3 sm:space-y-4">

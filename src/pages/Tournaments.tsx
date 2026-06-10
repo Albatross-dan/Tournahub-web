@@ -14,7 +14,13 @@ import { TournamentStatus } from '../constants';
 import SEO from '../components/common/SEO';
 
 export default function Tournaments() {
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('q') || '';
+    }
+    return '';
+  });
   const [filter, setFilter] = useState<'all' | 'registration_open' | 'ongoing' | 'completed'>('all');
   const { tournaments, loading } = useRealtimeTournaments('all', 24); 
   const { userRegistrations } = useUserRegistrations();
@@ -163,8 +169,8 @@ function TournamentCard({ tournament, isJoined }: { tournament: Tournament; isJo
                  : 'Join this exciting tournament on TournaHub!';
                await shareContent({
                  title: `🏆 ${tournament.name}`,
-                 text: `${shortDesc}\n\nJoin this ${(tournament as any).format || tournament.type || 'eFootball'} event on TournaHub.\n💰 Prize Pool: ${tournament.prize_pool ? formatCurrency(tournament.prize_pool) : 'N/A'}\n🎟️ Entry Fee: ${tournament.entry_fee ? formatCurrency(tournament.entry_fee) : 'Free'}`,
-                 url: `${window.location.origin}/tournaments/${tournament.id}`,
+                 text: `${shortDesc}\n\nJoin this ${(tournament as any).format || tournament.type || 'eFootball'} event on TournaHub.\n🎮 Slots: ${regCount}/${tournament.max_players || 16}\n💰 Prize Pool: ${tournament.prize_pool ? formatCurrency(tournament.prize_pool) : 'N/A'}\n🎟️ Entry Fee: ${tournament.entry_fee ? formatCurrency(tournament.entry_fee) : 'Free'}`,
+                 url: `${window.location.origin}/tournaments?q=${encodeURIComponent(tournament.name)}`,
                  imageUrl: bannerUrl
                });
              }}

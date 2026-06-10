@@ -72,18 +72,11 @@ export default function Dashboard() {
   const isInitialLoad = React.useRef(true);
   useRefetchOnFocus(loadDashboardData);
   
-  const activeStatus = React.useMemo(() => [
-    TournamentStatus.REGISTRATION_OPEN,
-    TournamentStatus.REGISTRATION_CLOSED,
-    TournamentStatus.SEEDING,
-    TournamentStatus.FIXTURE_GENERATION,
-    TournamentStatus.READY,
-    TournamentStatus.ONGOING
-  ], []);
+  const activeStatus = React.useMemo(() => Object.values(TournamentStatus), []);
   const completedStatus = TournamentStatus.COMPLETED;
 
-  // Only fetch upcoming/ongoing tournaments for the main slider
-  const { tournaments: activeTournaments, loading: activeLoading } = useRealtimeTournaments(activeStatus, 10);
+  // Fetch all tournaments for the main slider (including completed, ready, cancelled, etc.)
+  const { tournaments: activeTournaments, loading: activeLoading } = useRealtimeTournaments(activeStatus, 30);
   // Separate fetch for completed tournaments for the hall of fame
   const { tournaments: completedTournaments, loading: completedLoading } = useRealtimeTournaments(completedStatus, 6);
   
@@ -236,7 +229,7 @@ export default function Dashboard() {
                     x: ["0%", "-33.33%"]
                   } : {}}
                   transition={activeTournaments.length > 0 ? { 
-                    duration: 35, 
+                    duration: 55, 
                     repeat: Infinity, 
                     ease: "linear" 
                   } : {}}
