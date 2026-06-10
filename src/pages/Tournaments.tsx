@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Tournament } from '../types/database';
 import Shell from '../components/layout/Shell';
 import { Link } from 'react-router-dom';
-import { Trophy, Users, Search, Calendar, RefreshCw, Image as ImageIcon } from 'lucide-react';
+import { Trophy, Users, Search, Calendar, RefreshCw, Image as ImageIcon, Share2 } from 'lucide-react';
 import { formatCurrency, getStorageUrl, cn } from '../lib/utils';
+import { shareContent } from '../utils/share';
 import { useRealtimeTournaments } from '../hooks/useRealtimeTournaments';
 import { useUserRegistrations } from '../hooks/useUserRegistrations';
 import { motion, AnimatePresence } from 'motion/react';
@@ -146,6 +147,31 @@ function TournamentCard({ tournament, isJoined }: { tournament: Tournament; isJo
             {(tournament.type || '').toUpperCase()}
           </span>
           <StatusBadge status={tournament.status} />
+        </div>
+
+        <div className="absolute top-6 right-6 z-10">
+           <button 
+             type="button"
+             title="Share Tournament"
+             onClick={async (e) => {
+               e.preventDefault();
+               e.stopPropagation();
+               const shortDesc = tournament.description 
+                 ? (tournament.description.length > 120 
+                     ? tournament.description.slice(0, 117) + '...' 
+                     : tournament.description)
+                 : 'Join this exciting tournament on TournaHub!';
+               await shareContent({
+                 title: `🏆 ${tournament.name}`,
+                 text: `${shortDesc}\n\nJoin this ${(tournament as any).format || tournament.type || 'eFootball'} event on TournaHub.\n💰 Prize Pool: ${tournament.prize_pool ? formatCurrency(tournament.prize_pool) : 'N/A'}\n🎟️ Entry Fee: ${tournament.entry_fee ? formatCurrency(tournament.entry_fee) : 'Free'}`,
+                 url: `${window.location.origin}/tournaments/${tournament.id}`,
+                 imageUrl: bannerUrl
+               });
+             }}
+             className="w-10 h-10 rounded-full border border-border-main bg-background/80 hover:bg-primary hover:text-black hover:border-transparent text-text-main flex items-center justify-center shadow-lg transition-all duration-300 pointer-events-auto cursor-pointer hover:scale-110 active:scale-95"
+           >
+              <Share2 className="w-4 h-4" />
+           </button>
         </div>
 
         {!tournament.banner_url && (
