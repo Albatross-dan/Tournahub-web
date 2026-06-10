@@ -129,8 +129,10 @@ export default function Navbar() {
                           isItemActive = location.pathname.startsWith(item.path);
                         }
                         
+                        const isRelocated = ['Home', 'Tournaments', 'Matches', 'Wallet'].includes(item.name);
                         return cn(
                           "flex items-center space-x-4 px-6 py-5 rounded-2xl transition-all",
+                          isRelocated && "hidden md:flex",
                           isItemActive 
                             ? "bg-primary text-slate-900 border border-primary/20 shadow-[0_0_20px_rgba(var(--color-primary),0.3)]" 
                             : "bg-background text-text-muted border border-border-main hover:bg-surface-hover hover:border-primary/30"
