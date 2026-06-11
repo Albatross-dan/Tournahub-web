@@ -87,9 +87,7 @@ export default function VerifyCallback() {
           // Trigger state refreshment inside AuthContext
           await refreshAuth();
           
-          setStatus('success');
-
-          // If inside a popup, notify the opener and close
+          // Execute immediate and silent redirection
           if (window.opener) {
             console.log('[VerifyCallback] Inside popup, sending SUPABASE_OAUTH_SUCCESS message to opener...');
             try {
@@ -100,6 +98,33 @@ export default function VerifyCallback() {
             } catch (msgErr) {
               console.error('[VerifyCallback] failed message dispatch:', msgErr);
             }
+          } else {
+            // Main window: check profile instantly and route properly
+            try {
+              const { data: profileRaw } = await supabase
+                .from('profiles')
+                .select('username, whatsapp_number')
+                .eq('id', session.user.id)
+                .maybeSingle();
+
+              const profileData = profileRaw as any;
+
+              const hasIncompleteProfile = 
+                !profileData?.username || 
+                profileData.username.trim() === '' || 
+                profileData.username.startsWith('temp_user_') ||
+                !profileData?.whatsapp_number || 
+                profileData.whatsapp_number.trim() === '';
+
+              if (hasIncompleteProfile) {
+                navigate('/complete-profile', { replace: true });
+              } else {
+                navigate('/dashboard', { replace: true });
+              }
+            } catch (err) {
+              console.error('[VerifyCallback] Error checking profile status silently:', err);
+              navigate('/dashboard', { replace: true });
+            }
           }
         } else {
           // If no session resides, check if we has any authenticated user immediately
@@ -108,9 +133,7 @@ export default function VerifyCallback() {
             console.log('[VerifyCallback] Authenticated user retrieved:', user);
             localStorage.removeItem('pending_signup_email');
             await refreshAuth();
-            setStatus('success');
-
-            // If inside a popup, notify the opener and close
+            
             if (window.opener) {
               console.log('[VerifyCallback] Inside popup, sending SUPABASE_OAUTH_SUCCESS message to opener...');
               try {
@@ -120,6 +143,32 @@ export default function VerifyCallback() {
                 }, 400);
               } catch (msgErr) {
                 console.error('[VerifyCallback] failed message dispatch:', msgErr);
+              }
+            } else {
+              try {
+                const { data: profileRaw } = await supabase
+                  .from('profiles')
+                  .select('username, whatsapp_number')
+                  .eq('id', user.id)
+                  .maybeSingle();
+
+                const profileData = profileRaw as any;
+
+                const hasIncompleteProfile = 
+                  !profileData?.username || 
+                  profileData.username.trim() === '' || 
+                  profileData.username.startsWith('temp_user_') ||
+                  !profileData?.whatsapp_number || 
+                  profileData.whatsapp_number.trim() === '';
+
+                if (hasIncompleteProfile) {
+                  navigate('/complete-profile', { replace: true });
+                } else {
+                  navigate('/dashboard', { replace: true });
+                }
+              } catch (err) {
+                console.error('[VerifyCallback] Error checking profile status silently:', err);
+                navigate('/dashboard', { replace: true });
               }
             }
           } else {
@@ -168,6 +217,22 @@ export default function VerifyCallback() {
       setResending(false);
     }
   };
+
+  if (status === 'loading' && !window.opener) {
+    return (
+      <div className="min-h-screen bg-[#000000] flex flex-col items-center justify-center relative p-4">
+        <div className="absolute top-[30%] left-[30%] w-[250px] h-[250px] bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
+        <div className="flex flex-col items-center space-y-4 relative z-10">
+          <div className="relative">
+            <div className="w-12 h-12 rounded-full border-2 border-primary-dark/20 border-t-2 border-t-primary animate-spin" />
+          </div>
+          <p className="text-[10px] text-slate-450 font-black uppercase tracking-[0.2em] animate-pulse">
+            Authorizing session...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-4 relative overflow-hidden">
