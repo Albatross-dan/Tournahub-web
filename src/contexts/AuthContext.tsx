@@ -980,15 +980,6 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
 
   return (
     <AuthContext.Provider value={value}>
-      {needsUsernameSetup && user && (
-        <UsernameSetup 
-          userId={user.id} 
-          onComplete={(newUsername) => {
-            setProfile(p => p ? { ...p, username: newUsername } : null);
-            setNeedsUsernameSetup(false);
-          }} 
-        />
-      )}
       {children}
     </AuthContext.Provider>
   );

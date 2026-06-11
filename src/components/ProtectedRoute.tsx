@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { ShieldAlert, LogOut, Loader2 } from 'lucide-react';
@@ -9,23 +9,27 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowAdminOnly = false }) => {
-  const { user, loading, isAdmin, signOut, accountStatus } = useAuth();
+  const { user, loading, profile, isAdmin, signOut, accountStatus } = useAuth();
+  const location = useLocation();
 
   useEffect(() => {
     console.log('[ProtectedRoute] Security Gate Checked:', {
       timestamp: new Date().toISOString(),
-      path: window.location.pathname,
+      path: location.pathname,
       allowAdminOnly,
       loading,
       hasUser: !!user,
       userId: user?.id,
       userEmail: user?.email,
+      hasProfile: !!profile,
+      username: profile?.username,
+      whatsapp: profile?.whatsapp_number,
       isAdmin,
       accountStatusSummary: accountStatus ? { status: accountStatus.status } : 'none'
     });
-  }, [allowAdminOnly, loading, user, isAdmin, accountStatus]);
+  }, [allowAdminOnly, loading, user, profile, isAdmin, accountStatus, location.pathname]);
 
-  if (loading || (user && !accountStatus)) {
+  if (loading || (user && !profile) || (user && !accountStatus)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white">
         <div className="flex flex-col items-center space-y-4">
@@ -38,6 +42,21 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowAdminOnly =
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Enforce profile completion checks
+  const hasIncompleteProfile = 
+    !profile?.username || 
+    profile.username.trim() === '' || 
+    !profile?.whatsapp_number || 
+    profile.whatsapp_number.trim() === '';
+
+  if (hasIncompleteProfile) {
+    if (location.pathname !== '/complete-profile') {
+      return <Navigate to="/complete-profile" replace />;
+    }
+  } else if (location.pathname === '/complete-profile') {
+    return <Navigate to="/dashboard" replace />;
   }
 
   // Evaluate current user status

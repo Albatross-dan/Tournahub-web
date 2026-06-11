@@ -31,6 +31,7 @@ import PaymentCallback from './pages/PaymentCallback';
 import Landing from './pages/Landing';
 import Rules from './pages/Rules';
 import Help from './pages/Help';
+import CompleteProfile from './pages/CompleteProfile';
 
 // Lazy load admin pages only
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
@@ -139,6 +140,7 @@ function AppRoutes() {
                 <Route path="/verify-callback" element={<VerifyCallback />} />
                 
                 <Route element={<ProtectedRoute />}>
+                  <Route path="/complete-profile" element={<CompleteProfile />} />
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/tournaments" element={<Tournaments />} />
                   <Route path="/tournaments/:id" element={<TournamentDetails />} />
