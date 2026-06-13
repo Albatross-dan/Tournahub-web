@@ -10,6 +10,7 @@ import { PlayerBadge } from '../ui/PlayerBadge';
 import { cn, getPublicIdentity } from '../../lib/utils';
 import { tournamentService } from '../../services/tournamentService';
 import { useNavigate } from 'react-router-dom';
+import { overrideTournamentChampion } from '../../utils/tournamentOverrides';
 
 interface GroupStageTournamentViewProps {
   tournamentId: string;
@@ -109,9 +110,15 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
         .maybeSingle();
 
       if (!error && data) {
-        setDbChampion(data);
+        const mappedData = overrideTournamentChampion(tournamentId, data);
+        setDbChampion(mappedData);
       } else {
-        setDbChampion(null);
+        const mappedData = overrideTournamentChampion(tournamentId, null);
+        if (mappedData) {
+          setDbChampion(mappedData);
+        } else {
+          setDbChampion(null);
+        }
       }
     } catch (err) {
       console.warn('Could not load db champion for tournament:', err);

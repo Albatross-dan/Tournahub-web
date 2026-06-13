@@ -5,6 +5,7 @@ import { Trophy, Star, ArrowUpRight, Award } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { RecentChampionFeedItem } from '../../types/champion';
 import { Link } from 'react-router-dom';
+import { overrideRecentChampionsFeed } from '../../utils/tournamentOverrides';
 
 const CrownIcon = () => (
   <svg className="w-8 h-8 text-[#FFD700] fill-[#FFD700] drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]" viewBox="0 0 24 24" fill="currentColor">
@@ -57,7 +58,9 @@ export default function RecentChampions() {
     refetchOnWindowFocus: true,
   });
 
-  const displayChampions = remoteChampions.length > 0 ? remoteChampions : FALLBACK_CHAMPIONS;
+  const displayChampions = remoteChampions.length > 0
+    ? overrideRecentChampionsFeed(remoteChampions)
+    : FALLBACK_CHAMPIONS;
   const [currentIndex, setCurrentIndex] = useState(0);
   const [direction, setDirection] = useState(1);
 

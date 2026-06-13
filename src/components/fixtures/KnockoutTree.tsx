@@ -8,6 +8,7 @@ import { useMatchCompletionSync } from '../../hooks/useMatchCompletionSync';
 import { Trophy, Shield, HelpCircle, CornerDownRight, Compass } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import { overrideTournamentChampion } from '../../utils/tournamentOverrides';
 
 interface KnockoutTreeProps {
   tournamentId: string;
@@ -80,9 +81,17 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
       
       setMatches(uniqueData);
       if (champRes && champRes.data) {
-        setDbChampion(champRes.data);
+        const mappedChamp = overrideTournamentChampion(tournamentId, champRes.data);
+        setDbChampion(mappedChamp);
       } else {
-        setDbChampion(null);
+        // Since we created an override, we can check if tournamentId matches the UEFA ID
+        // even if the DB returned null (champRes.data is null)
+        const mappedChamp = overrideTournamentChampion(tournamentId, null);
+        if (mappedChamp) {
+          setDbChampion(mappedChamp);
+        } else {
+          setDbChampion(null);
+        }
       }
     } catch (err) {
       console.error('Error fetching matches for bracket:', err);

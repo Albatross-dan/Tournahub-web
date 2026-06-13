@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { ChampionCardData } from '../types/champion';
 import ChampionCard from '../components/tournament/ChampionCard';
 import { toast } from 'react-hot-toast';
+import { overrideTournamentChampion } from '../utils/tournamentOverrides';
 
 export default function TournamentChampion() {
   const { id } = useParams<{ id: string }>();
@@ -51,7 +52,11 @@ export default function TournamentChampion() {
 
       if (tableError) throw tableError;
 
-      const row = champRow as any;
+      let row = champRow as any;
+      if (row) {
+        row = overrideTournamentChampion(tournamentId, row);
+      }
+
       if (!row) {
         setInProgress(true);
       } else {
