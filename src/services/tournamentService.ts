@@ -437,92 +437,171 @@ export const tournamentService = {
   async getRegisteredPlayers(tournamentId: string) {
     try {
       // 1. Fetch from RPC for specialized data (badges etc)
-      const { data, error } = await (supabase as any).rpc('get_tournament_registered_players', {
-        p_tournament_id: tournamentId
-      });
+      let rpcPlayers: any[] = [];
+      try {
+        const { data, error } = await (supabase as any).rpc('get_tournament_registered_players', {
+          p_tournament_id: tournamentId
+        });
+        if (!error && data) {
+          rpcPlayers = data.players || (Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        console.warn('[tournamentService] get_tournament_registered_players RPC failed:', err);
+      }
       
-      const rpcPlayers = data?.players || (Array.isArray(data) ? data : []);
-      
-      // 2. Fetch all registrations manually to ensure we didn't miss anyone
-      const manualRegs = await this.getRegistrations(tournamentId);
+      // 2. Fetch manual registrations
+      let manualRegs: any[] = [];
+      try {
+        manualRegs = await this.getRegistrations(tournamentId);
+      } catch (err) {
+        console.warn('[tournamentService] failed to fetch manual registrations from v_registrations_with_users:', err);
+      }
 
-      // Use a Map keyed on unique user profile UUID (user_id) to eliminate duplicates
+      // 3. Fetch badge selections for this tournament to ensure we have the correct chosen badge
+      const badgeMapByUserId: Record<string, string> = {};
+      try {
+        const { data: badgeData } = await supabase
+          .from('tournament_badge_selections')
+          .select('user_id, badge_id')
+          .eq('tournament_id', tournamentId);
+        
+        if (badgeData) {
+          badgeData.forEach((item: any) => {
+            if (item.user_id && item.badge_id) {
+              badgeMapByUserId[item.user_id] = item.badge_id;
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('[tournamentService] failed to fetch badge selections:', err);
+      }
+
+      // Use a Map to temporarily hold players by a unique identifier (ID first, username lowercased next)
+      // Since some records might have only temporary IDs, we merge carefully
       const playersMap = new Map<string, any>();
 
-      // Merge manual registrations
-      (manualRegs || []).forEach((m: any) => {
-        const uId = m.user_id;
-        if (uId) {
-          playersMap.set(uId, {
-            user_id: uId,
-            id: m.id || uId,
-            username: m.username || 'Contender',
-            avatar_url: m.avatar_url || null,
-            badge_id: m.badge_id || null,
-            status: m.status || 'registered',
-            registration_status: m.registration_status || m.status || 'Registered'
-          });
+      // A helper to register a player in the map and resolve their fields
+      const addOrMergePlayer = (player: any) => {
+        if (!player) return;
+        
+        // Find if they have a real UUID
+        let uId = player.user_id || player.id;
+        if (uId && typeof uId === 'string' && uId.startsWith('temp-')) {
+          uId = null;
         }
+
+        const usernameObj = player.username || player.profiles?.username || 'Contender';
+        const usernameStr = (typeof usernameObj === 'string' ? usernameObj : 'Contender').trim();
+        const usernameClean = usernameStr.toLowerCase();
+
+        // Check if we already have this user in playersMap by:
+        // a) UUID
+        // b) Username (case-insensitive)
+        let existingKey: string | null = null;
+        if (uId && playersMap.has(uId)) {
+          existingKey = uId;
+        } else {
+          // Search map for any record with matching lowercased username
+          for (const [key, val] of playersMap.entries()) {
+            if (val.username?.toLowerCase().trim() === usernameClean) {
+              existingKey = key;
+              break;
+            }
+          }
+        }
+
+        const existing = existingKey ? playersMap.get(existingKey) : null;
+
+        // Resolve badge_id
+        let resolvedBadgeId = player.badge_id || (existing ? existing.badge_id : null);
+        if (uId && badgeMapByUserId[uId]) {
+          resolvedBadgeId = badgeMapByUserId[uId];
+        } else if (existing && existing.user_id && badgeMapByUserId[existing.user_id]) {
+          resolvedBadgeId = badgeMapByUserId[existing.user_id];
+        }
+
+        const merged = {
+          user_id: uId || (existing ? existing.user_id : null),
+          id: uId || (existing ? existing.id : player.id) || (existing ? existing.user_id : null) || `temp-${Math.random()}`,
+          username: usernameStr !== 'Contender' && usernameStr !== 'User' && usernameStr !== 'Anonymous' ? usernameStr : (existing ? existing.username : usernameStr),
+          avatar_url: player.avatar_url || (existing ? existing.avatar_url : null),
+          badge_id: resolvedBadgeId,
+          status: player.status || (existing ? existing.status : 'registered'),
+          registration_status: player.registration_status || player.status || (existing ? existing.registration_status : 'Registered')
+        };
+
+        const targetKey = merged.user_id || merged.username.toLowerCase();
+        
+        // If there was an existing record under a different key (e.g. temp- key when UUID is now found), delete old one
+        if (existingKey && existingKey !== targetKey) {
+          playersMap.delete(existingKey);
+        }
+
+        playersMap.set(targetKey, merged);
+      };
+
+      // Now add/merge players from all sources:
+      
+      // A. Add manual registrations
+      (manualRegs || []).forEach(m => {
+        addOrMergePlayer({
+          user_id: m.user_id,
+          id: m.id || m.user_id,
+          username: m.username,
+          avatar_url: m.avatar_url,
+          badge_id: m.badge_id,
+          status: m.status,
+          registration_status: m.registration_status || m.status
+        });
       });
 
-      // Merge RPC players (from get_tournament_registered_players)
-      (rpcPlayers || []).forEach((rpcP: any) => {
-        const uId = rpcP.user_id || rpcP.id;
-        if (uId) {
-          const existing = playersMap.get(uId) || {};
-          playersMap.set(uId, {
-            ...existing,
-            user_id: uId,
-            id: existing.id || rpcP.id || uId,
-            username: rpcP.username || getPublicIdentity(rpcP) || existing.username || 'Contender',
-            avatar_url: rpcP.avatar_url || existing.avatar_url || null,
-            badge_id: rpcP.badge_id || existing.badge_id || null,
-            status: rpcP.status || existing.status || 'registered',
-            registration_status: rpcP.registration_status || rpcP.status || existing.registration_status || 'Registered'
-          });
-        }
+      // B. Add RPC players
+      (rpcPlayers || []).forEach(rpcP => {
+        addOrMergePlayer({
+          user_id: rpcP.user_id || rpcP.id,
+          id: rpcP.id || rpcP.user_id,
+          username: rpcP.username || getPublicIdentity(rpcP),
+          avatar_url: rpcP.avatar_url,
+          badge_id: rpcP.badge_id,
+          status: rpcP.status,
+          registration_status: rpcP.registration_status || rpcP.status
+        });
       });
 
-      // 4. Extract players from fixtures in case registration state has altered
+      // C. Extract from fixtures
       try {
         const fixtures = await this.getFixturesWithBadges(tournamentId);
         if (fixtures && fixtures.length > 0) {
           fixtures.forEach((f: any) => {
             if (f.player1 && f.player1 !== '00000000-0000-0000-0000-000000000000') {
-              const uId = f.player1;
-              const existing = playersMap.get(uId) || {};
-              playersMap.set(uId, {
-                ...existing,
-                user_id: uId,
-                id: existing.id || uId,
-                username: f.player1_username || existing.username || 'Contender',
-                avatar_url: f.player1_avatar || existing.avatar_url || null,
-                badge_id: f.player1_badge_id || existing.badge_id || null,
-                status: existing.status || 'registered',
-                registration_status: existing.registration_status || 'Registered'
+              addOrMergePlayer({
+                user_id: f.player1,
+                id: f.player1,
+                username: f.player1_username,
+                avatar_url: f.player1_avatar,
+                badge_id: f.player1_badge_id,
+                status: 'registered',
+                registration_status: 'Registered'
               });
             }
             if (f.player2 && f.player2 !== '00000000-0000-0000-0000-000000000000') {
-              const uId = f.player2;
-              const existing = playersMap.get(uId) || {};
-              playersMap.set(uId, {
-                ...existing,
-                user_id: uId,
-                id: existing.id || uId,
-                username: f.player2_username || existing.username || 'Contender',
-                avatar_url: f.player2_avatar || existing.avatar_url || null,
-                badge_id: f.player2_badge_id || existing.badge_id || null,
-                status: existing.status || 'registered',
-                registration_status: existing.registration_status || 'Registered'
+              addOrMergePlayer({
+                user_id: f.player2,
+                id: f.player2,
+                username: f.player2_username,
+                avatar_url: f.player2_avatar,
+                badge_id: f.player2_badge_id,
+                status: 'registered',
+                registration_status: 'Registered'
               });
             }
           });
         }
       } catch (fixtureErr) {
-        console.warn('[tournamentService] Failed to extract tournament players from fixtures:', fixtureErr);
+        console.warn('[tournamentService] Failed to extract tournament players from fixtures in getRegisteredPlayers:', fixtureErr);
       }
 
-      // 5. Extract players from standings (for group stages)
+      // D. Extract from standings (group stage)
       try {
         const { data: standingsData } = await supabase
           .from('standings')
@@ -532,28 +611,39 @@ export const tournamentService = {
         if (standingsData && standingsData.length > 0) {
           standingsData.forEach((st: any) => {
             const uId = st.player_id || st.profiles?.id;
-            if (uId) {
-              const existing = playersMap.get(uId) || {};
-              playersMap.set(uId, {
-                ...existing,
+            if (uId || st.profiles?.username) {
+              addOrMergePlayer({
                 user_id: uId,
-                id: existing.id || uId,
-                username: st.profiles?.username || existing.username || 'Contender',
-                avatar_url: st.profiles?.avatar_url || existing.avatar_url || null,
-                status: existing.status || 'registered',
-                registration_status: existing.registration_status || 'Registered'
+                id: uId,
+                username: st.profiles?.username,
+                avatar_url: st.profiles?.avatar_url,
+                badge_id: st.badge_id || null,
+                status: 'registered',
+                registration_status: 'Registered'
               });
             }
           });
         }
       } catch (standingsErr) {
-        console.warn('[tournamentService] Failed to extract tournament players from standings:', standingsErr);
+        console.warn('[tournamentService] Failed to extract tournament players from standings in getRegisteredPlayers:', standingsErr);
       }
-      
-      return Array.from(playersMap.values());
+
+      // Finally, clean up any generic/unknown usernames if they have no badge/no valid fields,
+      // and ensure everyone has their correct badge_id from the badgeMapByUserId.
+      const finalPlayers = Array.from(playersMap.values()).map(p => {
+        let badgeId = p.badge_id;
+        if (p.user_id && badgeMapByUserId[p.user_id]) {
+          badgeId = badgeMapByUserId[p.user_id];
+        }
+        return {
+          ...p,
+          badge_id: badgeId
+        };
+      });
+
+      return finalPlayers as any[];
     } catch (err) {
       console.error('[tournamentService] getRegisteredPlayers failed:', err);
-      // Fallback: try manual registrations + fixtures/standings
       let fallbackMerged: any[] = [];
       try {
         fallbackMerged = await this.getRegistrations(tournamentId);
