@@ -443,13 +443,26 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
                   <span>Match starts in {preMatchCountdown.formatted}</span>
                 </div>
               );
-            case 'active':
+            case 'active': {
+              let deadlineLabel = 'N/A';
+              if (match_deadline) {
+                try {
+                  const deadline = new Date(match_deadline);
+                  deadlineLabel = deadline.toLocaleTimeString([], { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                  });
+                } catch (e) {
+                  console.error('Error parsing match_deadline:', e);
+                }
+              }
               return (
                 <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl flex items-center justify-center space-x-2 text-emerald-400 animate-pulse font-mono text-xs font-black uppercase italic tracking-wider">
                   <Clock className="w-4 h-4 text-emerald-400" />
-                  <span>{formatSecondsRemaining(secondsRemaining)} remaining</span>
+                  <span>Submit by {deadlineLabel}  •  {formatSecondsRemaining(secondsRemaining)} left</span>
                 </div>
               );
+            }
             case 'deadline_expired':
               return (
                 <div className="p-4 bg-rose-500/5 border border-rose-500/20 rounded-2xl flex items-center justify-center space-x-2 text-rose-400 font-mono text-xs font-black uppercase italic tracking-wider">
