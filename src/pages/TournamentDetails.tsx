@@ -71,6 +71,11 @@ export default function TournamentDetails() {
   const [showRulesPopup, setShowRulesPopup] = useState(false);
   const [acceptedRulesCheck, setAcceptedRulesCheck] = useState(false);
 
+  // Profile completion warning modal state
+  const [showProfileCompleteModal, setShowProfileCompleteModal] = useState(false);
+
+  const isProfileIncomplete = !profile?.username || !profile.username.trim() || !profile?.whatsapp_number || !profile.whatsapp_number.trim();
+
   useEffect(() => {
     isInitialLoad.current = true;
     if (!id) return;
@@ -174,6 +179,11 @@ export default function TournamentDetails() {
   const handleRegisterWithBadge = async (badgeId: string) => {
     if (!user || !tournament || !id) return;
 
+    if (isProfileIncomplete) {
+      setShowProfileCompleteModal(true);
+      return;
+    }
+
     // 1. Pre-check wallet if tournament has entry fee
     if (tournament.entry_fee > 0) {
       if (limits?.is_locked) {
@@ -247,11 +257,21 @@ export default function TournamentDetails() {
       return;
     }
 
+    if (isProfileIncomplete) {
+      setShowProfileCompleteModal(true);
+      return;
+    }
+
     setAcceptedRulesCheck(false);
     setShowRulesPopup(true);
   };
 
   const handleConfirmRulesAndProceed = async () => {
+    if (isProfileIncomplete) {
+      setShowProfileCompleteModal(true);
+      return;
+    }
+
     setShowRulesPopup(false);
 
     try {
@@ -528,6 +548,106 @@ export default function TournamentDetails() {
         </motion.div>
 
         <AnimatePresence>
+          {showProfileCompleteModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              {/* Backdrop */}
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowProfileCompleteModal(false)}
+                className="absolute inset-0 bg-black/80 backdrop-blur-md"
+              />
+              
+              {/* Modal Card */}
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="relative bg-[#090b16] border border-white/10 rounded-[2rem] w-full max-w-md overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.8)] flex flex-col z-50 text-left"
+              >
+                {/* Header panel */}
+                <div className="p-6 pb-4 shrink-0 flex items-start justify-between border-b border-white/5 bg-[#0b0e1e]/60">
+                  <div className="space-y-1">
+                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-rose-450/10 border border-rose-400/20 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider text-rose-400">
+                      <ShieldAlert className="w-3 h-3 text-rose-400" /> Setup Required
+                    </div>
+                    <h3 className="text-xl sm:text-2xl font-black italic uppercase tracking-tight text-white flex items-center gap-2 mt-1">
+                      ⚠️ Profile Incomplete
+                    </h3>
+                  </div>
+                  <button 
+                    onClick={() => setShowProfileCompleteModal(false)}
+                    className="p-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-zinc-400 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="p-6 space-y-4">
+                  <p className="text-sm text-zinc-300 leading-relaxed font-semibold">
+                    To maintain high integrity, fair-play coordination, and seamless matchmaking inside TournaHub, all contenders are required to complete their profile setup before claiming tournament slots.
+                  </p>
+                  
+                  <div className="space-y-3 bg-[#0b0d19]/80 border border-zinc-800/40 rounded-2xl p-4">
+                    <h4 className="text-xs font-black uppercase text-zinc-400 tracking-wider">Required Checklist:</h4>
+                    
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
+                        profile?.username ? "bg-emerald-500/20 text-emerald-400" : "bg-zinc-800 text-zinc-500"
+                      )}>
+                        {profile?.username ? "✓" : "1"}
+                      </div>
+                      <span className={cn("text-xs font-bold", profile?.username ? "text-zinc-400" : "text-white")}>
+                        Tournament Username
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
+                        profile?.whatsapp_number ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400 animate-pulse"
+                      )}>
+                        {profile?.whatsapp_number ? "✓" : "2"}
+                      </div>
+                      <span className={cn("text-xs font-bold", profile?.whatsapp_number ? "text-zinc-400" : "text-white")}>
+                        WhatsApp Number <span className="text-rose-400 font-extrabold text-[10px] uppercase ml-1">(Required)</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-zinc-400 italic">
+                    Why WhatsApp? TournaHub shares your WhatsApp details exclusively with your matched opponents during the tournament to coordinate lobby setup, results verification, and direct play support.
+                  </p>
+                </div>
+
+                {/* Actions */}
+                <div className="p-6 border-t border-white/5 bg-[#0b0e1e]/60 flex flex-col gap-2">
+                  <button
+                    onClick={() => {
+                      setShowProfileCompleteModal(false);
+                      navigate('/profile', { state: { returnTo: `/tournaments/${id}` } });
+                    }}
+                    className="w-full relative group overflow-hidden rounded-xl h-12 flex items-center justify-center cursor-pointer transition-all duration-200"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-amber-500 to-[#d4af37] transition-transform group-hover:scale-105" />
+                    <span className="relative z-10 text-xs text-black font-black uppercase italic tracking-wider">
+                      Complete Profile
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setShowProfileCompleteModal(false)}
+                    className="w-full py-3 hover:bg-white/5 border border-white/10 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-300 transition-all text-center"
+                  >
+                    Decide Later
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+
           {showRulesPopup && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               {/* Backdrop */}

@@ -39,6 +39,42 @@ interface UserPreferences {
   [key: string]: any;
 }
 
+const getTimezones = () => {
+  let list: string[] = [];
+  try {
+    if (typeof Intl !== 'undefined' && typeof Intl.supportedValuesOf === 'function') {
+      list = Intl.supportedValuesOf('timeZone');
+    }
+  } catch (e) {
+    console.error('Error fetching timezones via Intl:', e);
+  }
+  if (!list || list.length === 0) {
+    list = [
+      'Africa/Nairobi',
+      'UTC',
+      'Africa/Lagos',
+      'Africa/Johannesburg',
+      'Africa/Cairo',
+      'Europe/London',
+      'Europe/Paris',
+      'America/New_York',
+      'America/Los_Angeles',
+      'Asia/Dubai',
+      'Asia/Kolkata',
+      'Asia/Singapore',
+      'Asia/Tokyo',
+      'Australia/Sydney'
+    ];
+  }
+  if (!list.includes('Africa/Nairobi')) {
+    list.push('Africa/Nairobi');
+  }
+  return [...list].sort();
+};
+
+const SYSTEM_TIMEZONES = getTimezones();
+
+
 export default function SettingsMenu() {
   const { profile, user } = useAuth();
   const { theme, setTheme } = useTheme();
@@ -101,6 +137,11 @@ export default function SettingsMenu() {
       // If updating currency, update profile table
       if (updates.preferred_currency) {
         await profileService.updateProfile(user.id, { preferred_currency: updates.preferred_currency });
+      }
+
+      // If updating timezone, ALSO update the profiles table so it remains perfectly in sync!
+      if (updates.timezone) {
+        await profileService.updateProfile(user.id, { timezone: updates.timezone });
       }
       
       const data = await profileService.updateNotificationPreferences(user.id, updates);
@@ -196,13 +237,24 @@ export default function SettingsMenu() {
                 </button>
              </div>
              <div className="relative">
-               <input 
-                 type="text" 
-                 readOnly
-                 value={timezone}
-                 className="w-full bg-background border border-border-main rounded-xl px-4 py-3 text-sm font-bold text-text-main italic"
-               />
-               <Check className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500" />
+                <select
+                  value={timezone}
+                  onChange={(e) => {
+                    const nextTz = e.target.value;
+                    setTimezone(nextTz);
+                    updatePreference({ timezone: nextTz });
+                  }}
+                  className="w-full bg-background border border-border-main rounded-xl px-4 py-3 text-sm font-bold text-text-main focus:outline-none focus:border-primary transition-colors appearance-none cursor-pointer"
+                >
+                  {SYSTEM_TIMEZONES.map((tz) => (
+                    <option key={tz} value={tz} className="bg-[#111218] text-white">
+                      {tz}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-text-muted">
+                  <ChevronDown className="w-4 h-4" />
+                </div>
              </div>
           </div>
 

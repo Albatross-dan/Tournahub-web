@@ -69,7 +69,13 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [countryIndex, setCountryIndex] = useState(0);
   const [whatsappLocal, setWhatsappLocal] = useState('');
-  const [timezone, setTimezone] = useState('Africa/Nairobi');
+  const [timezone, setTimezone] = useState(() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Africa/Nairobi';
+    } catch (e) {
+      return 'Africa/Nairobi';
+    }
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -472,32 +478,7 @@ export default function Login() {
               </div>
             )}
 
-            {isSignUp && (
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em] ml-1">
-                  Timezone
-                </label>
-                <div className="relative group">
-                  <div className="absolute inset-0 bg-primary/5 rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
-                  <Globe className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-text-muted group-focus-within:text-primary transition-colors pointer-events-none z-20" />
-                  <select
-                    required
-                    className="w-full bg-background/40 border border-border-main rounded-2xl pl-12 pr-10 py-4 focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all text-text-main font-medium relative z-10 cursor-pointer"
-                    value={timezone}
-                    onChange={(e) => setTimezone(e.target.value)}
-                  >
-                    {SYSTEM_TIMEZONES.map((tz) => (
-                      <option key={tz} value={tz} className="bg-[#111218] text-white">
-                        {tz}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <p className="text-[9px] text-text-muted italic ml-1 mt-1">
-                  Used to translate scheduled match times automatically to your exact local time.
-                </p>
-              </div>
-            )}
+
 
             {isSignUp && (
               <div className="space-y-3 px-1">

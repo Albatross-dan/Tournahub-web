@@ -3,7 +3,7 @@ import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { profileService } from '../services/profileService';
 import { matchService } from '../services/matchService';
 import Shell from '../components/layout/Shell';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
   User as UserIcon, Camera, Save, 
   Settings, Shield, Loader2, Trophy,
@@ -89,8 +89,13 @@ export default function Profile() {
     }
   };
 
+  const location = useLocation();
+  const returnTo = location.state?.returnTo;
+
   useRefetchOnFocus(loadStats);
-  const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'settings'>(
+    location.state?.returnTo ? 'settings' : 'overview'
+  );
   const [username, setUsername] = useState(profile?.username || '');
   const [whatsappNumber, setWhatsappNumber] = useState(profile?.whatsapp_number || '');
   const [timezone, setTimezone] = useState(profile?.timezone || 'Africa/Nairobi');
@@ -299,6 +304,34 @@ export default function Profile() {
             </button>
           </div>
         </div>
+        
+        {/* Profile Completion Redirect Banners */}
+        {returnTo && (
+          <div className="mb-4">
+            {!profile?.username || profile.username.trim() === '' || !profile?.whatsapp_number || profile.whatsapp_number.trim() === '' ? (
+              <div className="bg-amber-500/10 border-2 border-amber-500/30 rounded-2xl p-6 text-center space-y-2">
+                <h3 className="text-lg font-black text-amber-500 uppercase italic tracking-tighter">⚠️ Profile Setup Required</h3>
+                <p className="text-xs text-amber-200">
+                  Please provide a valid <strong>Tournament Username</strong> and <strong>WhatsApp Number</strong> below before registering for tournaments.
+                </p>
+              </div>
+            ) : (
+              <div className="bg-emerald-500/10 border-2 border-emerald-555/35 rounded-2xl p-6 text-center space-y-3 relative overflow-hidden">
+                <div className="absolute inset-0 bg-emerald-500/5 animate-pulse pointer-events-none" />
+                <h3 className="text-lg font-black text-emerald-400 uppercase italic tracking-tighter">✨ Profile Complete!</h3>
+                <p className="text-xs text-emerald-100 italic">
+                  Your username and WhatsApp number have been successfully saved. You can now return to register.
+                </p>
+                <button
+                  onClick={() => navigate(returnTo)}
+                  className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black uppercase italic tracking-wider rounded-xl transition-all shadow-lg text-xs"
+                >
+                  Return & Join Tournament
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {activeTab === 'overview' ? (
           <>
