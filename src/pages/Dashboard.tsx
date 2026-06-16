@@ -112,7 +112,7 @@ export default function Dashboard() {
 
   const scheduledMatches = React.useMemo(() => {
     return userMatches.filter((m: any) => 
-      ['pending', 'ongoing', 'awaiting_result', 'match_in_progress', 'lobby_open', 'under_review'].includes(m.status)
+      ['pending', 'scheduled', 'waiting_for_players'].includes(m.status)
     ).slice(0, 20);
   }, [userMatches]);
 
