@@ -192,9 +192,9 @@ export default function Navbar() {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 onClick={installApp}
-                className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary text-slate-950 hover:bg-white text-[8px] font-black uppercase tracking-widest rounded-full transition-all duration-200 cursor-pointer shadow-[0_0_15px_rgba(0,209,255,0.25)] active:scale-95"
+                className="inline-flex items-center gap-2 px-4 py-1.5 bg-[#facc15] text-slate-950 hover:bg-white text-[10px] font-black uppercase tracking-widest rounded-full transition-all duration-200 cursor-pointer shadow-[0_0_20px_rgba(250,204,21,0.35)] active:scale-95"
               >
-                <Download className="w-2.5 h-2.5 shrink-0 text-slate-950" />
+                <Download className="w-3 h-3 shrink-0 text-slate-950" />
                 <span>INSTALL PWA</span>
               </motion.button>
             )}
