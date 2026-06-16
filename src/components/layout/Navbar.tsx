@@ -4,8 +4,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { 
   Trophy, Wallet, RefreshCw, LayoutDashboard, 
   Calendar, MessageSquare, Shield, Bell, Menu, X, Tv,
-  HelpCircle
+  HelpCircle, Download
 } from 'lucide-react';
+import { usePWAInstall } from '../../hooks/usePWAInstall';
 import NotificationBell from '../notifications/NotificationBell';
 import { walletService } from '../../services/walletService';
 import { formatCurrency, cn } from '../../lib/utils';
@@ -16,6 +17,7 @@ const logoUrl = '/android-chrome-512x512.png';
 
 export default function Navbar() {
   const { profile, user, isAdmin, walletSummary, unreadNotificationsCount, unreadChatCount } = useAuth();
+  const { isInstallable, installApp } = usePWAInstall();
   const location = useLocation();
   const [lastUpdated, setLastUpdated] = useState<string>(new Date().toLocaleTimeString());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -172,15 +174,32 @@ export default function Navbar() {
           </span>
         </div>
         
-        {balance !== null && balance === 0 && (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }}
-            className="text-[7px] font-black text-amber-500 uppercase tracking-widest animate-pulse"
-          >
-            Low Funds
-          </motion.div>
-        )}
+        <div className="flex items-center space-x-3">
+          {balance !== null && balance === 0 && (
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }}
+              className="text-[7px] font-black text-amber-500 uppercase tracking-widest animate-pulse"
+            >
+              Low Funds
+            </motion.div>
+          )}
+
+          <AnimatePresence>
+            {isInstallable && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                onClick={installApp}
+                className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary text-slate-950 hover:bg-white text-[8px] font-black uppercase tracking-widest rounded-full transition-all duration-200 cursor-pointer shadow-[0_0_15px_rgba(0,209,255,0.25)] active:scale-95"
+              >
+                <Download className="w-2.5 h-2.5 shrink-0 text-slate-950" />
+                <span>INSTALL PWA</span>
+              </motion.button>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     </header>
   );

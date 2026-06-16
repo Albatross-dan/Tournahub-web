@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Tournament } from '../types/database';
 import Shell from '../components/layout/Shell';
 import { Link } from 'react-router-dom';
-import { Trophy, Users, Search, Calendar, RefreshCw, Image as ImageIcon, Share2 } from 'lucide-react';
+import { Trophy, Users, Search, Calendar, RefreshCw, Image as ImageIcon, Share2, X } from 'lucide-react';
 import { formatCurrency, getStorageUrl, cn } from '../lib/utils';
 import { shareContent } from '../utils/share';
 import { useRealtimeTournaments } from '../hooks/useRealtimeTournaments';
@@ -12,6 +12,7 @@ import LoadingState from '../components/ui/LoadingState';
 import StatusBadge from '../components/ui/StatusBadge';
 import { TournamentStatus } from '../constants';
 import SEO from '../components/common/SEO';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Tournaments() {
   const [search, setSearch] = useState(() => {
@@ -22,13 +23,22 @@ export default function Tournaments() {
     return '';
   });
   const [filter, setFilter] = useState<'all' | 'registration_open' | 'ongoing' | 'completed'>('all');
+  const [showJoinedOnly, setShowJoinedOnly] = useState(false);
   const { tournaments, loading } = useRealtimeTournaments('all', 24); 
   const { userRegistrations } = useUserRegistrations();
+  const { user } = useAuth();
 
   const safeUserRegistrations = userRegistrations instanceof Set ? userRegistrations : new Set<string>();
+  const joinedTournaments = (tournaments || []).filter(t => t && safeUserRegistrations.has(t.id));
 
   const filteredTournaments = (tournaments || []).filter(t => {
     if (!t) return false;
+
+    // Filter by joined only when showJoinedOnly is true
+    if (showJoinedOnly && !safeUserRegistrations.has(t.id)) {
+      return false;
+    }
+
     const matchesSearch = (t.name || '').toLowerCase().includes(search.toLowerCase());
     if (!matchesSearch) return false;
     
@@ -57,7 +67,26 @@ export default function Tournaments() {
       />
       <div className="space-y-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <h1 className="text-3xl font-black text-text-main uppercase italic tracking-tighter">Tournaments</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-black text-text-main uppercase italic tracking-tighter">Tournaments</h1>
+            {user && (
+              <button
+                type="button"
+                onClick={() => setShowJoinedOnly(!showJoinedOnly)}
+                className={cn(
+                  "inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-black uppercase tracking-wider transition-all cursor-pointer border shadow-md",
+                  showJoinedOnly 
+                    ? "bg-[#10b981] text-slate-950 border-[#10b981] shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:bg-emerald-400" 
+                    : "bg-[#064e3b] text-emerald-100 border-[#047857] hover:bg-[#047857] hover:text-white"
+                )}
+              >
+                <Trophy className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">My Tournaments</span>
+                <span className="sm:hidden">My</span>
+                <span>({joinedTournaments.length})</span>
+              </button>
+            )}
+          </div>
           
           <div className="flex items-center space-x-2 bg-surface p-1 rounded-xl border border-border-main">
             {[
@@ -94,11 +123,31 @@ export default function Tournaments() {
         </div>
 
         <div className="space-y-6">
-           <div className="inline-flex items-center space-x-3 px-6 py-4 bg-[#0ea5e9]/10 border border-[#0ea5e9]/20 rounded-2xl">
-              <div className="w-2 h-2 bg-[#0ea5e9] rounded-full animate-pulse" />
-              <span className="text-sm font-black text-[#0ea5e9] uppercase tracking-widest italic">
-                Available Tournaments ({filteredTournaments.length})
+           <div id="available-tournaments-section" className={cn(
+             "inline-flex items-center space-x-3 px-6 py-4 rounded-2xl border",
+             showJoinedOnly 
+               ? "bg-emerald-500/10 border-emerald-500/20" 
+               : "bg-[#0ea5e9]/10 border-[#0ea5e9]/20"
+           )}>
+              <div className={cn(
+                "w-2 h-2 rounded-full animate-pulse",
+                showJoinedOnly ? "bg-emerald-500" : "bg-[#0ea5e9]"
+              )} />
+              <span className={cn(
+                "text-sm font-black uppercase tracking-widest italic",
+                showJoinedOnly ? "text-emerald-400" : "text-[#0ea5e9]"
+              )}>
+                {showJoinedOnly ? 'My Registered Tournaments' : 'Available Tournaments'} ({filteredTournaments.length})
               </span>
+              {showJoinedOnly && (
+                <button
+                  type="button"
+                  onClick={() => setShowJoinedOnly(false)}
+                  className="text-[10px] font-black uppercase text-emerald-400 hover:text-emerald-300 hover:underline transition-colors pl-2 ml-2 border-l border-white/10"
+                >
+                  Show All
+                </button>
+              )}
            </div>
 
            <div className="flex items-center space-x-2">
@@ -111,6 +160,29 @@ export default function Tournaments() {
 
            {loading ? (
              <LoadingState message="Scanning Circuits..." />
+           ) : filteredTournaments.length === 0 ? (
+             <div className="flex flex-col items-center justify-center py-16 text-center space-y-4 bg-surface/30 border border-border-main/50 rounded-[2rem] p-8">
+               <div className="w-16 h-16 bg-zinc-900/50 border border-white/5 rounded-full flex items-center justify-center text-zinc-600">
+                 <Trophy className="w-8 h-8 text-emerald-500/60" />
+               </div>
+               <div className="space-y-1">
+                 <p className="text-sm font-extrabold text-zinc-300">
+                   {showJoinedOnly ? "You haven't joined any tournaments yet." : "No tournaments match your current filter."}
+                 </p>
+                 <p className="text-xs text-text-muted">
+                   {showJoinedOnly ? "Claim your spots in the active brackets below!" : "Try adjusting your query or filters."}
+                 </p>
+               </div>
+               {showJoinedOnly && (
+                 <button
+                   type="button"
+                   onClick={() => setShowJoinedOnly(false)}
+                   className="px-6 py-2.5 bg-primary text-slate-900 font-extrabold uppercase text-[10px] tracking-widest rounded-xl hover:bg-opacity-90 transition-all cursor-pointer"
+                 >
+                   Browse Tournaments
+                 </button>
+               )}
+             </div>
            ) : (
              <div className="space-y-6">
                 {filteredTournaments.map((tournament) => (
