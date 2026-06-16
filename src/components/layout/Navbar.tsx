@@ -195,7 +195,7 @@ export default function Navbar() {
                 className="inline-flex items-center gap-2 px-4 py-1.5 bg-[#facc15] text-slate-950 hover:bg-white text-[10px] font-black uppercase tracking-widest rounded-full transition-all duration-200 cursor-pointer shadow-[0_0_20px_rgba(250,204,21,0.35)] active:scale-95"
               >
                 <Download className="w-3 h-3 shrink-0 text-slate-950" />
-                <span>INSTALL PWA</span>
+                <span>INSTALL APP</span>
               </motion.button>
             )}
           </AnimatePresence>
