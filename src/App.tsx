@@ -21,6 +21,7 @@ import MatchDetails from './pages/MatchDetails';
 import Matches from './pages/Matches';
 import LiveStreams from './pages/LiveStreams';
 import Chat from './pages/Chat';
+import CommunityChat from './pages/CommunityChat';
 import Notifications from './pages/Notifications';
 import Wallet from './pages/Wallet';
 import WalletHistory from './pages/WalletHistory';
@@ -149,6 +150,7 @@ function AppRoutes() {
                   <Route path="/matches" element={<Matches />} />
                   <Route path="/streams" element={<LiveStreams />} />
                   <Route path="/chat" element={<Chat />} />
+                  <Route path="/community-chat" element={<CommunityChat />} />
                   <Route path="/notifications" element={<Notifications />} />
                   <Route path="/wallet" element={<Wallet />} />
                   <Route path="/wallet/history" element={<WalletHistory />} />

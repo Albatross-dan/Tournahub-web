@@ -4,7 +4,8 @@ import {
   Trophy, Users, Wallet, 
   ArrowUpRight, Gamepad2, Timer,
   Loader2, Tv, Shield, HelpCircle,
-  ChevronDown, ChevronUp, Calendar, Play, CheckCircle2, Download
+  ChevronDown, ChevronUp, Calendar, Play, CheckCircle2, Download,
+  MessageSquare
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatCurrency, cn, getPublicIdentity, formatFixtureTime } from '../lib/utils';
@@ -272,6 +273,35 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 pt-4">
           {/* Main Feed: Scheduled Matches */}
           <motion.div variants={item} className="lg:col-span-2 space-y-8">
+            {/* Community Chat Feature Button */}
+            <motion.div variants={item} className="w-full animate-in fade-in slide-in-from-bottom-3 duration-300">
+              <button 
+                type="button"
+                onClick={() => navigate('/community-chat')}
+                className="w-full bg-[#064e3b] hover:bg-[#047857] text-[#34d399] border border-[#047857]/50 rounded-3xl p-4 flex items-center justify-between transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl shadow-[#064e3b]/20 hover:scale-[1.01]"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-2xl bg-[#047857]/30 flex items-center justify-center shrink-0 border border-[#047857]/30 text-[#34d399]">
+                    <MessageSquare className="w-5 h-5" />
+                  </div>
+                  <div className="text-left">
+                    <h4 className="font-black text-white uppercase italic tracking-tighter text-sm leading-none flex items-center gap-1.5">
+                      Join Community Chat
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#10b981] flex items-center justify-center relative">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />
+                        <span className="absolute w-2 h-2 rounded-full bg-[#10b981] animate-ping opacity-75" />
+                      </span>
+                    </h4>
+                    <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mt-1">Connect, banter, and coordinate with all players</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">Open Chat</span>
+                  <ArrowUpRight className="w-4 h-4 text-[#34d399] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                </div>
+              </button>
+            </motion.div>
+
             <div>
               <SectionHeader title="Next Scheduled Battles" link="/matches" />
               <div className="space-y-4 mt-4">
