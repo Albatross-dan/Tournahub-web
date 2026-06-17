@@ -58,11 +58,25 @@ export default function CommunityChat() {
   
   // Realtime "new message" alert state
   const [scrolledUp, setScrolledUp] = useState(false);
+  const scrolledUpRef = useRef(false);
   const [hasNewMessagesNotification, setHasNewMessagesNotification] = useState(false);
   
   // Scroll refs
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Instant scroll on mount if we have cached messages
+  useEffect(() => {
+    if (messages && messages.length > 0) {
+      scrollToBottom('instant');
+      const timer1 = setTimeout(() => scrollToBottom('instant'), 50);
+      const timer2 = setTimeout(() => scrollToBottom('instant'), 150);
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+      };
+    }
+  }, []);
 
   // Bottom Navigation Items (matches Shell.tsx)
   const bottomNavItems = [
@@ -116,6 +130,7 @@ export default function CommunityChat() {
       messagesEndRef.current.scrollIntoView({ behavior });
       setHasNewMessagesNotification(false);
       setScrolledUp(false);
+      scrolledUpRef.current = false;
     }
   };
 
@@ -129,9 +144,11 @@ export default function CommunityChat() {
     
     if (isAtBottom) {
       setScrolledUp(false);
+      scrolledUpRef.current = false;
       setHasNewMessagesNotification(false);
     } else {
       setScrolledUp(true);
+      scrolledUpRef.current = true;
     }
   };
 
@@ -214,7 +231,7 @@ export default function CommunityChat() {
             });
 
             // If user has scrolled up, show "New message" indicator instead of force scrolling
-            if (scrolledUp) {
+            if (scrolledUpRef.current) {
               setHasNewMessagesNotification(true);
             } else {
               setTimeout(() => scrollToBottom('smooth'), 100);
@@ -244,7 +261,7 @@ export default function CommunityChat() {
       isMounted = false;
       supabase.removeChannel(channel);
     };
-  }, [scrolledUp]);
+  }, []);
 
   // Send message
   const handleSendMessage = async (e: React.FormEvent) => {
