@@ -3,7 +3,7 @@ import { User } from '@supabase/supabase-js';
 import { ensureAuthenticated, supabase } from '../lib/supabase';
 import { Profile } from '../types/database';
 import { queryClient } from '../lib/queryClient';
-import { requestNotificationPermission, listenForForegroundNotifications, deleteFcmTokenOnLogout, syncTokenToSupabase } from '../lib/notifications';
+import { requestNotificationPermission, listenForForegroundNotifications, deleteFcmTokenOnLogout, syncTokenToSupabase, registerPushToken } from '../lib/notifications';
 import { Trophy, Zap, Loader2, Sparkles, AlertCircle } from 'lucide-react';
 
 // Professional fallback timeout engine to prevent hangs and guarantee resolution
@@ -435,7 +435,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         const currentPermission = typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default';
         if (currentPermission === 'granted') {
           console.log('[AuthContext] Notification permission already granted. Completing automatic FCM token retrieval and sync...');
-          await requestNotificationPermission(user.id);
+          await registerPushToken();
         } else {
           console.log('[AuthContext] Notification permission is not granted (current state:', currentPermission + '). Skipping automatic prompt to adhere to browser user-gesture restrictions.');
         }
@@ -580,6 +580,9 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         if (session?.user) {
           const userId = session.user.id;
           lastUserIdRef.current = userId;
+          
+          // Centrally register push token immediately upon SIGNED_IN
+          registerPushToken();
           
           const currentPermission = typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default';
           if (currentPermission === 'granted') {

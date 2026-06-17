@@ -382,3 +382,67 @@ export async function listenForForegroundNotifications(): Promise<(() => void) |
     return null;
   }
 }
+
+/**
+ * Centrally registers/syncs the FCM push token when permission is granted.
+ * Safe to call on every app load and on login.
+ */
+export async function registerPushToken(): Promise<void> {
+  try {
+    // 1. Check permission
+    if (typeof window === 'undefined') return;
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+
+    // 2. Protect and verify user session
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.log('[Notifications] registerPushToken skipped: No authenticated session found.');
+      return;
+    }
+
+    console.log('[Notifications] Registering/refreshing push token for user:', user.id);
+
+    // 3. Get FCM token via the existing robust registration/FCM helper
+    const token = await requestNotificationPermission(user.id);
+    if (!token) {
+      console.warn('[Notifications] registerPushToken failed: requestNotificationPermission returned null token.');
+      return;
+    }
+
+    // 4. Directly save/upsert token to user_push_tokens using both standard onConflicts to guarantee it saves
+    const supabaseAny = supabase as any;
+    const { error } = await supabaseAny.from('user_push_tokens').upsert({
+      user_id: user.id,
+      token: token,
+      platform: 'web',
+      device_name: navigator.userAgent.slice(0, 100),
+      revoked_at: null,
+      last_seen_at: new Date().toISOString()
+    }, {
+      onConflict: 'token'
+    });
+
+    if (error) {
+      console.log('[Notifications] Token-only conflict upsert warned (matching user_id,token instead):', error.message);
+      const { error: secondError } = await supabaseAny.from('user_push_tokens').upsert({
+        user_id: user.id,
+        token: token,
+        platform: 'web',
+        device_name: navigator.userAgent.slice(0, 100),
+        revoked_at: null,
+        last_seen_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id,token'
+      });
+      if (secondError) {
+        console.error('[Notifications] Failed both options of user_push_tokens upsert:', secondError.message);
+      }
+    } else {
+      console.log('[Notifications] Push token registered successfully into user_push_tokens');
+    }
+  } catch (err) {
+    console.error('Push token registration failed:', err);
+  }
+}
+
