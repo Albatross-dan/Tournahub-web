@@ -28,11 +28,33 @@ export default function CommunityChat() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [messages, setMessages] = useState<CommunityMessage[]>([]);
+  const [messages, setMessages] = useState<CommunityMessage[]>(() => {
+    try {
+      const cached = localStorage.getItem('tournahub_community_chat_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch (e) {
+      console.error('[CommunityChat] Failed to read messages cache:', e);
+      return [];
+    }
+  });
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [errorHeader, setErrorHeader] = useState<string | null>(null);
+
+  // Cache messages to localStorage whenever they are updated/fetched
+  useEffect(() => {
+    try {
+      const persistentMessages = messages.filter(m => m && m.id && !m.id.startsWith('temp-'));
+      // Keep only the last 100 messages to keep cache size very small and clean
+      const toCache = persistentMessages.slice(-100);
+      if (toCache.length > 0) {
+        localStorage.setItem('tournahub_community_chat_cache', JSON.stringify(toCache));
+      }
+    } catch (e) {
+      console.error('[CommunityChat] Failed to save messages to cache:', e);
+    }
+  }, [messages]);
   
   // Realtime "new message" alert state
   const [scrolledUp, setScrolledUp] = useState(false);
@@ -425,13 +447,21 @@ export default function CommunityChat() {
         className="flex-grow overflow-y-auto bg-transparent relative z-10 custom-scrollbar"
       >
         <div className="px-3 py-3 pb-6 flex flex-col space-y-2">
-          {loading ? (
+          {loading && messages.length === 0 ? (
             <div className="my-12 flex flex-col items-center justify-center space-y-3">
               <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest animate-pulse">Establishing lobby pipeline...</p>
             </div>
           ) : messages.length > 0 ? (
-            renderMessageList()
+            <>
+              {loading && (
+                <div className="flex items-center justify-center space-x-2 py-1 select-none opacity-80 animate-pulse">
+                  <Loader2 className="w-3.5 h-3.5 text-emerald-500 animate-spin" />
+                  <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest leading-none">Syncing feed...</span>
+                </div>
+              )}
+              {renderMessageList()}
+            </>
           ) : (
             <div className="my-12 flex flex-col items-center justify-center space-y-4 py-12">
               <div className="w-16 h-16 bg-surface border border-slate-800 rounded-full flex items-center justify-center text-text-muted shadow-lg">
