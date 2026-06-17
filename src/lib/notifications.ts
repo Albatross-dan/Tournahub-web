@@ -206,9 +206,10 @@ export async function syncTokenToSupabase(userId: string, token: string): Promis
       .maybeSingle();
 
     if (!selectErr && existing) {
-      console.log('[Notifications] Token already exists in "user_push_tokens". Updating last seen.');
+      console.log('[Notifications] Token already exists in "user_push_tokens". Updating last seen and ensuring un-revoked.');
       await supabaseAny.from('user_push_tokens').update({
-        last_seen_at: new Date().toISOString()
+        last_seen_at: new Date().toISOString(),
+        revoked_at: null
       }).eq('id', existing.id);
     } else {
       const { error: insertErr } = await supabaseAny.from('user_push_tokens').insert({
@@ -216,7 +217,8 @@ export async function syncTokenToSupabase(userId: string, token: string): Promis
         token: token,
         platform: 'web',
         device_name: navigator.userAgent.slice(0, 100),
-        last_seen_at: new Date().toISOString()
+        last_seen_at: new Date().toISOString(),
+        revoked_at: null
       });
       
       if (insertErr) {
@@ -226,7 +228,8 @@ export async function syncTokenToSupabase(userId: string, token: string): Promis
             token: token,
             platform: 'web',
             device_name: navigator.userAgent.slice(0, 100),
-            last_seen_at: new Date().toISOString()
+            last_seen_at: new Date().toISOString(),
+            revoked_at: null
           },
           { onConflict: 'user_id,token' }
         );

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { profileService } from '../../services/profileService';
-import { requestNotificationPermission } from '../../lib/notifications';
+import { requestNotificationPermission, registerPushToken } from '../../lib/notifications';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { 
@@ -214,10 +214,10 @@ export default function SettingsMenu() {
             const token = localStorage.getItem('fcm_token');
             if (!token) {
               console.log('[SettingsMenu] Permission is granted, but local fcm_token is missing. Syncing token...');
-              setTimeout(() => {
-                requestNotificationPermission(user!.id);
-              }, 100);
             }
+            setTimeout(() => {
+              registerPushToken();
+            }, 100);
           }
         } else {
           data.in_app_enabled = false;
