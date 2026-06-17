@@ -28,7 +28,9 @@ export default function Notifications() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setInIframe(window.self !== window.top);
-      setPermissionStatus('Notification' in window ? Notification.permission : 'not_supported');
+      const isSupported = 'Notification' in window;
+      const currentPerm = isSupported ? Notification.permission : 'not_supported';
+      setPermissionStatus(currentPerm);
       
       const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
       const projId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
@@ -38,8 +40,24 @@ export default function Notifications() {
       
       setHasFirebaseConfig(!!(apiKey && projId && senderId && appId && vapidId));
       setFcmToken(localStorage.getItem('fcm_token'));
+
+      if (isSupported && currentPerm === 'default' && user?.id) {
+        console.log('[Notifications Page] Permission is default on mount. Querying permission automatically...');
+        const autoTrigger = async () => {
+          try {
+            await requestNotificationPermission(user.id);
+            const resultingPerm = 'Notification' in window ? Notification.permission : 'not_supported';
+            setPermissionStatus(resultingPerm);
+            setFcmToken(localStorage.getItem('fcm_token'));
+          } catch (err) {
+            console.error('[Notifications Page] Auto-prompt on mount failed:', err);
+          }
+        };
+        const timer = setTimeout(autoTrigger, 1000);
+        return () => clearTimeout(timer);
+      }
     }
-  }, []);
+  }, [user?.id]);
 
   const handleRequestPermission = async () => {
     if (!user) return;
