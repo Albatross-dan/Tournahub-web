@@ -1,5 +1,5 @@
 import React from 'react';
-import { getToken, onMessage } from 'firebase/messaging';
+import { getToken, onMessage, deleteToken } from 'firebase/messaging';
 import { getMessagingInstance } from './firebase';
 import { supabase } from './supabase';
 import { toast } from 'react-hot-toast';
@@ -14,7 +14,7 @@ import { toast } from 'react-hot-toast';
  * 
  * @param userId The ID of the authenticated user
  */
-export async function requestNotificationPermission(userId: string): Promise<string | null> {
+export async function requestNotificationPermission(userId: string, isRetry = false): Promise<string | null> {
   // 1. Safety Checks for Browser APIs
   if (typeof window === 'undefined') {
     console.log('[Notifications] requestNotificationPermission called server-side. Aborting.');
@@ -118,7 +118,7 @@ export async function requestNotificationPermission(userId: string): Promise<str
 
     // 6. Save and Sync to Supabase table: 'notification_tokens'
     console.log('[Notifications] Initiating Supabase database synchronization...');
-    await syncTokenToSupabase(userId, token);
+    const activeToken = await syncTokenToSupabase(userId, token, isRetry);
     console.log('[Notifications] Completed token synchronization process.');
 
     // 7. Handle token refresh inside callback if supported
@@ -139,7 +139,7 @@ export async function requestNotificationPermission(userId: string): Promise<str
       console.log('[Notifications] FCM onTokenRefresh is not natively present on this messaging version. Auto-refresh relies on getToken callbacks.');
     }
 
-    return token;
+    return activeToken;
   } catch (error: any) {
     console.warn('[Notifications] Failed to obtain token or request permission:', error);
     return null;
@@ -150,8 +150,48 @@ export async function requestNotificationPermission(userId: string): Promise<str
  * Handles syncing of FCM token to Supabase using optimal checking and upsert fallbacks.
  * This function guarantees no double inserts and updates token ownership securely.
  */
-export async function syncTokenToSupabase(userId: string, token: string): Promise<void> {
+export async function syncTokenToSupabase(userId: string, token: string, isRetry = false): Promise<string | null> {
   const supabaseAny = supabase as any;
+  
+  // A. Check for Cross-User conflicts before proceeding with inserts/upserts.
+  try {
+    const { data: pushTokens } = await supabaseAny
+      .from('user_push_tokens')
+      .select('user_id')
+      .eq('token', token)
+      .limit(5);
+
+    const { data: notifTokens } = await supabaseAny
+      .from('notification_tokens')
+      .select('user_id')
+      .eq('token', token)
+      .limit(5);
+
+    const otherUserPush = pushTokens?.find((r: any) => r.user_id !== userId);
+    const otherUserNotif = notifTokens?.find((r: any) => r.user_id !== userId);
+
+    if ((otherUserPush || otherUserNotif) && !isRetry) {
+      const conflictingUserId = otherUserPush?.user_id || otherUserNotif?.user_id;
+      console.warn(`[Notifications] FCM token conflict! Token ${token.substring(0, 8)}... belongs in DB to user ${conflictingUserId}, but current logged-in user is ${userId}. Forcing token revocation and brand new token...`);
+      
+      try {
+        const messaging = await getMessagingInstance();
+        if (messaging) {
+          console.log('[Notifications] Revoking existing overridden token from FCM server...');
+          await deleteToken(messaging);
+        }
+      } catch (delErr) {
+        console.warn('[Notifications] deleteToken() warning (already invalid/unassigned):', delErr);
+      }
+      
+      localStorage.removeItem('fcm_token');
+      console.log('[Notifications] Retrying requestNotificationPermission recursively with isRetry=true to obtain fresh token...');
+      await requestNotificationPermission(userId, true);
+      return;
+    }
+  } catch (conflictCheckErr) {
+    console.warn('[Notifications] Error checking cross-user token conflict:', conflictCheckErr);
+  }
   
   // 1. Try syncing to "notification_tokens"
   try {
@@ -245,6 +285,7 @@ export async function syncTokenToSupabase(userId: string, token: string): Promis
   } catch (err) {
     console.warn('[Notifications] Exception syncing to "user_push_tokens":', err);
   }
+  return token;
 }
 
 /**
@@ -413,37 +454,7 @@ export async function registerPushToken(): Promise<void> {
       return;
     }
 
-    // 4. Directly save/upsert token to user_push_tokens using both standard onConflicts to guarantee it saves
-    const supabaseAny = supabase as any;
-    const { error } = await supabaseAny.from('user_push_tokens').upsert({
-      user_id: user.id,
-      token: token,
-      platform: 'web',
-      device_name: navigator.userAgent.slice(0, 100),
-      revoked_at: null,
-      last_seen_at: new Date().toISOString()
-    }, {
-      onConflict: 'token'
-    });
-
-    if (error) {
-      console.log('[Notifications] Token-only conflict upsert warned (matching user_id,token instead):', error.message);
-      const { error: secondError } = await supabaseAny.from('user_push_tokens').upsert({
-        user_id: user.id,
-        token: token,
-        platform: 'web',
-        device_name: navigator.userAgent.slice(0, 100),
-        revoked_at: null,
-        last_seen_at: new Date().toISOString()
-      }, {
-        onConflict: 'user_id,token'
-      });
-      if (secondError) {
-        console.error('[Notifications] Failed both options of user_push_tokens upsert:', secondError.message);
-      }
-    } else {
-      console.log('[Notifications] Push token registered successfully into user_push_tokens');
-    }
+    console.log('[Notifications] Push token registered and synced successfully.');
   } catch (err) {
     console.error('Push token registration failed:', err);
   }
