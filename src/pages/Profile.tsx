@@ -12,6 +12,72 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
+import { 
+  getCountries, 
+  getCountryCallingCode, 
+  AsYouType, 
+  isValidPhoneNumber, 
+  parsePhoneNumber, 
+  getExampleNumber,
+  CountryCode 
+} from 'libphonenumber-js';
+import examples from 'libphonenumber-js/examples.mobile.json';
+
+const countryList = getCountries().map(code => {
+  let name: string = code;
+  try {
+    name = new Intl.DisplayNames(['en'], { type: 'region' }).of(code) || code;
+  } catch (e) {
+    name = code;
+  }
+  return {
+    countryCode: code as CountryCode,
+    callingCode: `+${getCountryCallingCode(code)}`,
+    name
+  };
+}).sort((a, b) => a.name.localeCompare(b.name));
+
+const priorityCodes = ['KE', 'NG', 'GH', 'TZ', 'UG', 'ZA', 'ET', 'CM', 'CI', 'SN'];
+
+const priorityCountries = priorityCodes
+  .map(code => countryList.find(c => c.countryCode === code))
+  .filter((c): c is NonNullable<typeof c> => !!c);
+
+const remainingCountries = countryList.filter(
+  c => !priorityCodes.includes(c.countryCode)
+);
+
+const countryOptions = [...priorityCountries, ...remainingCountries];
+
+function getExpectedDigits(countryCode: CountryCode) {
+  try {
+    const example = getExampleNumber(countryCode, examples);
+    return example?.nationalNumber?.length ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function getExampleFormat(countryCode: CountryCode) {
+  try {
+    const example = getExampleNumber(countryCode, examples);
+    return example?.formatNational() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function getFlagEmoji(countryCode: string) {
+  const codePoints = countryCode
+    .toUpperCase()
+    .split('')
+    .map(char => 127397 + char.charCodeAt(0));
+  try {
+    return String.fromCodePoint(...codePoints);
+  } catch {
+    return '';
+  }
+}
 
 const getTimezones = () => {
   let list: string[] = [];
@@ -97,7 +163,18 @@ export default function Profile() {
     location.state?.returnTo ? 'settings' : 'overview'
   );
   const [username, setUsername] = useState(profile?.username || '');
-  const [whatsappNumber, setWhatsappNumber] = useState(profile?.whatsapp_number || '');
+  const [selectedCountry, setSelectedCountry] = useState<CountryCode>('KE');
+  const [numberInput, setNumberInput] = useState('');
+  const [isValid, setIsValid] = useState<boolean | null>(null);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [formattedPreview, setFormattedPreview] = useState('');
+  const [countrySearch, setCountrySearch] = useState('');
+  const [showCountryDropdown, setShowCountryDropdown] = useState(false);
+
+  const expectedDigits = getExpectedDigits(selectedCountry);
+  const exampleFormat = getExampleFormat(selectedCountry);
+  const placeholder = getExampleNumber(selectedCountry, examples)?.nationalNumber ?? '712345678';
+
   const [timezone, setTimezone] = useState(profile?.timezone || 'Africa/Nairobi');
   const [loading, setLoading] = useState(false);
   const [waLoading, setWaLoading] = useState(false);
@@ -114,7 +191,34 @@ export default function Profile() {
 
   useEffect(() => {
     if (profile?.whatsapp_number) {
-      setWhatsappNumber(profile.whatsapp_number);
+      try {
+        const parsed = parsePhoneNumber(profile.whatsapp_number);
+        if (parsed) {
+          if (parsed.country) {
+            setSelectedCountry(parsed.country);
+          }
+          setNumberInput(parsed.nationalNumber);
+          
+          const callingCode = getCountryCallingCode(parsed.country || 'KE');
+          const formatter = new AsYouType(parsed.country || 'KE');
+          const formatted = formatter.input(`+${callingCode}${parsed.nationalNumber}`);
+          setFormattedPreview(formatted);
+          
+          const fullNumber = `+${callingCode}${parsed.nationalNumber}`;
+          const valid = isValidPhoneNumber(fullNumber, parsed.country || 'KE');
+          setIsValid(valid);
+          setErrorMessage('');
+        }
+      } catch (e) {
+        console.error('[Profile] Error parsing pre-existing whatsapp number:', e);
+        setNumberInput(profile.whatsapp_number.replace(/^\+/, ''));
+        setIsValid(null);
+      }
+    } else {
+      setNumberInput('');
+      setIsValid(null);
+      setFormattedPreview('');
+      setErrorMessage('');
     }
   }, [profile?.whatsapp_number]);
 
@@ -123,6 +227,44 @@ export default function Profile() {
       setTimezone(profile.timezone);
     }
   }, [profile?.timezone]);
+
+  const handleNumberChange = (value: string, country = selectedCountry) => {
+    const digitsOnly = value.replace(/\D/g, '');
+    setNumberInput(digitsOnly);
+
+    if (!digitsOnly) {
+      setIsValid(null);
+      setErrorMessage('');
+      setFormattedPreview('');
+      return;
+    }
+
+    const formatter = new AsYouType(country);
+    const callingCode = getCountryCallingCode(country);
+    const formatted = formatter.input(`+${callingCode}${digitsOnly}`);
+    setFormattedPreview(formatted);
+
+    const fullNumber = `+${callingCode}${digitsOnly}`;
+    const valid = isValidPhoneNumber(fullNumber, country);
+    setIsValid(valid);
+
+    if (!valid && digitsOnly.length >= 4) {
+      const expectedDigits = getExpectedDigits(country);
+      const countryName = new Intl.DisplayNames(['en'], { type: 'region' }).of(country) || country;
+      setErrorMessage(
+        expectedDigits
+          ? `${countryName} numbers need ${expectedDigits} digits after the country code`
+          : 'Invalid number for the selected country'
+      );
+    } else {
+      setErrorMessage('');
+    }
+  };
+
+  const handleCountryChange = (country: CountryCode) => {
+    setSelectedCountry(country);
+    handleNumberChange(numberInput, country);
+  };
 
   const editsUsed = user?.user_metadata?.username_edits_count || 0;
   const editsRemaining = Math.max(0, 3 - editsUsed);
@@ -231,7 +373,8 @@ export default function Profile() {
     }
   };
 
-  const whatsappChanged = whatsappNumber.trim() !== (profile?.whatsapp_number || '');
+  const finalWhatsapp = numberInput ? `+${getCountryCallingCode(selectedCountry)}${numberInput}` : '';
+  const whatsappChanged = finalWhatsapp !== (profile?.whatsapp_number || '');
   const timezoneChanged = timezone !== (profile?.timezone || 'Africa/Nairobi');
   const isDataChanged = whatsappChanged || timezoneChanged;
 
@@ -240,16 +383,11 @@ export default function Profile() {
     setWaLoading(true);
     setWaMessage(null);
 
-    const val = whatsappNumber.trim();
+    const fullNumber = finalWhatsapp;
 
-    if (!val) {
-      setWaMessage({ type: 'error', text: 'WhatsApp number cannot be blank.' });
-      setWaLoading(false);
-      return;
-    }
-
-    if (!/^\+[1-9]\d{1,14}$/.test(val)) {
-      setWaMessage({ type: 'error', text: 'WhatsApp number must be in E.164 format (e.g., +254712345678).' });
+    if (!isValidPhoneNumber(fullNumber, selectedCountry)) {
+      setIsValid(false);
+      setErrorMessage('Please enter a valid WhatsApp number before saving');
       setWaLoading(false);
       return;
     }
@@ -259,7 +397,7 @@ export default function Profile() {
       const { error: updateError } = await (supabase as any)
         .from('profiles')
         .update({ 
-          whatsapp_number: val,
+          whatsapp_number: fullNumber,
           timezone: timezone
         })
         .eq('id', user.id);
@@ -271,7 +409,9 @@ export default function Profile() {
       setWaMessage({ type: 'success', text: 'WhatsApp coordination & local timezone saved successfully!' });
       setTimeout(() => setWaMessage(null), 5000);
     } catch (err: any) {
-      setWaMessage({ type: 'error', text: err.message || 'Failed to update WhatsApp coordination config. Try again.' });
+      console.error('[Profile] Error updating WhatsApp number:', err);
+      // Backend already enforces E.164 — if the save still fails with a constraint error, catch it and show
+      setWaMessage({ type: 'error', text: 'This number format is not accepted. Please check your country code and number.' });
     } finally {
       setWaLoading(false);
     }
@@ -553,23 +693,114 @@ export default function Profile() {
                   <p className="text-[10px] text-text-muted italic ml-1 mb-2">
                     Your number will only be shared with your matched opponents.
                   </p>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500 font-extrabold italic text-sm leading-none select-none">+</span>
-                    <input
-                      type="tel"
-                      disabled={waLoading}
-                      className="w-full bg-[#111218]/80 border border-zinc-800 rounded-2xl pl-10 pr-4 py-4 font-bold transition-all placeholder-zinc-700 text-white shadow-inner focus:ring-1 focus:ring-emerald-500/40 focus:border-emerald-500/40 outline-none"
-                      placeholder="Country code first (e.g. +254712345678)"
-                      value={whatsappNumber}
-                      onChange={(e) => {
-                        setWaMessage(null);
-                        let val = e.target.value.trim();
-                        if (val && !val.startsWith('+')) {
-                          val = '+' + val;
-                        }
-                        setWhatsappNumber(val);
-                      }}
-                    />
+                  
+                  {/* Country and Phone input layout */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Searchable Country Selector Dropdown */}
+                    <div className="md:col-span-1 relative">
+                      <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-1">Country</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowCountryDropdown(!showCountryDropdown)}
+                        className="w-full h-14 bg-[#111218]/80 border border-[#27272a] rounded-2xl px-4 flex items-center justify-between text-white font-bold transition-all focus:ring-1 focus:ring-emerald-500/40 focus:border-emerald-500/40 outline-none text-sm"
+                      >
+                        <span className="flex items-center space-x-2 truncate">
+                          <span className="text-lg">{getFlagEmoji(selectedCountry)}</span>
+                          <span className="truncate">
+                            {countryOptions.find(c => c.countryCode === selectedCountry)?.name || selectedCountry}
+                          </span>
+                        </span>
+                        <span className="text-zinc-500">▼</span>
+                      </button>
+
+                      {/* Dropdown Panel */}
+                      {showCountryDropdown && (
+                        <div className="absolute left-0 mt-2 w-full max-h-80 bg-[#16171f] border border-zinc-800 rounded-2xl shadow-xl z-50 overflow-hidden flex flex-col">
+                          <div className="p-2 border-b border-zinc-800 bg-[#0b0c11]">
+                            <input
+                              type="text"
+                              autoFocus
+                              placeholder="Search country or code..."
+                              value={countrySearch}
+                              onChange={(e) => setCountrySearch(e.target.value)}
+                              className="w-full bg-[#111218] border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/40"
+                            />
+                          </div>
+                          <div className="overflow-y-auto flex-1 max-h-60 custom-scrollbar">
+                            {countryOptions.filter(c =>
+                              c.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
+                              c.callingCode.includes(countrySearch)
+                            ).length === 0 ? (
+                              <div className="p-4 text-xs text-zinc-500 text-center">No countries match "{countrySearch}"</div>
+                            ) : (
+                              countryOptions.filter(c =>
+                                c.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
+                                c.callingCode.includes(countrySearch)
+                              ).map((c) => (
+                                <button
+                                  key={c.countryCode}
+                                  type="button"
+                                  onClick={() => {
+                                    handleCountryChange(c.countryCode);
+                                    setShowCountryDropdown(false);
+                                    setCountrySearch('');
+                                  }}
+                                  className={cn(
+                                    "w-full px-4 py-3 text-left hover:bg-emerald-500/10 transition-colors text-xs flex items-center justify-between",
+                                    selectedCountry === c.countryCode ? "bg-emerald-500/20 text-emerald-400 font-extrabold" : "text-white"
+                                  )}
+                                >
+                                  <span className="flex items-center space-x-2 truncate">
+                                    <span>{getFlagEmoji(c.countryCode)}</span>
+                                    <span className="truncate">{c.name}</span>
+                                  </span>
+                                  <span className="text-text-muted font-mono">{c.callingCode}</span>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Phone Input Box with static calling code prefix next to it */}
+                    <div className="md:col-span-2 relative">
+                      <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-1">Phone Number</label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500 font-extrabold italic text-sm leading-none select-none">
+                          {getCountryCallingCode(selectedCountry) ? `+${getCountryCallingCode(selectedCountry)}` : ''}
+                        </span>
+                        <input
+                          type="tel"
+                          disabled={waLoading}
+                          className="w-full bg-[#111218]/80 border border-zinc-800 rounded-2xl pl-16 pr-4 py-4 font-bold transition-all placeholder-zinc-700 text-white shadow-inner focus:ring-1 focus:ring-emerald-500/40 focus:border-emerald-500/40 outline-none"
+                          placeholder={`e.g. ${placeholder}`}
+                          value={numberInput}
+                          onChange={(e) => handleNumberChange(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Previews and format validations */}
+                  <div className="mt-2 space-y-1 pl-1">
+                    <p className="hint-text text-[10px] text-text-muted">
+                      {exampleFormat && expectedDigits
+                        ? `e.g. ${exampleFormat} · ${expectedDigits} digits, excluding leading zero`
+                        : 'Enter your number without the country code'}
+                    </p>
+
+                    {isValid === true && formattedPreview && (
+                      <p className="text-xs text-emerald-400 font-bold flex items-center space-x-1">
+                        <span>✓ {formattedPreview}</span>
+                      </p>
+                    )}
+
+                    {isValid === false && errorMessage && (
+                      <p className="text-xs text-red-500 font-bold flex items-center space-x-1">
+                        <span>✗ {errorMessage}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
 

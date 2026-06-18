@@ -1,109 +1,93 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, Phone, Loader2, CheckCircle, XCircle, LogOut } from 'lucide-react';
+import { Trophy, Phone, Loader2, CheckCircle, XCircle, LogOut, Globe } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import SEO from '../components/common/SEO';
+import { 
+  getCountries, 
+  getCountryCallingCode, 
+  AsYouType, 
+  isValidPhoneNumber, 
+  parsePhoneNumber, 
+  getExampleNumber,
+  CountryCode 
+} from 'libphonenumber-js';
+import examples from 'libphonenumber-js/examples.mobile.json';
 
-const GLOBAL_COUNTRIES = [
-  // Top / Most active ones first
-  { name: 'Kenya', code: 'KE', prefix: '+254', length: [9], placeholder: '712345678', flag: '🇰🇪' },
-  { name: 'Nigeria', code: 'NG', prefix: '+234', length: [9], placeholder: '803123456', flag: '🇳🇬' },
-  { name: 'South Africa', code: 'ZA', prefix: '+27', length: [9], placeholder: '821234567', flag: '🇿🇦' },
-  { name: 'Uganda', code: 'UG', prefix: '+256', length: [9], placeholder: '712345678', flag: '🇺🇬' },
-  { name: 'Tanzania', code: 'TZ', prefix: '+255', length: [9], placeholder: '712345678', flag: '🇹🇿' },
-  { name: 'Ghana', code: 'GH', prefix: '+233', length: [9], placeholder: '241234567', flag: '🇬🇭' },
-  { name: 'Rwanda', code: 'RW', prefix: '+250', length: [9], placeholder: '788123456', flag: '🇷🇼' },
+const countryList = getCountries().map(code => {
+  let name: string = code;
+  try {
+    name = new Intl.DisplayNames(['en'], { type: 'region' }).of(code) || code;
+  } catch (e) {
+    name = code;
+  }
+  return {
+    countryCode: code as CountryCode,
+    callingCode: `+${getCountryCallingCode(code)}`,
+    name
+  };
+}).sort((a, b) => a.name.localeCompare(b.name));
 
-  // All other African countries
-  { name: 'Algeria', code: 'DZ', prefix: '+213', length: [9], placeholder: '512345678', flag: '🇩🇿' },
-  { name: 'Angola', code: 'AO', prefix: '+244', length: [9], placeholder: '912345678', flag: '🇦🇴' },
-  { name: 'Benin', code: 'BJ', prefix: '+229', length: [9], placeholder: '901234567', flag: '🇧🇯' },
-  { name: 'Botswana', code: 'BW', prefix: '+267', length: [9], placeholder: '712345678', flag: '🇧🇼' },
-  { name: 'Burkina Faso', code: 'BF', prefix: '+226', length: [9], placeholder: '701234567', flag: '🇧🇫' },
-  { name: 'Burundi', code: 'BI', prefix: '+257', length: [9], placeholder: '712345678', flag: '🇧🇮' },
-  { name: 'Cabo Verde', code: 'CV', prefix: '+238', length: [9], placeholder: '912345678', flag: '🇨🇻' },
-  { name: 'Cameroon', code: 'CM', prefix: '+237', length: [9], placeholder: '612345678', flag: '🇨🇲' },
-  { name: 'Central African Republic', code: 'CF', prefix: '+236', length: [9], placeholder: '701234567', flag: '🇨🇫' },
-  { name: 'Chad', code: 'TD', prefix: '+235', length: [9], placeholder: '612345678', flag: '🇹🇩' },
-  { name: 'Comoros', code: 'KM', prefix: '+269', length: [9], placeholder: '321234567', flag: '🇰🇲' },
-  { name: 'DR Congo', code: 'CD', prefix: '+243', length: [9], placeholder: '812345678', flag: '🇨🇩' },
-  { name: 'Congo Republic', code: 'CG', prefix: '+242', length: [9], placeholder: '051234567', flag: '🇨🇬' },
-  { name: 'Cote d\'Ivoire', code: 'CI', prefix: '+225', length: [9], placeholder: '071234567', flag: '🇨🇮' },
-  { name: 'Djibouti', code: 'DJ', prefix: '+253', length: [9], placeholder: '771234567', flag: '🇩🇯' },
-  { name: 'Egypt', code: 'EG', prefix: '+20', length: [9], placeholder: '101234567', flag: '🇪🇬' },
-  { name: 'Equatorial Guinea', code: 'GQ', prefix: '+240', length: [9], placeholder: '221234567', flag: '🇬🇶' },
-  { name: 'Eritrea', code: 'ER', prefix: '+291', length: [9], placeholder: '712345678', flag: '🇪🇷' },
-  { name: 'Eswatini', code: 'SZ', prefix: '+268', length: [9], placeholder: '761234567', flag: '🇸🇿' },
-  { name: 'Ethiopia', code: 'ET', prefix: '+251', length: [9], placeholder: '911234567', flag: '🇪🇹' },
-  { name: 'Gabon', code: 'GA', prefix: '+241', length: [9], placeholder: '612345678', flag: '🇬🇦' },
-  { name: 'Gambia', code: 'GM', prefix: '+220', length: [9], placeholder: '712345678', flag: '🇬🇲' },
-  { name: 'Guinea', code: 'GN', prefix: '+224', length: [9], placeholder: '621234567', flag: '🇬🇳' },
-  { name: 'Guinea-Bissau', code: 'GW', prefix: '+245', length: [9], placeholder: '951234567', flag: '🇬🇼' },
-  { name: 'Lesotho', code: 'LS', prefix: '+266', length: [9], placeholder: '581234567', flag: '🇱🇸' },
-  { name: 'Liberia', code: 'LR', prefix: '+231', length: [9], placeholder: '771234567', fontFlag: '🇱🇷', flag: '🇱🇷' },
-  { name: 'Libya', code: 'LY', prefix: '+218', length: [9], placeholder: '912345678', flag: '🇱🇾' },
-  { name: 'Madagascar', code: 'MG', prefix: '+261', length: [9], placeholder: '321234567', flag: '🇲🇬' },
-  { name: 'Malawi', code: 'MW', prefix: '+265', length: [9], placeholder: '881234567', flag: '🇲🇼' },
-  { name: 'Mali', code: 'ML', prefix: '+223', length: [9], placeholder: '612345678', flag: '🇲🇱' },
-  { name: 'Mauritania', code: 'MR', prefix: '+222', length: [9], placeholder: '451234567', flag: '🇲🇷' },
-  { name: 'Mauritius', code: 'MU', prefix: '+230', length: [9], placeholder: '521234567', flag: '🇲🇺' },
-  { name: 'Morocco', code: 'MA', prefix: '+212', length: [9], placeholder: '612345678', flag: '🇲🇦' },
-  { name: 'Mozambique', code: 'MZ', prefix: '+258', length: [9], placeholder: '821234567', flag: '🇲🇿' },
-  { name: 'Namibia', code: 'NA', prefix: '+264', length: [9], placeholder: '811234567', flag: '🇳🇦' },
-  { name: 'Niger', code: 'NE', prefix: '+227', length: [9], placeholder: '901234567', flag: '🇳🇪' },
-  { name: 'Sao Tome and Principe', code: 'ST', prefix: '+239', length: [9], placeholder: '991234567', flag: '🇸🇹' },
-  { name: 'Senegal', code: 'SN', prefix: '+221', length: [9], placeholder: '771234567', flag: '🇸🇳' },
-  { name: 'Seychelles', code: 'SC', prefix: '+248', length: [9], placeholder: '251234567', flag: '🇸🇨' },
-  { name: 'Sierra Leone', code: 'SL', prefix: '+232', length: [9], placeholder: '761234567', flag: '🇸🇱' },
-  { name: 'Somalia', code: 'SO', prefix: '+252', length: [9], placeholder: '612345678', flag: '🇸🇴' },
-  { name: 'South Sudan', code: 'SS', prefix: '+211', length: [9], placeholder: '911234567', flag: '🇸🇸' },
-  { name: 'Sudan', code: 'SD', prefix: '+249', length: [9], placeholder: '912345678', flag: '🇸🇩' },
-  { name: 'Togo', code: 'TG', prefix: '+228', length: [9], placeholder: '901234567', flag: '🇹🇬' },
-  { name: 'Tunisia', code: 'TN', prefix: '+216', length: [9], placeholder: '981234567', flag: '🇹🇳' },
-  { name: 'Zambia', code: 'ZM', prefix: '+260', length: [9], placeholder: '951234567', flag: '🇿🇲' },
-  { name: 'Zimbabwe', code: 'ZW', prefix: '+263', length: [9], placeholder: '771234567', flag: '🇿🇼' },
+const priorityCodes = ['KE', 'NG', 'GH', 'TZ', 'UG', 'ZA', 'ET', 'CM', 'CI', 'SN'];
 
-  // Rest of the world
-  { name: 'United Kingdom', code: 'GB', prefix: '+44', length: [9], placeholder: '770090007', flag: '🇬🇧' },
-  { name: 'United States', code: 'US', prefix: '+1', length: [9], placeholder: '202555014', flag: '🇺🇸' },
-  { name: 'Canada', code: 'CA', prefix: '+1_CA', prefixValue: '+1', length: [9], placeholder: '613555014', flag: '🇨🇦' },
-  { name: 'India', code: 'IN', prefix: '+91', length: [9], placeholder: '987654321', flag: '🇮🇳' },
-  { name: 'Saudi Arabia', code: 'SA', prefix: '+966', length: [9], placeholder: '501234567', flag: '🇸🇦' },
-  { name: 'UAE', code: 'AE', prefix: '+971', length: [9], placeholder: '501234567', flag: '🇦🇪' },
-  { name: 'Germany', code: 'DE', prefix: '+49', length: [9], placeholder: '170123456', flag: '🇩🇪' },
-  { name: 'France', code: 'FR', prefix: '+33', length: [9], placeholder: '612345678', flag: '🇫🇷' },
-  { name: 'Australia', code: 'AU', prefix: '+61', length: [9], placeholder: '412345678', flag: '🇦🇺' },
-  { name: 'China', code: 'CN', prefix: '+86', length: [9], placeholder: '138123456', flag: '🇨🇳' },
-  { name: 'Brazil', code: 'BR', prefix: '+55', length: [9], placeholder: '119123456', flag: '🇧🇷' },
-  { name: 'Japan', code: 'JP', prefix: '+81', length: [9], placeholder: '901234567', flag: '🇯🇵' },
-  { name: 'Singapore', code: 'SG', prefix: '+65', length: [9], placeholder: '812345678', flag: '🇸🇬' },
-  { name: 'Spain', code: 'ES', prefix: '+34', length: [9], placeholder: '612345678', flag: '🇪🇸' },
-  { name: 'Italy', code: 'IT', prefix: '+39', length: [9], placeholder: '312345678', flag: '🇮🇹' },
-  { name: 'Portugal', code: 'PT', prefix: '+351', length: [9], placeholder: '912345678', flag: '🇵🇹' },
-  { name: 'Netherlands', code: 'NL', prefix: '+31', length: [9], placeholder: '612345678', flag: '🇳🇱' },
-  { name: 'Argentina', code: 'AR', prefix: '+54', length: [9], placeholder: '911234567', flag: '🇦🇷' },
-  { name: 'Mexico', code: 'MX', prefix: '+52', length: [9], placeholder: '551234567', flag: '🇲🇽' },
-  { name: 'Turkey', code: 'TR', prefix: '+90', length: [9], placeholder: '532123456', flag: '🇹🇷' },
-  { name: 'Qatar', code: 'QA', prefix: '+974', length: [9], placeholder: '551234567', flag: '🇶🇦' },
-  { name: 'Kuwait', code: 'KW', prefix: '+965', length: [9], placeholder: '512345678', flag: '🇰🇼' },
-  { name: 'Pakistan', code: 'PK', prefix: '+92', length: [9], placeholder: '300123456', flag: '🇵🇰' },
-  { name: 'Bangladesh', code: 'BD', prefix: '+880', length: [9], placeholder: '171234567', flag: '🇧🇩' },
-  { name: 'Indonesia', code: 'ID', prefix: '+62', length: [9], placeholder: '812345678', flag: '🇮🇩' },
-  { name: 'Malaysia', code: 'MY', prefix: '+60', length: [9], placeholder: '123456789', flag: '🇲🇾' },
-  { name: 'Ukraine', code: 'UA', prefix: '+380', length: [9], placeholder: '501234567', flag: '🇺🇦' },
-  { name: 'Poland', code: 'PL', prefix: '+48', length: [9], placeholder: '501234567', flag: '🇵🇱' },
+const priorityCountries = priorityCodes
+  .map(code => countryList.find(c => c.countryCode === code))
+  .filter((c): c is NonNullable<typeof c> => !!c);
 
-  { name: 'Custom Code', code: 'OTH', prefix: '+', length: [9], placeholder: 'Enter 9-digit local number', flag: '🌐' }
-];
+const remainingCountries = countryList.filter(
+  c => !priorityCodes.includes(c.countryCode)
+);
+
+const countryOptions = [...priorityCountries, ...remainingCountries];
+
+function getExpectedDigits(countryCode: CountryCode) {
+  try {
+    const example = getExampleNumber(countryCode, examples);
+    return example?.nationalNumber?.length ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function getExampleFormat(countryCode: CountryCode) {
+  try {
+    const example = getExampleNumber(countryCode, examples);
+    return example?.formatNational() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function getFlagEmoji(countryCode: string) {
+  const codePoints = countryCode
+    .toUpperCase()
+    .split('')
+    .map(char => 127397 + char.charCodeAt(0));
+  try {
+    return String.fromCodePoint(...codePoints);
+  } catch {
+    return '';
+  }
+}
 
 export default function CompleteProfile() {
   const { user, profile, refreshAuth, signOut } = useAuth();
   const navigate = useNavigate();
 
   const [username, setUsername] = useState('');
-  const [countryIndex, setCountryIndex] = useState(0);
-  const [whatsappLocal, setWhatsappLocal] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState<CountryCode>('KE');
+  const [numberInput, setNumberInput] = useState('');
+  const [isValid, setIsValid] = useState<boolean | null>(null);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [formattedPreview, setFormattedPreview] = useState('');
+  const [countrySearch, setCountrySearch] = useState('');
+  const [showCountryDropdown, setShowCountryDropdown] = useState(false);
+
+  const expectedDigits = getExpectedDigits(selectedCountry);
+  const exampleFormat = getExampleFormat(selectedCountry);
+  const placeholder = getExampleNumber(selectedCountry, examples)?.nationalNumber ?? '712345678';
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [usernameAvailability, setUsernameAvailability] = useState<'checking' | 'available' | 'taken' | 'invalid' | 'too_short' | null>(null);
@@ -116,18 +100,69 @@ export default function CompleteProfile() {
     
     // Parse partial phone number if they have one already
     if (profile?.whatsapp_number) {
-      const ph = profile.whatsapp_number;
-      // Find matching country code prefix
-      const match = GLOBAL_COUNTRIES.find(c => c.prefix !== '+' && ph.startsWith(c.prefix));
-      if (match) {
-        const idx = GLOBAL_COUNTRIES.indexOf(match);
-        setCountryIndex(idx);
-        setWhatsappLocal(ph.slice(match.prefix.length));
-      } else {
-        setWhatsappLocal(ph);
+      try {
+        const parsed = parsePhoneNumber(profile.whatsapp_number);
+        if (parsed) {
+          if (parsed.country) {
+            setSelectedCountry(parsed.country);
+          }
+          setNumberInput(parsed.nationalNumber);
+          
+          const callingCode = getCountryCallingCode(parsed.country || 'KE');
+          const formatter = new AsYouType(parsed.country || 'KE');
+          const formatted = formatter.input(`+${callingCode}${parsed.nationalNumber}`);
+          setFormattedPreview(formatted);
+          
+          const fullNumber = `+${callingCode}${parsed.nationalNumber}`;
+          const valid = isValidPhoneNumber(fullNumber, parsed.country || 'KE');
+          setIsValid(valid);
+          setErrorMessage('');
+        }
+      } catch (e) {
+        console.error('[CompleteProfile] Error parsing pre-existing whatsapp number:', e);
+        setNumberInput(profile.whatsapp_number.replace(/^\+/, ''));
+        setIsValid(null);
       }
     }
   }, [profile]);
+
+  const handleNumberChange = (value: string, country = selectedCountry) => {
+    const digitsOnly = value.replace(/\D/g, '');
+    setNumberInput(digitsOnly);
+
+    if (!digitsOnly) {
+      setIsValid(null);
+      setErrorMessage('');
+      setFormattedPreview('');
+      return;
+    }
+
+    const formatter = new AsYouType(country);
+    const callingCode = getCountryCallingCode(country);
+    const formatted = formatter.input(`+${callingCode}${digitsOnly}`);
+    setFormattedPreview(formatted);
+
+    const fullNumber = `+${callingCode}${digitsOnly}`;
+    const valid = isValidPhoneNumber(fullNumber, country);
+    setIsValid(valid);
+
+    if (!valid && digitsOnly.length >= 4) {
+      const expectedDigits = getExpectedDigits(country);
+      const countryName = new Intl.DisplayNames(['en'], { type: 'region' }).of(country) || country;
+      setErrorMessage(
+        expectedDigits
+          ? `${countryName} numbers need ${expectedDigits} digits after the country code`
+          : 'Invalid number for the selected country'
+      );
+    } else {
+      setErrorMessage('');
+    }
+  };
+
+  const handleCountryChange = (country: CountryCode) => {
+    setSelectedCountry(country);
+    handleNumberChange(numberInput, country);
+  };
 
   // Real-time username verification
   useEffect(() => {
@@ -198,13 +233,12 @@ export default function CompleteProfile() {
         throw new Error('This username is already taken. Please try another one.');
       }
 
-      const cleanLocal = whatsappLocal.replace(/[^0-9]/g, '');
-      if (!cleanLocal || cleanLocal.length < 7) {
-        throw new Error('Please enter a valid WhatsApp phone number (excluding leading zeros).');
-      }
+      const callingCode = getCountryCallingCode(selectedCountry);
+      const fullWhatsAppNumber = `+${callingCode}${numberInput}`;
 
-      const country = GLOBAL_COUNTRIES[countryIndex];
-      const fullWhatsAppNumber = `${country.prefix}${cleanLocal}`;
+      if (!isValidPhoneNumber(fullWhatsAppNumber, selectedCountry)) {
+        throw new Error('Please enter a valid WhatsApp number before saving.');
+      }
 
       // Perform profile update
       const { error: updateError } = await (supabase as any)
@@ -225,7 +259,13 @@ export default function CompleteProfile() {
       // Navigate to main application landing
       navigate('/dashboard', { replace: true });
     } catch (err: any) {
-      setError(err.message || 'An expected write failure occurred. Please retry.');
+      console.error('[CompleteProfile] Error saving profile:', err);
+      // Backend already enforces E.164 — if the save still fails with a constraint error, catch it and show
+      if (err.message && err.message.includes('profiles_whatsapp_number_check')) {
+        setError('This number format is not accepted. Please check your country code and number.');
+      } else {
+        setError(err.message || 'This number format is not accepted. Please check your country code and number.');
+      }
     } finally {
       setLoading(false);
     }
@@ -324,48 +364,120 @@ export default function CompleteProfile() {
             <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.3em] ml-1">
               WhatsApp number
             </label>
-            <div className="flex items-center bg-background/40 border border-border-main rounded-2xl focus-within:ring-1 focus-within:ring-primary/50 focus-within:border-primary/50 overflow-hidden relative group">
-              <div className="absolute inset-0 bg-primary/5 rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
-              
-              {/* Flag prefix selector dropdown */}
-              <div className="relative z-20 flex items-center pl-4 pr-2 py-4 border-r border-[#1c1d24] h-full cursor-pointer bg-[#0e0f14]/50 hover:bg-[#15161d] transition-colors">
-                <select
-                  disabled={loading}
-                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-                  value={countryIndex}
-                  onChange={(e) => setCountryIndex(Number(e.target.value))}
+            
+            {/* Country and Phone input layout */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Searchable Country Selector Dropdown */}
+              <div className="md:col-span-1 relative z-30">
+                <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-1">Country</label>
+                <button
+                  type="button"
+                  onClick={() => setShowCountryDropdown(!showCountryDropdown)}
+                  className="w-full h-14 bg-background/40 border border-border-main rounded-2xl px-4 flex items-center justify-between text-white font-bold transition-all focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none text-xs"
                 >
-                  {GLOBAL_COUNTRIES.map((c, idx) => (
-                    <option key={c.code} value={idx} className="bg-[#111218] text-white">
-                      {c.flag} {c.name} ({c.prefix})
-                    </option>
-                  ))}
-                </select>
-                <span className="text-sm font-semibold">{GLOBAL_COUNTRIES[countryIndex].flag}</span>
-                <span className="ml-1 text-xs font-black text-text-main font-mono">{GLOBAL_COUNTRIES[countryIndex].prefix}</span>
+                  <span className="flex items-center space-x-2 truncate">
+                    <span className="text-base">{getFlagEmoji(selectedCountry)}</span>
+                    <span className="truncate text-text-main">
+                      {countryOptions.find(c => c.countryCode === selectedCountry)?.name || selectedCountry}
+                    </span>
+                  </span>
+                  <span className="text-zinc-500">▼</span>
+                </button>
+
+                {/* Dropdown Panel */}
+                {showCountryDropdown && (
+                  <div className="absolute left-0 mt-2 w-full max-h-64 bg-[#16171f] border border-zinc-800 rounded-2xl shadow-xl z-50 overflow-hidden flex flex-col">
+                    <div className="p-2 border-b border-zinc-800 bg-[#0b0c11]">
+                      <input
+                        type="text"
+                        autoFocus
+                        placeholder="Search..."
+                        value={countrySearch}
+                        onChange={(e) => setCountrySearch(e.target.value)}
+                        className="w-full bg-[#111218] border border-zinc-805 rounded-xl px-2 py-1.5 text-xs text-white focus:outline-none focus:border-primary/50"
+                      />
+                    </div>
+                    <div className="overflow-y-auto flex-1 max-h-48 custom-scrollbar">
+                      {countryOptions.filter(c =>
+                        c.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
+                        c.callingCode.includes(countrySearch)
+                      ).length === 0 ? (
+                        <div className="p-3 text-[10px] text-zinc-500 text-center">No results for "{countrySearch}"</div>
+                      ) : (
+                        countryOptions.filter(c =>
+                          c.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
+                          c.callingCode.includes(countrySearch)
+                        ).map((c) => (
+                          <button
+                            key={c.countryCode}
+                            type="button"
+                            onClick={() => {
+                              handleCountryChange(c.countryCode);
+                              setShowCountryDropdown(false);
+                              setCountrySearch('');
+                            }}
+                            className={`w-full px-3 py-2 text-left hover:bg-primary/10 transition-colors text-[10px] flex items-center justify-between ${
+                              selectedCountry === c.countryCode ? "bg-primary/20 text-primary font-black" : "text-white"
+                            }`}
+                          >
+                            <span className="flex items-center space-x-1.5 truncate">
+                              <span>{getFlagEmoji(c.countryCode)}</span>
+                              <span className="truncate">{c.name}</span>
+                            </span>
+                            <span className="text-text-muted font-mono">{c.callingCode}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Local Number Input */}
-              <input
-                type="text"
-                inputMode="numeric"
-                required
-                disabled={loading}
-                className="flex-1 bg-transparent border-none outline-none text-text-main font-medium py-4 px-4 placeholder:text-text-muted/40 focus:ring-0 focus:border-none text-sm h-full"
-                placeholder={`e.g. ${GLOBAL_COUNTRIES[countryIndex].placeholder}`}
-                value={whatsappLocal}
-                onChange={(e) => setWhatsappLocal(e.target.value.replace(/[^0-9]/g, ''))}
-              />
+              {/* Phone Input Box with static calling code prefix next to it */}
+              <div className="md:col-span-2 relative">
+                <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-1">Phone Number</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black italic text-sm leading-none select-none">
+                    {getCountryCallingCode(selectedCountry) ? `+${getCountryCallingCode(selectedCountry)}` : ''}
+                  </span>
+                  <input
+                    type="tel"
+                    disabled={loading}
+                    className="w-full bg-background/40 border border-border-main rounded-2xl pl-16 pr-4 py-4 text-xs font-bold transition-all placeholder-zinc-700 text-white shadow-inner focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none h-14"
+                    placeholder={`e.g. ${placeholder}`}
+                    value={numberInput}
+                    onChange={(e) => handleNumberChange(e.target.value)}
+                  />
+                </div>
+              </div>
             </div>
-            <p className="text-[9px] text-text-muted italic ml-1 mt-1 leading-normal">
-              Excluding any leading zero. Must be a valid local WhatsApp communication number.
-            </p>
+
+            {/* Previews and format validations */}
+            <div className="mt-2 space-y-1 pl-1">
+              <p className="hint-text text-[9px] text-text-muted">
+                {exampleFormat && expectedDigits
+                  ? `e.g. ${exampleFormat} · ${expectedDigits} digits, excluding leading zero`
+                  : 'Enter your number without the country code'}
+              </p>
+
+              {isValid === true && formattedPreview && (
+                <p className="text-[10px] text-emerald-400 font-bold flex items-center space-x-1">
+                  <span>✓ {formattedPreview}</span>
+                </p>
+              )}
+
+              {isValid === false && errorMessage && (
+                <p className="text-[10px] text-red-500 font-bold flex items-center space-x-1">
+                  <span>✗ {errorMessage}</span>
+                </p>
+              )}
+            </div>
           </div>
 
           {/* SUBMIT BUTTON */}
           <button
             type="submit"
-            disabled={loading || usernameAvailability === 'taken' || usernameAvailability === 'checking' || !username || !whatsappLocal}
+            disabled={loading || usernameAvailability === 'taken' || usernameAvailability === 'checking' || !username || isValid !== true}
             className="w-full relative group overflow-hidden rounded-2xl h-14 flex items-center justify-center cursor-pointer transition-all duration-200 mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="absolute inset-0 bg-gradient-to-r from-primary via-[#00a3cc] to-primary transition-transform group-hover:scale-105" />
