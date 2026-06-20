@@ -41,6 +41,7 @@ export default function CommunityChat() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [errorHeader, setErrorHeader] = useState<string | null>(null);
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
   // Cache messages to localStorage whenever they are updated/fetched
   useEffect(() => {
@@ -540,6 +541,11 @@ export default function CommunityChat() {
                     setInputText(e.target.value);
                     if (errorHeader) setErrorHeader(null);
                   }}
+                  onFocus={() => setIsInputFocused(true)}
+                  onBlur={() => {
+                    // Slight delay to allow clicking on nav buttons before they hide/unhide
+                    setTimeout(() => setIsInputFocused(false), 150);
+                  }}
                   placeholder="Message..."
                   className="w-full bg-[#182236] border border-slate-700 focus:border-[#10b981]/80 rounded-2xl pl-4 pr-4 py-3 text-xs text-white placeholder-slate-400 tracking-wide outline-none transition-all shadow-md focus:bg-[#1a263d]"
                 />
@@ -579,8 +585,11 @@ export default function CommunityChat() {
         )}
       </footer>
 
-      {/* Mobile Bottom Navigation Bar Layer (Hides automatically on Mobile using CSS focus-within) */}
-      <div className="md:hidden group-focus-within:hidden shrink-0 bg-background border-t border-border-main py-2.5 px-3 z-20 flex items-center justify-around shadow-[0_-5px_20px_rgba(0,0,0,0.5)]">
+      {/* Bottom Navigation Bar Layer (Hides automatically on mobile when input is focused) */}
+      <div className={cn(
+        "shrink-0 bg-background border-t border-border-main py-2.5 px-3 z-20 flex items-center justify-around shadow-[0_-5px_20px_rgba(0,0,0,0.5)] transition-all duration-200",
+        isInputFocused ? "hidden md:flex" : "flex"
+      )}>
         {bottomNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = checkActive(item.path);
