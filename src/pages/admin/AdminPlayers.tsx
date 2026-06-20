@@ -168,13 +168,62 @@ export default function AdminPlayers() {
       const statusParam = statusFilter === 'All' ? null : (statusFilter.toLowerCase() as any);
       const roleParam = roleFilter === 'All' ? null : (roleFilter.toLowerCase() as any);
       
-      const result = await moderationService.listUsers({
-        page,
-        pageSize,
-        status: statusParam,
-        role: roleParam,
-        search: search.trim() || null
-      });
+      let result;
+      if (search.trim().toLowerCase() === 'online') {
+        const idsArray = Array.from(onlineUserIds);
+        if (idsArray.length === 0) {
+          result = { users: [], total_count: 0 };
+        } else {
+          let query = supabase
+            .from('profiles')
+            .select('*', { count: 'exact' })
+            .in('id', idsArray)
+            .neq('status', 'permanently_deleted');
+
+          if (statusParam) {
+            if (statusParam === 'active') {
+              query = query.or('status.eq.active,status.is.null');
+            } else {
+              query = query.eq('status', statusParam);
+            }
+          }
+          if (roleParam) {
+            query = query.eq('role', roleParam);
+          }
+
+          const from = (page - 1) * pageSize;
+          const to = from + pageSize - 1;
+
+          const { data, count, error } = await query
+            .order('created_at', { ascending: false })
+            .range(from, to);
+
+          if (error) {
+            console.error('[AdminPlayers] Error querying online users:', error);
+            result = { users: [], total_count: 0 };
+          } else {
+            const formattedUsers = (data as any[] || []).map((u: any) => ({
+              id: u.id,
+              username: u.username || 'Anonymous',
+              avatar_url: u.avatar_url || null,
+              role: u.role || 'user',
+              status: u.status || 'active',
+              last_login_at: u.created_at || null,
+              email: u.email || null,
+              last_seen_at: u.last_seen_at || null
+            }));
+            result = { users: formattedUsers, total_count: count !== null ? count : formattedUsers.length };
+          }
+        }
+      } else {
+        result = await moderationService.listUsers({
+          page,
+          pageSize,
+          status: statusParam,
+          role: roleParam,
+          search: search.trim() || null
+        });
+      }
 
       // Response contains users & total_count
       setUsers(result?.users || []);
