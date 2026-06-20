@@ -360,6 +360,44 @@ export default function Login() {
         </div>
 
         <div className="bg-surface/80 backdrop-blur-2xl border border-border-main rounded-[2.5rem] p-8 shadow-2xl shadow-black/20">
+          {/* Segmented control tab/selector */}
+          <div className="grid grid-cols-2 p-1 bg-background/60 border border-border-main/50 rounded-2xl mb-8">
+            <button
+              type="button"
+              onClick={() => {
+                setIsSignUp(false);
+                setConfirmPassword('');
+                setError(null);
+                setSuccess(null);
+                navigate('/login', { replace: true });
+              }}
+              className={`py-3.5 rounded-xl font-black uppercase tracking-wider text-xs italic transition-all duration-300 cursor-pointer ${
+                !isSignUp
+                  ? 'bg-primary text-slate-900 shadow-lg shadow-primary/20'
+                  : 'text-text-muted hover:text-text-main hover:bg-background/20'
+              }`}
+            >
+              Login
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsSignUp(true);
+                setConfirmPassword('');
+                setError(null);
+                setSuccess(null);
+                navigate('/signup', { replace: true });
+              }}
+              className={`py-3.5 rounded-xl font-black uppercase tracking-wider text-xs italic transition-all duration-300 cursor-pointer ${
+                isSignUp
+                  ? 'bg-primary text-slate-900 shadow-lg shadow-primary/20'
+                  : 'text-text-muted hover:text-text-main hover:bg-background/20'
+              }`}
+            >
+              Sign Up
+            </button>
+          </div>
+
           <form onSubmit={handleAuth} className="space-y-6">
             {isSignUp && (
               <div className="space-y-2">
