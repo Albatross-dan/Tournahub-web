@@ -6,11 +6,13 @@ import AnnouncementBanner from './AnnouncementBanner';
 import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Trophy, Calendar, Wallet } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const SUPPORT_EMAIL = 'mailto:support@tournahub.me';
   const COMMUNITY_WHATSAPP = 'https://whatsapp.com/channel/0029Vb7nKTkK5cDClzvMYT1Z';
   const location = useLocation();
+  const { refetchSignal } = useAuth();
 
   const bottomNavItems = [
     { name: 'Home', path: '/dashboard', icon: LayoutDashboard },
@@ -42,6 +44,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         {/* Main Content */}
         <main className="flex-1 px-4 overflow-y-auto w-full custom-scrollbar">
           <motion.div 
+            key={location.pathname + '-' + refetchSignal}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="max-w-7xl mx-auto w-full pb-24 md:pb-10 flex flex-col min-h-full justify-between"

@@ -31,7 +31,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, loading, isAdmin } = useAuth();
+  const { user, profile, loading, isAdmin, refetchSignal } = useAuth();
 
   useEffect(() => {
     console.log('[AdminShell] Route Entry Evaluation:', {
@@ -177,7 +177,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
         <div className="p-6 md:p-10 max-w-7xl w-full mx-auto">
           <motion.div
-            key={location.pathname}
+            key={location.pathname + '-' + refetchSignal}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}

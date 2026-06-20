@@ -755,6 +755,29 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       lastFocusTime.current = now;
       console.log(`[Reconnection] Invoked by [${reason}]. Harmonizing app state...`);
 
+      // A. Immediately increment refetchSignal to trigger visual layout repaint & refresh
+      if (isMounted) {
+        setRefetchSignal(prev => prev + 1);
+      }
+
+      // B. Instantly force hardware-accelerated compositor reflow to cure Android PWA suspend/freeze glitches
+      try {
+        const docEl = document.documentElement;
+        if (docEl) {
+          const originalTransform = docEl.style.transform;
+          docEl.style.transform = 'translateZ(0)';
+          // Reading offsetHeight forces immediate layout recalculation & GPU paint flash
+          const _UnusedReflow = docEl.offsetHeight;
+          setTimeout(() => {
+            if (isMounted) {
+              docEl.style.transform = originalTransform;
+            }
+          }, 80);
+        }
+      } catch (reflowErr) {
+        console.warn('[PWA] Compulsory layout reflow skipped:', reflowErr);
+      }
+
       try {
         // Safe check session with strict timeout
         const sessionPromise = supabase.auth.getSession().then(({ data }) => data.session);
@@ -789,11 +812,6 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
 
           // Re-sync local profile state
           await applySession(session);
-
-          // Signal active non-Query components to run their manual fetch routines
-          if (isMounted) {
-            setRefetchSignal(prev => prev + 1);
-          }
         } else {
           console.log('[Reconnection] Session session not detected.');
         }
