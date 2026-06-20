@@ -117,7 +117,8 @@ export const moderationService = {
         role: u.role || 'user',
         status: (u as any).status || 'active',
         last_login_at: u.created_at || null,
-        email: (u as any).email || null
+        email: (u as any).email || null,
+        last_seen_at: u.last_seen_at || null
       }));
 
       return {
@@ -198,7 +199,8 @@ export const moderationService = {
           role: profile.role || 'user',
           status: (profile as any).status || 'active',
           email: (profile as any).email || null,
-          country_code: profile.country_code || null
+          country_code: profile.country_code || null,
+          last_seen_at: profile.last_seen_at || null
         },
         notes: notes,
         logs: logs
@@ -214,7 +216,8 @@ export const moderationService = {
           role: 'user',
           status: 'active',
           email: null,
-          country_code: null
+          country_code: null,
+          last_seen_at: null
         },
         notes: [],
         logs: []

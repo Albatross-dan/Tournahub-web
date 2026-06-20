@@ -50,6 +50,7 @@ interface AuthContextType {
   unreadNotificationsCount: number;
   unreadChatCount: number;
   refreshWalletAndStatus: () => Promise<void>;
+  onlineUserIds: Set<string>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -231,6 +232,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
   const [accountStatus, setAccountStatus] = useState<any>(null);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
   const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
 
   const fetchWalletAndStatus = async (userId: string) => {
     try {
@@ -418,6 +420,58 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       supabase.removeChannel(walletChannel);
     };
   }, [user?.id]);
+
+  // Call once on app mount, then every 60 seconds while the app is open/foregrounded
+  useEffect(() => {
+    if (!user) return;
+    const sendHeartbeat = async () => {
+      try {
+        await supabase.rpc('fn_update_last_seen');
+      } catch (err) {
+        console.warn('[Heartbeat] failed to update last seen status:', err);
+      }
+    };
+    sendHeartbeat();
+    const interval = setInterval(sendHeartbeat, 60000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // Realtime Presence — join a global presence channel
+  useEffect(() => {
+    if (!user) {
+      setOnlineUserIds(new Set());
+      return;
+    }
+
+    const channel = supabase.channel('online-users', {
+      config: { presence: { key: user.id } }
+    });
+
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState();
+        const ids = new Set<string>(
+          Object.values(state)
+            .flat()
+            .map((p: any) => p.user_id)
+            .filter(Boolean)
+        );
+        setOnlineUserIds(ids);
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          try {
+            await channel.track({ user_id: user.id, online_at: new Date().toISOString() });
+          } catch (err) {
+            console.warn('[Presence] track failed:', err);
+          }
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   // Initialize FCM Push Notifications once after user is successfully authenticated
   useEffect(() => {
@@ -979,6 +1033,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     unreadNotificationsCount,
     unreadChatCount,
     refreshWalletAndStatus,
+    onlineUserIds,
   };
 
   return (

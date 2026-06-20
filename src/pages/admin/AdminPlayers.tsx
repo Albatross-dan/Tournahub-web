@@ -61,8 +61,31 @@ function formatRelativeTime(isoString: string | null) {
   }
 }
 
+function OnlineBadge({ userId, lastSeenAt, onlineUserIds }: { userId: string; lastSeenAt: string | null; onlineUserIds: Set<string> }) {
+  const isOnline = onlineUserIds.has(userId);
+
+  if (isOnline) {
+    return (
+      <span className="flex items-center gap-1.5">
+        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+        <span className="text-green-400 text-xs font-bold font-sans">Online</span>
+      </span>
+    );
+  }
+
+  if (!lastSeenAt) {
+    return <span className="text-gray-500 text-xs">Never active</span>;
+  }
+
+  return (
+    <span className="text-gray-400 text-xs">
+      Last seen {formatRelativeTime(lastSeenAt)}
+    </span>
+  );
+}
+
 export default function AdminPlayers() {
-  const { profile: loggedInProfile } = useAuth();
+  const { profile: loggedInProfile, onlineUserIds } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -367,7 +390,7 @@ export default function AdminPlayers() {
                           </span>
                         </td>
                         <td className="px-6 py-5 font-mono text-slate-500 text-[11px]">
-                          {formatRelativeTime(u.last_login_at)}
+                          <OnlineBadge userId={u.id} lastSeenAt={u.last_seen_at || u.last_login_at} onlineUserIds={onlineUserIds} />
                         </td>
                         <td className="px-6 py-5 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end space-x-1">
@@ -572,6 +595,12 @@ export default function AdminPlayers() {
                     <div className="flex justify-between">
                       <span className="font-bold text-slate-500 uppercase tracking-widest">Last Access Node:</span>
                       <span className="text-slate-300 font-bold">{formatLocalTime(selectedUserFull.profile?.last_login_at)}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-1 border-t border-slate-800/40">
+                      <span className="font-bold text-slate-500 uppercase tracking-widest">Online Connection:</span>
+                      <span>
+                        <OnlineBadge userId={selectedUserFull.profile?.id} lastSeenAt={selectedUserFull.profile?.last_seen_at || selectedUserFull.profile?.last_login_at} onlineUserIds={onlineUserIds} />
+                      </span>
                     </div>
                   </div>
 
