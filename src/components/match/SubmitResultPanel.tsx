@@ -8,7 +8,7 @@ import { AutoVerifiedResult } from './AutoVerifiedResult';
 import { DisputedResult } from './DisputedResult';
 import { AdminReviewBanner } from './AdminReviewBanner';
 import { cn, getPublicIdentity } from '../../lib/utils';
-import { supabase } from '../../lib/supabase';
+import { supabase, ensureAuthenticated } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
 import StorageImage from '../common/StorageImage';
 import { useCountdown } from '../../hooks/useCountdown';
@@ -26,6 +26,7 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
   const [score1, setScore1] = useState<string>('');
   const [score2, setScore2] = useState<string>('');
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
+  const [screenshotBuffer, setScreenshotBuffer] = useState<ArrayBuffer | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -233,66 +234,107 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
     return <AdminReviewBanner type="abandoned" />;
   }
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const convertToJpg = (file: File): Promise<{ buffer: ArrayBuffer; name: string; type: string }> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Canvas context could not be created'));
+            URL.revokeObjectURL(objectUrl);
+            return;
+          }
+          ctx.drawImage(img, 0, 0);
+          canvas.toBlob(async (blob) => {
+            URL.revokeObjectURL(objectUrl);
+            if (!blob) {
+              reject(new Error('Canvas conversion failed'));
+              return;
+            }
+            try {
+              // Read arrayBuffer immediately in the same callback context of canvas.toBlob to prevent browser revocation!
+              const buf = await blob.arrayBuffer();
+              const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || 'screenshot';
+              resolve({
+                buffer: buf,
+                name: `${nameWithoutExt}.jpg`,
+                type: 'image/jpeg'
+              });
+            } catch (err) {
+              reject(err);
+            }
+          }, 'image/jpeg', 0.9);
+        } catch (e) {
+          URL.revokeObjectURL(objectUrl);
+          reject(e);
+        }
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('Failed to load image for conversion'));
+      };
+      img.src = objectUrl;
+    });
+  };
 
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
-    if (!allowedTypes.includes(file.type)) {
-      setUploadError('Invalid file type. Only image/jpeg, image/png, and image/jpg are allowed.');
-      toast.error('Invalid file type. Only JPEG, PNG, or JPG are allowed.');
-      return;
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      setUploadError('File too large. Max size 10MB.');
-      toast.error('File too large. Maximum size allowed is 10MB.');
-      return;
-    }
-
-    // Revoke previous object URL if any to clean memory
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
-
-    const generatedPreview = URL.createObjectURL(file);
-    setPreviewUrl(generatedPreview);
-    setScreenshotFile(file);
+  const performUpload = async (buffer: ArrayBuffer, name: string, type: string) => {
+    console.log('[SubmitResultPanel] [STEP 3] Upload started for file:', {
+      name,
+      size: buffer.byteLength,
+      type
+    });
+    setUploading(true);
     setUploadError(null);
     setPublicUrl(null);
-    setUploading(true);
 
     try {
-      // 2. Read the file as ArrayBuffer before uploading
-      const arrayBuffer = await file.arrayBuffer();
+      // Hydrate session prior to upload to prevent auth-mismatch CORS "Failed to fetch" errors
+      await ensureAuthenticated();
 
-      // 3. Upload path must be UID-prefixed
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error("You must be logged in to upload evidence.");
+      const { data: { user }, error: userErr } = await supabase.auth.getUser();
+      if (userErr || !user) {
+        throw new Error("You must be logged in to upload evidence. Please log in again.");
       }
-      
-      const fileExt = file.name ? (file.name.split('.').pop() || 'png') : 'png';
+
+      const fileExt = name ? (name.split('.').pop() || 'png') : 'png';
       const filePath = `${user.id}/match_${matchId}_${Date.now()}.${fileExt}`;
 
-      // 4. Upload using ArrayBuffer with explicit content type
+      console.log('[SubmitResultPanel] Uploading screenshot directly to path:', filePath);
+
+      // Create browser Blob from in-memory ArrayBuffer.
+      // Plain Blob bypasses the iOS Safari fetch new File() serialization/Failed to fetch bug completely!
+      const blobToUpload = new Blob([buffer], { type });
+
       const { data, error: uploadErr } = await supabase.storage
         .from('result-screenshots')
-        .upload(filePath, arrayBuffer, {
-          contentType: file.type,
+        .upload(filePath, blobToUpload, {
+          cacheControl: '3600',
+          contentType: type,
           upsert: true
         });
 
       if (uploadErr) {
-        throw uploadErr;
+        console.error('Screenshot upload failed:', uploadErr);
+        setUploadError(uploadErr.message);
+        return;
       }
 
-      // 5. Get the URL immediately after upload
-      const { data: { publicUrl: loadedUrl } } = supabase.storage
+      // Get the full public URL from supabase
+      const { data: publicUrlData } = supabase.storage
         .from('result-screenshots')
         .getPublicUrl(filePath);
 
-      setPublicUrl(loadedUrl);
+      if (!publicUrlData?.publicUrl) {
+        throw new Error("Failed to retrieve public/signed URL for the uploaded screenshot.");
+      }
+
+      console.log('[SubmitResultPanel] [STEP 4] Upload complete successfully. Public URL:', publicUrlData.publicUrl);
+      setPublicUrl(publicUrlData.publicUrl);
       toast.success("Screenshot uploaded successfully!");
     } catch (uError: any) {
       const errMsg = uError?.message || uError?.toString() || 'Unknown upload error';
@@ -302,6 +344,90 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('[SubmitResultPanel] [STEP 1] handleFileUpload invoked. e.target.files:', e.target.files);
+    const originalFile = e.target.files?.[0];
+    if (!originalFile) {
+      console.warn('[SubmitResultPanel] e.target.files is empty or null');
+      return;
+    }
+
+    console.log('[SubmitResultPanel] Original file selected:', {
+      name: originalFile.name,
+      size: originalFile.size,
+      type: originalFile.type
+    });
+
+    // CRITICAL: Read the array buffer immediately before any async wait, state updates, or canvas operations!
+    // This maintains synchronous reference permission on iOS/Safari.
+    let buffer: ArrayBuffer;
+    try {
+      buffer = await originalFile.arrayBuffer();
+    } catch (readErr: any) {
+      console.error('[SubmitResultPanel] Failed to read file immediately:', readErr);
+      setUploadError(`Failed to read file: Please try again or use a different browser.`);
+      toast.error('The selected file could not be read. Please try again or use a different browser.');
+      return;
+    }
+
+    let currentName = originalFile.name;
+    let currentType = originalFile.type || 'image/jpeg';
+    const fileExt = (currentName ? currentName.split('.').pop() : '').toLowerCase();
+
+    // Check if the uploaded image has an unsupported format (like WebP, HEIC, GIF)
+    const isUnsupportedUploadFormat = !['image/jpeg', 'image/png', 'image/jpg'].includes(currentType);
+
+    if (isUnsupportedUploadFormat) {
+      const convertibles = ['image/webp', 'image/gif', 'image/bmp'];
+      if (convertibles.includes(currentType) || ['webp', 'gif', 'bmp'].includes(fileExt)) {
+        try {
+          const toastId = toast.loading("Converting image to JPEG format...");
+          const tempFile = new File([buffer], currentName, { type: currentType });
+          const converted = await convertToJpg(tempFile);
+          buffer = converted.buffer;
+          currentName = converted.name;
+          currentType = converted.type;
+          toast.success("Converted image to JPEG format successfully!", { id: toastId });
+        } catch (convErr) {
+          console.error('[SubmitResultPanel] Client-side image conversion failed:', convErr);
+          setUploadError('Please upload a JPG or PNG screenshot under 10MB.');
+          toast.error('Please upload a JPG or PNG screenshot under 10MB.');
+          return;
+        }
+      } else {
+        setUploadError('Please upload a JPG or PNG screenshot under 10MB.');
+        toast.error('Please upload a JPG or PNG screenshot under 10MB.');
+        return;
+      }
+    }
+
+    if (buffer.byteLength > 10 * 1024 * 1024) {
+      console.warn('[SubmitResultPanel] File size exceeds 10MB limit:', buffer.byteLength);
+      setUploadError('Please upload a JPG or PNG screenshot under 10MB.');
+      toast.error('Please upload a JPG or PNG screenshot under 10MB.');
+      return;
+    }
+
+    console.log('[SubmitResultPanel] [STEP 2] File validation passed successfully. Final File size to Upload:', buffer.byteLength);
+
+    // Revoke previous object URL if any to clean memory
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    const previewBlob = new Blob([buffer], { type: currentType });
+    const generatedPreview = URL.createObjectURL(previewBlob);
+    setPreviewUrl(generatedPreview);
+    
+    const filePlaceholder = new File([buffer], currentName, { type: currentType });
+    setScreenshotFile(filePlaceholder);
+    setScreenshotBuffer(buffer);
+    setUploadError(null);
+    setPublicUrl(null);
+
+    await performUpload(buffer, currentName, currentType);
   };
 
   // Error grouping & matching
@@ -609,21 +735,57 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
                   <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Uploading Encrypted Intel...</span>
                 </div>
               )}
-              <button 
-                onClick={() => { 
-                  if (previewUrl) {
-                    URL.revokeObjectURL(previewUrl);
-                  }
-                  setPreviewUrl(null);
-                  setScreenshotFile(null); 
-                  setPublicUrl(null);
-                  setUploadError(null);
-                }}
-                className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
-                disabled={!can_submit || formDisabled || isSubmitting || hasAlreadySubmitted}
-              >
-                <div className="bg-red-600 p-2 rounded-lg text-white text-[10px] font-black uppercase tracking-widest">Remove</div>
-              </button>
+              {uploadError && !uploading && (
+                <div className="absolute inset-0 bg-slate-950/80 flex flex-col items-center justify-center p-4 text-center z-10 space-y-3">
+                  <AlertCircle className="w-8 h-8 text-red-500 animate-bounce" />
+                  <p className="text-red-400 font-bold uppercase tracking-wider text-[10px] px-2">{uploadError}</p>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (screenshotBuffer && screenshotFile) {
+                          performUpload(screenshotBuffer, screenshotFile.name, screenshotFile.type);
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-primary/20 border border-primary/40 text-primary hover:bg-primary/30 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors cursor-pointer"
+                    >
+                      Retry Upload
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (previewUrl) {
+                          URL.revokeObjectURL(previewUrl);
+                        }
+                        setPreviewUrl(null);
+                        setScreenshotFile(null);
+                        setPublicUrl(null);
+                        setUploadError(null);
+                      }}
+                      className="px-3 py-1.5 bg-red-600 border border-red-700 text-white hover:bg-red-700 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              )}
+              {!uploading && !uploadError && (
+                <button 
+                  onClick={() => { 
+                    if (previewUrl) {
+                      URL.revokeObjectURL(previewUrl);
+                    }
+                    setPreviewUrl(null);
+                    setScreenshotFile(null); 
+                    setPublicUrl(null);
+                    setUploadError(null);
+                  }}
+                  className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                  disabled={!can_submit || formDisabled || isSubmitting || hasAlreadySubmitted}
+                >
+                  <div className="bg-red-600 p-2 rounded-lg text-white text-[10px] font-black uppercase tracking-widest">Remove</div>
+                </button>
+              )}
             </div>
           ) : (
             <div className={cn(
@@ -635,6 +797,10 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
                 type="file"
                 accept="image/*"
                 onChange={handleFileUpload}
+                onClick={(e) => {
+                  console.log('[SubmitResultPanel] File input element clicked, resetting value to allow repeating same file selection.');
+                  (e.target as HTMLInputElement).value = '';
+                }}
                 disabled={!can_submit || uploading || isSubmitting || formDisabled || hasAlreadySubmitted}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
               />

@@ -44,7 +44,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         {/* Main Content */}
         <main className="flex-1 px-4 overflow-y-auto w-full custom-scrollbar">
           <motion.div 
-            key={location.pathname + '-' + refetchSignal}
+            key={location.pathname}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="max-w-7xl mx-auto w-full pb-24 md:pb-10 flex flex-col min-h-full justify-between"
