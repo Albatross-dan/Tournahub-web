@@ -115,7 +115,7 @@ export const matchService = {
           // Last message from view
           let { data: lastMessage } = await (supabase as any)
             .from('v_messages_with_sender')
-            .select('content, created_at, sender_id, sender_username')
+            .select('content, created_at, sender_id, username')
             .eq('conversation_id', conv.id)
             .order('created_at', { ascending: false })
             .limit(1)
@@ -136,7 +136,7 @@ export const matchService = {
                 content: rawMsg.content,
                 created_at: rawMsg.created_at,
                 sender_id: rawMsg.sender_id,
-                sender_username: 'Player'
+                username: 'Player'
               };
             }
           }
@@ -490,8 +490,8 @@ export const matchService = {
         ...m,
         sender: {
           id: m.sender_id,
-          username: m.sender_username,
-          avatar_url: m.sender_avatar_url
+          username: m.username,
+          avatar_url: m.avatar_url
         }
       }));
     } catch (err) {

@@ -212,8 +212,8 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
                 status: 'delivered',
                 sender: {
                   id: enrichedMsg.sender_id,
-                  username: enrichedMsg.sender_username,
-                  avatar_url: enrichedMsg.sender_avatar_url
+                  username: enrichedMsg.username,
+                  avatar_url: enrichedMsg.avatar_url
                 }
               };
               return newMsgs;
@@ -225,8 +225,8 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
               status: 'delivered',
               sender: {
                 id: enrichedMsg.sender_id,
-                username: enrichedMsg.sender_username,
-                avatar_url: enrichedMsg.sender_avatar_url
+                username: enrichedMsg.username,
+                avatar_url: enrichedMsg.avatar_url
               }
             };
             return [...prev, messageToUse];

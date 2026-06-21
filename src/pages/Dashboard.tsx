@@ -96,6 +96,27 @@ export default function Dashboard() {
     refetchOnWindowFocus: true,
   });
 
+  // Query active user's submitted match IDs
+  const { data: userSubmittedMatchIds = [], refetch: refetchSubmittedMatchIds } = useQuery<string[]>({
+    queryKey: ['user_submitted_match_ids', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const { data, error } = await supabase
+        .from('match_results')
+        .select('match_id')
+        .eq('submitted_by', user.id)
+        .eq('is_active', true)
+        .in('status', ['submitted', 'pending_confirmation', 'disputed', 'verified']);
+      if (error) {
+        console.error('[Dashboard] Error loading active submissions:', error);
+        return [];
+      }
+      return (data || []).map((r: any) => r.match_id);
+    },
+    enabled: !!user?.id,
+    staleTime: 1000 * 20,
+  });
+
   // Query user stats
   const { data: userStats = { totalMatches: 0, wins: 0, winRate: 0 }, status: statsStatus, refetch: refetchStats } = useQuery({
     queryKey: ['user_stats', user?.id],
@@ -126,14 +147,16 @@ export default function Dashboard() {
     if (refetchSignal > 0) {
       refetchMatches();
       refetchStats();
+      refetchSubmittedMatchIds();
     }
-  }, [refetchSignal, refetchMatches, refetchStats]);
+  }, [refetchSignal, refetchMatches, refetchStats, refetchSubmittedMatchIds]);
 
   // Compatibility callback for refetchOnFocus hook
   async function loadDashboardData() {
     if (user?.id) {
       refetchMatches();
       refetchStats();
+      refetchSubmittedMatchIds();
     }
   }
 
@@ -307,11 +330,11 @@ export default function Dashboard() {
               <div className="space-y-4 mt-4">
                 {scheduledMatches.length > 0 ? (
                   <div className="space-y-4">
-                    <AnimatePresence mode="popLayout" initial={false}>
+                     <AnimatePresence mode="popLayout" initial={false}>
                       {/* Show first 2 matches always */}
                       {scheduledMatches.slice(0, 2).map((match) => (
                         <motion.div key={match.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
-                          <MatchCard match={match} />
+                          <MatchCard match={match} userSubmittedMatchIds={userSubmittedMatchIds} />
                         </motion.div>
                       ))}
                     </AnimatePresence>
@@ -328,7 +351,7 @@ export default function Dashboard() {
                         >
                           {scheduledMatches.slice(2).map((match) => (
                             <motion.div key={match.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
-                              <MatchCard match={match} />
+                              <MatchCard match={match} userSubmittedMatchIds={userSubmittedMatchIds} />
                             </motion.div>
                           ))}
                         </motion.div>
@@ -669,13 +692,14 @@ function SectionHeader({ title, link }: { title: string; link: string }) {
   );
 }
 
-function MatchCard({ match }: { match: any }) {
+function MatchCard({ match, userSubmittedMatchIds = [] }: { match: any; userSubmittedMatchIds?: string[] }) {
   const { user } = useAuth();
   const [isExpanded, setIsExpanded] = useState(false);
   const opponent = match.player1?.id === user?.id ? match.player2 : match.player1;
   const opponentName = getPublicIdentity(opponent);
   
   const verificationStatus = match.result_verification_status as VerificationStatus || 'none';
+  const hasUserAlreadySubmitted = userSubmittedMatchIds.includes(match.id);
 
   const toggleExpand = (e: React.MouseEvent) => {
     // Prevent toggling when clicking buttons or links
@@ -697,7 +721,34 @@ function MatchCard({ match }: { match: any }) {
         </Link>
       );
     }
-    if (match.status === 'awaiting_result' && ['none', 'disputed'].includes(verificationStatus)) {
+    if (match.status === 'awaiting_result') {
+      if (hasUserAlreadySubmitted) {
+        return (
+          <div className="flex items-center space-x-2 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl">
+            <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
+            <span className="text-amber-500 text-[10px] font-black uppercase tracking-widest italic leading-none">Verification Pending</span>
+          </div>
+        );
+      } else {
+        return (
+          <Link 
+            to={`/matches/${match.id}`} 
+            className="btn-primary py-2 px-4 text-[10px] shadow-none group-hover:shadow-lg group-hover:shadow-primary/20 rounded-xl text-center inline-block"
+          >
+            SUBMIT RESULT
+          </Link>
+        );
+      }
+    }
+    if (match.status === 'under_review' || (verificationStatus === 'single_submission' && hasUserAlreadySubmitted)) {
+      return (
+        <div className="flex items-center space-x-2 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl">
+          <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
+          <span className="text-amber-500 text-[10px] font-black uppercase tracking-widest italic leading-none">Verification Pending</span>
+        </div>
+      );
+    }
+    if (verificationStatus === 'single_submission' && !hasUserAlreadySubmitted) {
       return (
         <Link 
           to={`/matches/${match.id}`} 
@@ -705,14 +756,6 @@ function MatchCard({ match }: { match: any }) {
         >
           SUBMIT RESULT
         </Link>
-      );
-    }
-    if (match.status === 'under_review' || verificationStatus === 'single_submission') {
-      return (
-        <div className="flex items-center space-x-2 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl">
-          <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
-          <span className="text-amber-500 text-[10px] font-black uppercase tracking-widest italic leading-none">Verification Pending</span>
-        </div>
       );
     }
     return (

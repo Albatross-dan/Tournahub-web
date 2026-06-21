@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Check, AlertCircle, Loader2, Trophy, Users, Clock } from 'lucide-react';
+import { Upload, Check, AlertCircle, Loader2, Trophy, Users, Clock, CheckCircle2 } from 'lucide-react';
 import { useMatchVerificationState } from '../../hooks/useMatchVerificationState';
 import { matchService } from '../../services/matchService';
 import { storageService } from '../../services/storageService';
@@ -36,6 +36,48 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [formDisabled, setFormDisabled] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  const [myResult, setMyResult] = useState<any>(null);
+  const [rejectedResult, setRejectedResult] = useState<any>(null);
+  const [checkingSubmission, setCheckingSubmission] = useState<boolean>(true);
+
+  const checkMySub = async () => {
+    if (!matchId || !currentUserId) return;
+    try {
+      const { data: activeSub } = await supabase
+        .from('match_results')
+        .select('id, player1_score, player2_score, status, created_at')
+        .eq('match_id', matchId)
+        .eq('submitted_by', currentUserId)
+        .eq('is_active', true)
+        .in('status', ['submitted', 'pending_confirmation', 'disputed', 'verified'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const { data: rejSub } = await supabase
+        .from('match_results')
+        .select('id, player1_score, player2_score, status, created_at')
+        .eq('match_id', matchId)
+        .eq('submitted_by', currentUserId)
+        .eq('is_active', true)
+        .eq('status', 'rejected')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      setMyResult(activeSub || null);
+      setRejectedResult(rejSub || null);
+    } catch (err) {
+      console.error('[SubmitResultPanel] Exception checking submissions:', err);
+    } finally {
+      setCheckingSubmission(false);
+    }
+  };
+
+  useEffect(() => {
+    checkMySub();
+  }, [state?.submissions, matchId, currentUserId]);
 
   useEffect(() => {
     return () => {
@@ -94,7 +136,7 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
     return () => clearInterval(pollInterval);
   }, [refetch]);
 
-  if (isLoading) {
+  if (isLoading || checkingSubmission) {
     return (
       <div className="p-12 flex flex-col items-center justify-center bg-slate-900/50 rounded-3xl border border-slate-800 animate-pulse">
         <Loader2 className="w-8 h-8 text-primary animate-spin mb-4" />
@@ -108,6 +150,26 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
       <div className="p-8 bg-red-500/5 border border-red-500/20 rounded-3xl flex items-center justify-center">
         <AlertCircle className="w-5 h-5 text-red-500 mr-3" />
         <span className="text-red-500 font-bold tracking-tight">System failure: Unable to retrieve verification telemetry.</span>
+      </div>
+    );
+  }
+
+  if (myResult) {
+    return (
+      <div className="submission-locked-card bg-slate-900 border border-slate-800 rounded-3xl p-8 space-y-4 shadow-2xl relative flex flex-col items-center text-center">
+        <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 mx-auto mb-2">
+          <CheckCircle2 className="text-emerald-500 w-8 h-8" />
+        </div>
+        <p className="font-black text-lg text-white uppercase italic tracking-wider leading-none">You've already submitted</p>
+        <p className="text-xs text-emerald-400 font-bold uppercase tracking-widest mt-1">Status: {myResult.status.replace('_', ' ')}</p>
+        <p className="text-sm text-slate-400 max-w-md">
+          You submitted {myResult.player1_score} – {myResult.player2_score}.
+          {myResult.status === 'disputed' 
+            ? ' Your opponent submitted a different score — an admin will review this shortly.'
+            : myResult.status === 'verified'
+            ? ' This result has been confirmed.'
+            : ' Waiting for your opponent to confirm.'}
+        </p>
       </div>
     );
   }
@@ -481,6 +543,15 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
               return null;
           }
         })()}
+
+        {rejectedResult && (
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center space-x-3 mb-2">
+            <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
+            <p className="text-xs font-semibold text-red-400">
+              Your previous submission was rejected. Please resubmit with a clear screenshot.
+            </p>
+          </div>
+        )}
 
         {/* Scores */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
