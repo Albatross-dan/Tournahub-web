@@ -92,9 +92,14 @@ export default function Navbar() {
               </div>
             )}
             
-            <NavLink to="/profile" className="w-11 h-11 rounded-full bg-surface border border-border-main flex items-center justify-center text-primary font-black text-sm shadow-sm relative group cursor-pointer overflow-hidden">
-              <div className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-              <span className="relative z-10 text-sm">{initial}</span>
+            <NavLink to="/profile" className="flex flex-col items-center group cursor-pointer">
+              <div className="w-11 h-11 rounded-full bg-surface border border-border-main flex items-center justify-center text-primary font-black text-sm shadow-sm relative overflow-hidden group-hover:border-primary/50 transition-colors">
+                <div className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <span className="relative z-10 text-sm">{initial}</span>
+              </div>
+              <span className="text-[8px] font-black uppercase tracking-widest text-[#a3a3c2] group-hover:text-primary mt-1 transition-colors">
+                Profile
+              </span>
             </NavLink>
           </div>
         </div>

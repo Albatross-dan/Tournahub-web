@@ -56,6 +56,18 @@ export default function CommunityChat() {
       console.error('[CommunityChat] Failed to save messages to cache:', e);
     }
   }, [messages]);
+
+  // Mark all community messages as read by updating the last_read_at timestamp in localStorage
+  useEffect(() => {
+    localStorage.setItem('community_chat_last_read_at', new Date().toISOString());
+  }, [messages]);
+
+  useEffect(() => {
+    localStorage.setItem('community_chat_last_read_at', new Date().toISOString());
+    return () => {
+      localStorage.setItem('community_chat_last_read_at', new Date().toISOString());
+    };
+  }, []);
   
   // Realtime "new message" alert state
   const [scrolledUp, setScrolledUp] = useState(false);

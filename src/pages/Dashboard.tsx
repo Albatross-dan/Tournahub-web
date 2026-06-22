@@ -71,6 +71,58 @@ export default function Dashboard() {
 
   const [isSchedulesExpanded, setIsSchedulesExpanded] = useState(false);
   const isInitialLoad = React.useRef(true);
+
+  // Unread community chat messages tracking
+  const [unreadCommunityMessages, setUnreadCommunityMessages] = useState<number>(0);
+
+  const refreshUnreadCommunityCount = React.useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const lastReadStr = localStorage.getItem('community_chat_last_read_at') || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { count, error } = await (supabase as any)
+        .from('community_chat_messages')
+        .select('*', { count: 'exact', head: true })
+        .gt('created_at', lastReadStr)
+        .neq('sender_id', user.id);
+
+      if (!error) {
+        setUnreadCommunityMessages(count || 0);
+      }
+    } catch (err) {
+      console.error('[Dashboard] Error fetching unread community chat count:', err);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    refreshUnreadCommunityCount();
+
+    // Subscribe to new community messages
+    const channel = supabase
+      .channel('dashboard-community-chat-unread')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'community_chat_messages'
+        },
+        (payload) => {
+          const newMessage = payload.new;
+          const lastReadStr = localStorage.getItem('community_chat_last_read_at') || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          if (newMessage.sender_id !== user.id && newMessage.created_at > lastReadStr) {
+            setUnreadCommunityMessages(prev => prev + 1);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, refreshUnreadCommunityCount]);
+
   useRefetchOnFocus(loadDashboardData);
   
   const activeStatus = React.useMemo(() => Object.values(TournamentStatus), []);
@@ -148,8 +200,9 @@ export default function Dashboard() {
       refetchMatches();
       refetchStats();
       refetchSubmittedMatchIds();
+      refreshUnreadCommunityCount();
     }
-  }, [refetchSignal, refetchMatches, refetchStats, refetchSubmittedMatchIds]);
+  }, [refetchSignal, refetchMatches, refetchStats, refetchSubmittedMatchIds, refreshUnreadCommunityCount]);
 
   // Compatibility callback for refetchOnFocus hook
   async function loadDashboardData() {
@@ -157,6 +210,7 @@ export default function Dashboard() {
       refetchMatches();
       refetchStats();
       refetchSubmittedMatchIds();
+      refreshUnreadCommunityCount();
     }
   }
 
@@ -304,16 +358,29 @@ export default function Dashboard() {
                 className="w-full bg-[#064e3b] hover:bg-[#047857] text-[#34d399] border border-[#047857]/50 rounded-3xl p-4 flex items-center justify-between transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl shadow-[#064e3b]/20 hover:scale-[1.01]"
               >
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-2xl bg-[#047857]/30 flex items-center justify-center shrink-0 border border-[#047857]/30 text-[#34d399]">
-                    <MessageSquare className="w-5 h-5" />
+                  <div className="relative">
+                    <div className="w-10 h-10 rounded-2xl bg-[#047857]/30 flex items-center justify-center shrink-0 border border-[#047857]/30 text-[#34d399]">
+                      <MessageSquare className="w-5 h-5" />
+                    </div>
+                    {unreadCommunityMessages > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1.5 rounded-full bg-[#10b981] text-black text-[9px] font-bold flex items-center justify-center border-2 border-[#064e3b] shadow">
+                        {unreadCommunityMessages}
+                      </span>
+                    )}
                   </div>
                   <div className="text-left">
                     <h4 className="font-black text-white uppercase italic tracking-tighter text-sm leading-none flex items-center gap-1.5">
                       Join Community Chat
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#10b981] flex items-center justify-center relative">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />
-                        <span className="absolute w-2 h-2 rounded-full bg-[#10b981] animate-ping opacity-75" />
-                      </span>
+                      {unreadCommunityMessages > 0 ? (
+                        <span className="bg-[#10b981] text-[#052e16] px-1.5 py-0.5 rounded text-[9px] font-black tracking-normal normal-case leading-none flex items-center">
+                          {unreadCommunityMessages} unread
+                        </span>
+                      ) : (
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#10b981] flex items-center justify-center relative">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />
+                          <span className="absolute w-2 h-2 rounded-full bg-[#10b981] animate-ping opacity-75" />
+                        </span>
+                      )}
                     </h4>
                     <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mt-1">Connect, banter, and coordinate with all players</p>
                   </div>
