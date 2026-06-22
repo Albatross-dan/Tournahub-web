@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Upload, Check, AlertCircle, Loader2, Trophy, Users, Clock, CheckCircle2 } from 'lucide-react';
 import { useMatchVerificationState } from '../../hooks/useMatchVerificationState';
 import { matchService } from '../../services/matchService';
@@ -22,6 +22,7 @@ interface SubmitResultPanelProps {
 
 export function SubmitResultPanel({ matchId, currentUserId, playerName, match }: SubmitResultPanelProps) {
   const { state, isLoading, error, refetch, serverTimeOffsetMs } = useMatchVerificationState(matchId);
+  const uploadSectionRef = useRef<HTMLDivElement>(null);
 
   const [score1, setScore1] = useState<string>('');
   const [score2, setScore2] = useState<string>('');
@@ -513,6 +514,13 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
       console.error('[SubmitResultPanel] error:', err);
       toast.error(errMsg);
       setSubmitError(errMsg);
+
+      if (err?.screenshot_required) {
+        setUploadError("A screenshot of the match result is strictly required to submit.");
+        setTimeout(() => {
+          uploadSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -716,10 +724,10 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
         </div>
 
         {/* Screenshot Upload */}
-        <div className="space-y-3">
+        <div ref={uploadSectionRef} className="space-y-3">
           <div className="flex items-center justify-between">
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Screenshot Evidence</label>
-            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-white/5">Recommended</span>
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-white/5">Required</span>
           </div>
           
           {screenshotFile ? (
@@ -861,10 +869,10 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
         {/* Submit Button */}
         <button 
           onClick={handleSubmit}
-          disabled={!can_submit || !isFormValid || isSubmitting || uploading || formDisabled || hasAlreadySubmitted || (screenshotFile !== null && (!publicUrl || uploading))}
+          disabled={!can_submit || !isFormValid || isSubmitting || uploading || formDisabled || hasAlreadySubmitted || !publicUrl}
           className={cn(
             "w-full h-16 flex items-center justify-center space-x-3 rounded-2xl font-black uppercase italic tracking-widest transition-all cursor-pointer",
-            can_submit && isFormValid && !hasAlreadySubmitted && !formDisabled && !(screenshotFile !== null && (!publicUrl || uploading))
+            can_submit && isFormValid && !hasAlreadySubmitted && !formDisabled && !uploading && !!publicUrl
               ? "bg-primary text-black hover:bg-white hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-primary/20"
               : "bg-slate-800 text-slate-600 cursor-not-allowed"
           )}

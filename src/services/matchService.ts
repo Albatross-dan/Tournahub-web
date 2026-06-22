@@ -230,7 +230,11 @@ export const matchService = {
       }
 
       if (data?.error) {
-        throw new Error(data.error);
+        const customErr: any = new Error(data.error);
+        if (data.screenshot_required) {
+          customErr.screenshot_required = true;
+        }
+        throw customErr;
       }
 
       return data;
