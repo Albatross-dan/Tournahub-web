@@ -387,12 +387,12 @@ export default function Dashboard() {
           {/* Main Feed: Scheduled Matches */}
           <motion.div variants={item} className="lg:col-span-2 space-y-8">
             {/* Community Chat + 1v1 Challenge Side-by-Side Row */}
-            <motion.div variants={item} className="flex flex-row items-center gap-2 w-full animate-in fade-in slide-in-from-bottom-3 duration-300">
+            <motion.div variants={item} className="flex flex-row items-stretch gap-2 w-full animate-in fade-in slide-in-from-bottom-3 duration-300">
               {/* Left Card: Community Chat */}
               <button 
                 type="button"
                 onClick={() => navigate('/community-chat')}
-                className="flex-1 bg-[#064e3b] hover:bg-[#047857] text-[#34d399] border border-[#047857]/50 rounded-3xl p-4 flex flex-col justify-between h-[130px] transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl shadow-[#064e3b]/20 hover:scale-[1.01]"
+                className="flex-1 bg-[#064e3b] hover:bg-[#047857] text-[#34d399] border border-[#047857]/50 rounded-3xl p-4 flex flex-col justify-between min-h-[150px] transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl shadow-[#064e3b]/20 hover:scale-[1.01]"
               >
                 <div className="flex items-start justify-between w-full">
                   <div className="relative">
@@ -434,7 +434,7 @@ export default function Dashboard() {
               <button 
                 type="button"
                 onClick={() => navigate('/challenge-lobby')}
-                className="flex-1 bg-[#1e1b4b] hover:bg-[#312e81] text-[#818cf8] border border-[#3730a3]/50 rounded-3xl p-4 flex flex-col justify-between h-[130px] transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl shadow-[#1e1b4b]/20 hover:scale-[1.01]"
+                className="flex-1 bg-[#1e1b4b] hover:bg-[#312e81] text-[#818cf8] border border-[#3730a3]/50 rounded-3xl p-4 flex flex-col justify-between min-h-[150px] transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl shadow-[#1e1b4b]/20 hover:scale-[1.01]"
               >
                 <div className="flex items-start justify-between w-full">
                   <div className="relative">
