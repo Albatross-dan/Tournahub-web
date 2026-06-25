@@ -74,7 +74,7 @@ export const matchService = {
       if (error) throw error;
       return data as any[];
     } catch (err: any) {
-      console.error('[matchService] Critical failure in getUserMatches:', err);
+      console.warn('[matchService] Critical failure in getUserMatches:', err);
       return [];
     }
   },

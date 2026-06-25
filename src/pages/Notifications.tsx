@@ -114,7 +114,7 @@ export default function Notifications() {
       if (error) throw error;
       setNotifications(data || []);
     } catch (err) {
-      console.error('Error fetching notifications:', err);
+      console.warn('Error fetching notifications:', err);
     } finally {
       setLoading(false);
       isInitialLoad.current = false;

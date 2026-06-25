@@ -12,12 +12,33 @@ export interface PlatformStatus {
 
 export const platformService = {
   async getPlatformStatus(): Promise<PlatformStatus> {
-    const { data, error } = await (supabase as any).rpc('get_platform_status');
-    if (error) {
-      console.error('[platformService] Error getting platform status:', error);
-      throw error;
+    try {
+      const { data, error } = await (supabase as any).rpc('get_platform_status');
+      if (error) {
+        console.warn('[platformService] Error getting platform status:', error);
+        return {
+          maintenance_mode: false,
+          is_blocked: false,
+          caller_is_admin: false,
+          maintenance_message: '',
+          maintenance_end_estimate: null,
+          maintenance_scheduled_at: null,
+          upcoming_maintenance: false
+        };
+      }
+      return data as PlatformStatus;
+    } catch (err) {
+      console.warn('[platformService] Exception getting platform status:', err);
+      return {
+        maintenance_mode: false,
+        is_blocked: false,
+        caller_is_admin: false,
+        maintenance_message: '',
+        maintenance_end_estimate: null,
+        maintenance_scheduled_at: null,
+        upcoming_maintenance: false
+      };
     }
-    return data as PlatformStatus;
   },
 
   async setMaintenanceMode(adminId: string, enabled: boolean) {

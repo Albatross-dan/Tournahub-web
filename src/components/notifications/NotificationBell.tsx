@@ -61,7 +61,7 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
       setNotifications(data || []);
       setUnreadCount((data || []).filter(n => !n.read).length);
     } catch (err) {
-      console.error('Error fetching notifications:', err);
+      console.warn('Error fetching notifications:', err);
     }
   }
 

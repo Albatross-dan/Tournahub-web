@@ -279,7 +279,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       const fetchStatusPromise = (async () => {
         const { data, error } = await (supabase as any).rpc('get_my_account_status');
         if (error) {
-          console.error('[AuthContext] get_my_account_status error:', error);
+          console.warn('[AuthContext] get_my_account_status error (using profile fallback):', error);
           const { data: profileData } = await (supabase as any)
             .from('profiles')
             .select('status, banned_reason, suspension_reason, suspended_until')
@@ -296,7 +296,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
           p_display_currency: 'USD'
         });
         if (error) {
-          console.error('[AuthContext] get_wallet_summary error:', error);
+          console.warn('[AuthContext] get_wallet_summary error (using wallet fallback):', error);
           const { data: walletData } = await (supabase as any)
             .from('wallets')
             .select('*')

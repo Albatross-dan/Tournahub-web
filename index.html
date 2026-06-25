@@ -5,8 +5,95 @@
     <script>
       (function() {
         if (typeof window !== 'undefined') {
-          window.process = window.process || { env: { NODE_ENV: 'production', APP_VERSION: '1.0.24' } };
+          // Keep track of error event listeners to allow correct removal
+          var errorListeners = [];
+          var originalAddEventListener = window.addEventListener;
+          
+          window.addEventListener = function(type, listener, options) {
+            if (type === 'error' || type === 'unhandledrejection') {
+              var wrapped = function(event) {
+                if (type === 'error') {
+                  // Suppress generic cross-origin "Script error." (often sandbox/CORS/iframe related)
+                  if (event.message === 'Script error.' || !event.filename || event.filename === '') {
+                    try {
+                      event.stopImmediatePropagation();
+                      event.preventDefault();
+                    } catch (e) {}
+                    return;
+                  }
+                  // Suppress common errors injected by browser extensions
+                  if (event.filename && (
+                    event.filename.indexOf('chrome-extension') !== -1 || 
+                    event.filename.indexOf('safari-extension') !== -1 || 
+                    event.filename.indexOf('moz-extension') !== -1
+                  )) {
+                    try {
+                      event.stopImmediatePropagation();
+                      event.preventDefault();
+                    } catch (e) {}
+                    return;
+                  }
+                } else if (type === 'unhandledrejection') {
+                  if (event.reason && (
+                    event.reason.message === 'Script error.' || 
+                    event.reason.message === 'Extension error' || 
+                    (event.reason.stack && (
+                      event.reason.stack.indexOf('chrome-extension') !== -1 ||
+                      event.reason.stack.indexOf('safari-extension') !== -1 ||
+                      event.reason.stack.indexOf('moz-extension') !== -1
+                    ))
+                  )) {
+                    try {
+                      event.stopImmediatePropagation();
+                      event.preventDefault();
+                    } catch (e) {}
+                    return;
+                  }
+                }
+                try {
+                  return listener.apply(this, arguments);
+                } catch (e) {
+                  console.warn('[Suppressed inner listener error]:', e);
+                }
+              };
+              errorListeners.push({ original: listener, wrapped: wrapped });
+              return originalAddEventListener.call(window, type, wrapped, options);
+            }
+            return originalAddEventListener.call(window, type, listener, options);
+          };
+
+          var originalRemoveEventListener = window.removeEventListener;
+          window.removeEventListener = function(type, listener, options) {
+            if (type === 'error' || type === 'unhandledrejection') {
+              for (var i = 0; i < errorListeners.length; i++) {
+                if (errorListeners[i].original === listener) {
+                  var wrapped = errorListeners[i].wrapped;
+                  errorListeners.splice(i, 1);
+                  return originalRemoveEventListener.call(window, type, wrapped, options);
+                }
+              }
+            }
+            return originalRemoveEventListener.call(window, type, listener, options);
+          };
+
+          // Also configure the default legacy window.onerror fallback handler
+          window.onerror = function(message, source, lineno, colno, error) {
+            if (message === 'Script error.' || !source) {
+              console.warn('[Ignored Cross-Origin Script Error]:', message);
+              return true; // Suppress propagation
+            }
+            if (source && (
+              source.indexOf('chrome-extension') !== -1 || 
+              source.indexOf('safari-extension') !== -1 || 
+              source.indexOf('moz-extension') !== -1
+            )) {
+              console.warn('[Ignored Extension Error]:', message);
+              return true;
+            }
+            return false;
+          };
         }
+
         var isLocalStorageAccessible = false;
         try {
           if (typeof window !== 'undefined' && window.localStorage) {

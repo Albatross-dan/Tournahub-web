@@ -194,7 +194,7 @@ export default function Dashboard() {
         .eq('is_active', true)
         .in('status', ['submitted', 'pending_confirmation', 'disputed', 'verified']);
       if (error) {
-        console.error('[Dashboard] Error loading active submissions:', error);
+        console.warn('[Dashboard] Error loading active submissions:', error);
         return [];
       }
       return (data || []).map((r: any) => r.match_id);
@@ -394,24 +394,18 @@ export default function Dashboard() {
                 className="flex-1 bg-[#064e3b] hover:bg-[#047857] text-[#34d399] border border-[#047857]/50 rounded-3xl p-4 flex flex-col justify-between min-h-[150px] transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl shadow-[#064e3b]/20 hover:scale-[1.01] select-none outline-none focus-visible:ring-2 focus-visible:ring-[#34d399]/50"
               >
                 <div className="flex items-start justify-between w-full">
-                  <div className="relative">
-                    <div className="w-10 h-10 rounded-2xl bg-[#047857]/30 flex items-center justify-center shrink-0 border border-[#047857]/30 text-[#34d399]">
-                      <MessageSquare className="w-5 h-5" />
-                    </div>
-                    {unreadCommunityMessages > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1.5 rounded-full bg-[#10b981] text-black text-[9px] font-bold flex items-center justify-center border-2 border-[#064e3b] shadow">
-                        {unreadCommunityMessages}
-                      </span>
-                    )}
+                  <div className="w-10 h-10 rounded-2xl bg-[#047857]/30 flex items-center justify-center shrink-0 border border-[#047857]/30 text-[#34d399]">
+                    <MessageSquare className="w-5 h-5" />
                   </div>
 
                   {unreadCommunityMessages > 0 ? (
-                    <span className="bg-[#10b981] text-[#052e16] px-1.5 py-0.5 rounded text-[8px] font-black tracking-normal uppercase leading-none">
-                      {unreadCommunityMessages} unread
+                    <span className="bg-[#10b981] text-[#052e16] px-1.5 py-0.5 rounded text-[8px] font-black tracking-normal uppercase leading-none mt-1 mr-1">
+                      ● {unreadCommunityMessages} unread
                     </span>
                   ) : (
-                    <span className="w-2 h-2 rounded-full bg-[#10b981] relative mt-1 mr-1">
-                      <span className="absolute w-2 h-2 rounded-full bg-[#10b981] animate-ping opacity-75" />
+                    <span className="text-[8px] font-bold text-emerald-400 uppercase tracking-widest mt-1.5 mr-1 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />
+                      Online
                     </span>
                   )}
                 </div>
@@ -438,19 +432,18 @@ export default function Dashboard() {
                 className="flex-1 bg-[#1e1b4b] hover:bg-[#312e81] text-[#818cf8] border border-[#3730a3]/50 rounded-3xl p-4 flex flex-col justify-between min-h-[150px] transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl shadow-[#1e1b4b]/20 hover:scale-[1.01] select-none outline-none focus-visible:ring-2 focus-visible:ring-[#818cf8]/50"
               >
                 <div className="flex items-start justify-between w-full">
-                  <div className="relative">
-                    <div className="w-10 h-10 rounded-2xl bg-[#312e81]/30 flex items-center justify-center shrink-0 border border-[#3730a3]/30 text-[#818cf8]">
-                      <Swords className="w-5 h-5" />
-                    </div>
+                  <div className="w-10 h-10 rounded-2xl bg-[#312e81]/30 flex items-center justify-center shrink-0 border border-[#3730a3]/30 text-[#818cf8]">
+                    <Swords className="w-5 h-5" />
                   </div>
 
                   {openChallengesCount > 0 ? (
-                    <span className="bg-[#818cf8] text-black px-1.5 py-0.5 rounded text-[8px] font-black tracking-normal uppercase leading-none">
-                      {openChallengesCount} active
+                    <span className="bg-[#818cf8] text-black px-1.5 py-0.5 rounded text-[8px] font-black tracking-normal uppercase leading-none mt-1 mr-1">
+                      ● {openChallengesCount} active
                     </span>
                   ) : (
-                    <span className="text-[8px] font-bold text-indigo-400 uppercase tracking-widest mt-1 mr-1">
-                      0 open
+                    <span className="text-[8px] font-bold text-indigo-400 uppercase tracking-widest mt-1.5 mr-1 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                      0 Open
                     </span>
                   )}
                 </div>

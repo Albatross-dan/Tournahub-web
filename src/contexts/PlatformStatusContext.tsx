@@ -57,7 +57,7 @@ export function PlatformStatusProvider({ children }: { children: React.ReactNode
       setStatus(data);
       return data;
     } catch (err) {
-      console.error('[PlatformStatusProvider] Error polling status:', err);
+      console.warn('[PlatformStatusProvider] Error polling status:', err);
       setStatus(defaultStatus);
       return defaultStatus;
     } finally {
@@ -83,12 +83,12 @@ export function PlatformStatusProvider({ children }: { children: React.ReactNode
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('[PlatformStatusProvider] Error fetching announcements:', error);
+        console.warn('[PlatformStatusProvider] Error fetching announcements:', error);
       } else if (data) {
         setUnreadAnnouncements(data as AnnouncementNotification[]);
       }
     } catch (err) {
-      console.error('[PlatformStatusProvider] Error fetching announcements:', err);
+      console.warn('[PlatformStatusProvider] Error fetching announcements:', err);
     }
   };
 
@@ -100,12 +100,12 @@ export function PlatformStatusProvider({ children }: { children: React.ReactNode
         .eq('id', id);
 
       if (error) {
-        console.error('[PlatformStatusProvider] Error dismissing announcement:', error);
+        console.warn('[PlatformStatusProvider] Error dismissing announcement:', error);
       } else {
         setUnreadAnnouncements(prev => prev.filter(a => a.id !== id));
       }
     } catch (err) {
-      console.error('[PlatformStatusProvider] Exception during dismiss:', err);
+      console.warn('[PlatformStatusProvider] Exception during dismiss:', err);
     }
   };
 
