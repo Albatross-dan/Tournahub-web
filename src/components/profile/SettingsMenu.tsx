@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
+import { usePwaUpdate } from '../../contexts/PwaUpdateContext';
 
 const LANGUAGES = [
   { code: 'en', name: 'English' },
@@ -79,6 +80,7 @@ const SYSTEM_TIMEZONES = getTimezones();
 export default function SettingsMenu() {
   const { profile, user } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { appVersion } = usePwaUpdate();
   
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [loading, setLoading] = useState(true);
@@ -568,6 +570,13 @@ export default function SettingsMenu() {
           </button>
         </div>
       </section>
+
+      {/* Version Footer */}
+      <div className="pt-8 pb-4 text-center border-t border-zinc-900">
+        <p className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">
+          Tournahub Version <span className="text-zinc-400 font-extrabold">{appVersion}</span>
+        </p>
+      </div>
     </div>
   );
 }

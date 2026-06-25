@@ -29,8 +29,6 @@ self.addEventListener('install', (event) => {
     caches.open(SHELL_CACHE).then((cache) => {
       console.log('[SW] Pre-caching application shell assets...');
       return cache.addAll(PRECACHE_ASSETS);
-    }).then(() => {
-      return self.skipWaiting();
     })
   );
 });
@@ -155,3 +153,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 });
+
+// Message listener to trigger activation of the waiting service worker
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('[SW] Received SKIP_WAITING message, activating immediately...');
+    self.skipWaiting();
+  }
+});
+

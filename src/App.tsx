@@ -7,6 +7,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import LoadingState from './components/ui/LoadingState';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { PwaUpdateProvider } from './contexts/PwaUpdateContext';
 
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
@@ -200,7 +201,9 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <Router>
         <ErrorBoundary>
-          <AppRoutes />
+          <PwaUpdateProvider>
+            <AppRoutes />
+          </PwaUpdateProvider>
         </ErrorBoundary>
       </Router>
     </QueryClientProvider>
