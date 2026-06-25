@@ -224,10 +224,7 @@ export default function Dashboard() {
     ).slice(0, 20);
   }, [userMatches]);
 
-  const isDashboardLoading = (matchesStatus === 'pending' && userMatches.length === 0) || 
-                             (statsStatus === 'pending' && userStats.totalMatches === 0) || 
-                             activeLoading || 
-                             completedLoading;
+  const isDashboardLoading = false;
 
   useEffect(() => {
     if (refetchSignal > 0) {
@@ -387,12 +384,14 @@ export default function Dashboard() {
           {/* Main Feed: Scheduled Matches */}
           <motion.div variants={item} className="lg:col-span-2 space-y-8">
             {/* Community Chat + 1v1 Challenge Side-by-Side Row */}
-            <motion.div variants={item} className="flex flex-row items-stretch gap-2 w-full animate-in fade-in slide-in-from-bottom-3 duration-300">
+            <motion.div variants={item} className="flex flex-row items-stretch gap-2 w-full duration-300">
               {/* Left Card: Community Chat */}
-              <button 
-                type="button"
+              <div 
+                role="button"
+                tabIndex={0}
                 onClick={() => navigate('/community-chat')}
-                className="flex-1 bg-[#064e3b] hover:bg-[#047857] text-[#34d399] border border-[#047857]/50 rounded-3xl p-4 flex flex-col justify-between min-h-[150px] transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl shadow-[#064e3b]/20 hover:scale-[1.01]"
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/community-chat'); } }}
+                className="flex-1 bg-[#064e3b] hover:bg-[#047857] text-[#34d399] border border-[#047857]/50 rounded-3xl p-4 flex flex-col justify-between min-h-[150px] transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl shadow-[#064e3b]/20 hover:scale-[1.01] select-none outline-none focus-visible:ring-2 focus-visible:ring-[#34d399]/50"
               >
                 <div className="flex items-start justify-between w-full">
                   <div className="relative">
@@ -428,13 +427,15 @@ export default function Dashboard() {
                   <span className="text-[9px] font-black uppercase tracking-wider text-emerald-400">Open Chat</span>
                   <ArrowUpRight className="w-3.5 h-3.5 text-[#34d399] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </div>
-              </button>
+              </div>
 
               {/* Right Card: 1v1 Challenge */}
-              <button 
-                type="button"
+              <div 
+                role="button"
+                tabIndex={0}
                 onClick={() => navigate('/challenge-lobby')}
-                className="flex-1 bg-[#1e1b4b] hover:bg-[#312e81] text-[#818cf8] border border-[#3730a3]/50 rounded-3xl p-4 flex flex-col justify-between min-h-[150px] transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl shadow-[#1e1b4b]/20 hover:scale-[1.01]"
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/challenge-lobby'); } }}
+                className="flex-1 bg-[#1e1b4b] hover:bg-[#312e81] text-[#818cf8] border border-[#3730a3]/50 rounded-3xl p-4 flex flex-col justify-between min-h-[150px] transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl shadow-[#1e1b4b]/20 hover:scale-[1.01] select-none outline-none focus-visible:ring-2 focus-visible:ring-[#818cf8]/50"
               >
                 <div className="flex items-start justify-between w-full">
                   <div className="relative">
@@ -465,7 +466,7 @@ export default function Dashboard() {
                   <span className="text-[9px] font-black uppercase tracking-wider text-[#a5b4fc]">Play Now</span>
                   <ArrowUpRight className="w-3.5 h-3.5 text-[#818cf8] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </div>
-              </button>
+              </div>
             </motion.div>
 
             <div>
