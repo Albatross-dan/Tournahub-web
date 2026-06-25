@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
 import AdminShell from '../../components/layout/AdminShell';
 import { 
   Shield, Activity, Search, RefreshCw, 
@@ -9,6 +10,7 @@ import { cn } from '../../lib/utils';
 import LoadingState from '../../components/ui/LoadingState';
 import { toast } from 'react-hot-toast';
 import { moderationService } from '../../services/moderationService';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Local date format helper
 function formatLocalTime(isoString: string | null) {
@@ -46,9 +48,18 @@ function formatRelativeTime(isoString: string | null) {
 }
 
 export default function ModerationLogs() {
+  const { can, loading: authLoading } = useAuth();
   const [logs, setLogs] = useState<any[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  if (authLoading) {
+    return <LoadingState />;
+  }
+
+  if (!can('view_reports')) {
+    return <Navigate to="/admin" replace />;
+  }
 
   // Filters State
   const [actionType, setActionType] = useState<string>('All');

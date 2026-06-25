@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Trophy, Users, 
   Gamepad2, Wallet, BarChart3, 
   ChevronRight, LogOut, Shield,
-  Menu, X, Gavel, Wrench
+  Menu, X, Gavel, Wrench, ShieldCheck
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -15,23 +15,37 @@ const logoUrl = '/android-chrome-512x512.png';
 import UpcomingMaintenanceBanner from './UpcomingMaintenanceBanner';
 import AnnouncementBanner from './AnnouncementBanner';
 
-const NAV_ITEMS = [
-  { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
-  { name: 'Platform Gates', path: '/admin/platform', icon: Wrench },
-  { name: 'Tournaments', path: '/admin/tournaments', icon: Trophy },
-  { name: 'Fixtures', path: '/admin/fixtures', icon: Gamepad2 },
-  { name: 'Disputes', path: '/admin/moderation', icon: Gavel },
-  { name: 'Contenders', path: '/admin/players', icon: Users },
-  { name: 'Logs', path: '/admin/logs', icon: Shield },
-  { name: 'Wallet', path: '/admin/wallet', icon: Wallet },
-  { name: 'Standings', path: '/admin/standings', icon: BarChart3 },
-];
+const PERMISSION_LABELS: Record<string, string> = {
+  manage_disputes: 'Dispute Manager',
+  manage_chat: 'Chat Moderator',
+  manage_tournaments: 'Tournament Manager',
+  manage_matches: 'Match Manager',
+  manage_challenges: 'Challenge Manager',
+  view_reports: 'Reports Viewer',
+  view_players: 'Player Inspector',
+};
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, loading, isAdmin, refetchSignal } = useAuth();
+  const { user, profile, loading, isAdmin, refetchSignal, can, permissionSet } = useAuth();
+
+  const isFullAdmin = profile?.role === 'admin' || user?.email?.toLowerCase().trim() === 'danieloguda11221@gmail.com';
+  const canAccessAdmin = isFullAdmin || (permissionSet && permissionSet.size > 0);
+
+  const navItems = [
+    { name: 'Dashboard', path: '/admin', icon: LayoutDashboard, show: true },
+    { name: 'Platform Gates', path: '/admin/platform', icon: Wrench, show: isFullAdmin },
+    { name: 'Staff Management', path: '/admin/staff', icon: ShieldCheck, show: isFullAdmin },
+    { name: 'Tournaments', path: '/admin/tournaments', icon: Trophy, show: can('manage_tournaments') },
+    { name: 'Fixtures', path: '/admin/fixtures', icon: Gamepad2, show: can('manage_matches') },
+    { name: 'Disputes', path: '/admin/moderation', icon: Gavel, show: can('manage_disputes') },
+    { name: 'Contenders', path: '/admin/players', icon: Users, show: can('view_players') },
+    { name: 'Logs', path: '/admin/logs', icon: Shield, show: can('view_reports') },
+    { name: 'Wallet', path: '/admin/wallet', icon: Wallet, show: isFullAdmin },
+    { name: 'Standings', path: '/admin/standings', icon: BarChart3, show: can('manage_tournaments') },
+  ].filter(item => item.show);
 
   useEffect(() => {
     console.log('[AdminShell] Route Entry Evaluation:', {
@@ -41,14 +55,15 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       hasUser: !!user,
       userId: user?.id,
       userRole: profile?.role,
-      isAdmin
+      isAdmin,
+      canAccessAdmin
     });
 
-    if (!loading && (!user || !isAdmin)) {
-      console.warn('[AdminShell] Missing admin rights. Redirecting user to /dashboard:', { email: user?.email, isAdmin, role: profile?.role });
+    if (!loading && (!user || !canAccessAdmin)) {
+      console.warn('[AdminShell] Missing admin or staff rights. Redirecting user to /dashboard:', { email: user?.email, canAccessAdmin, role: profile?.role });
       navigate('/dashboard', { replace: true });
     }
-  }, [user, profile, isAdmin, loading, navigate, location.pathname]);
+  }, [user, profile, canAccessAdmin, loading, navigate, location.pathname]);
 
   const { disputedMatches = [], singleSubmissionMatches = [], abandonedMatches = [], noShowCount = 0 } = useAdminDisputes(user?.id || '');
   const totalAlerts = disputedMatches.length + singleSubmissionMatches.length + abandonedMatches.length + noShowCount;
@@ -63,8 +78,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     );
   }
 
-  if (!isAdmin) {
-    console.warn('[AdminShell] Rendering null because isAdmin is FALSE. A redirect is initiated.', { email: user?.email, isAdmin });
+  if (!canAccessAdmin) {
+    console.warn('[AdminShell] Rendering null because canAccessAdmin is FALSE. A redirect is initiated.', { email: user?.email, canAccessAdmin });
     return null; // Don't show anything during redirect
   }
 
@@ -94,7 +109,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
           {/* Navigation Items */}
           <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto">
-            {NAV_ITEMS.map((item) => (
+            {navItems.map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
@@ -159,6 +174,16 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               <span className="font-black italic uppercase text-white tracking-widest text-xs hidden sm:inline-block">Admin Control</span>
             </div>
           </div>
+
+          {!isFullAdmin && permissionSet && permissionSet.size > 0 && (
+            <div className="hidden md:flex items-center space-x-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 text-[10px] font-black uppercase tracking-wider shadow-sm">
+              <span>🛡️ STAFF MODE</span>
+              <span className="text-amber-500/40">•</span>
+              <span className="text-slate-300 font-bold italic">
+                {Array.from(permissionSet).map(key => PERMISSION_LABELS[key as string]).filter(Boolean).join(' · ')}
+              </span>
+            </div>
+          )}
           
           <div className="flex items-center space-x-2">
             <Link 

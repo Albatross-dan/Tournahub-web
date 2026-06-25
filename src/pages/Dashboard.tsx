@@ -5,7 +5,7 @@ import {
   ArrowUpRight, Gamepad2, Timer,
   Loader2, Tv, Shield, HelpCircle,
   ChevronDown, ChevronUp, Calendar, Play, CheckCircle2, Download,
-  MessageSquare
+  MessageSquare, Swords
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatCurrency, cn, getPublicIdentity, formatFixtureTime } from '../lib/utils';
@@ -123,6 +123,40 @@ export default function Dashboard() {
     };
   }, [user?.id, refreshUnreadCommunityCount]);
 
+  // Open 1v1 challenges tracking
+  const [openChallengesCount, setOpenChallengesCount] = useState<number>(0);
+
+  const refreshOpenChallengesCount = React.useCallback(async () => {
+    try {
+      const { count, error } = await supabase
+        .from('challenges')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'waiting');
+      if (!error) {
+        setOpenChallengesCount(count || 0);
+      }
+    } catch (err) {
+      console.error('[Dashboard] Error fetching open challenges:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshOpenChallengesCount();
+    const sub = supabase
+      .channel('dashboard-challenges-count')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'challenges',
+      }, () => {
+        refreshOpenChallengesCount();
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(sub);
+    };
+  }, [refreshOpenChallengesCount]);
+
   useRefetchOnFocus(loadDashboardData);
   
   const activeStatus = React.useMemo(() => Object.values(TournamentStatus), []);
@@ -201,8 +235,9 @@ export default function Dashboard() {
       refetchStats();
       refetchSubmittedMatchIds();
       refreshUnreadCommunityCount();
+      refreshOpenChallengesCount();
     }
-  }, [refetchSignal, refetchMatches, refetchStats, refetchSubmittedMatchIds, refreshUnreadCommunityCount]);
+  }, [refetchSignal, refetchMatches, refetchStats, refetchSubmittedMatchIds, refreshUnreadCommunityCount, refreshOpenChallengesCount]);
 
   // Compatibility callback for refetchOnFocus hook
   async function loadDashboardData() {
@@ -211,6 +246,7 @@ export default function Dashboard() {
       refetchStats();
       refetchSubmittedMatchIds();
       refreshUnreadCommunityCount();
+      refreshOpenChallengesCount();
     }
   }
 
@@ -350,14 +386,15 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 pt-4">
           {/* Main Feed: Scheduled Matches */}
           <motion.div variants={item} className="lg:col-span-2 space-y-8">
-            {/* Community Chat Feature Button */}
-            <motion.div variants={item} className="w-full animate-in fade-in slide-in-from-bottom-3 duration-300">
+            {/* Community Chat + 1v1 Challenge Side-by-Side Row */}
+            <motion.div variants={item} className="flex flex-row items-center gap-2 w-full animate-in fade-in slide-in-from-bottom-3 duration-300">
+              {/* Left Card: Community Chat */}
               <button 
                 type="button"
                 onClick={() => navigate('/community-chat')}
-                className="w-full bg-[#064e3b] hover:bg-[#047857] text-[#34d399] border border-[#047857]/50 rounded-3xl p-4 flex items-center justify-between transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl shadow-[#064e3b]/20 hover:scale-[1.01]"
+                className="flex-1 bg-[#064e3b] hover:bg-[#047857] text-[#34d399] border border-[#047857]/50 rounded-3xl p-4 flex flex-col justify-between h-[130px] transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl shadow-[#064e3b]/20 hover:scale-[1.01]"
               >
-                <div className="flex items-center space-x-3">
+                <div className="flex items-start justify-between w-full">
                   <div className="relative">
                     <div className="w-10 h-10 rounded-2xl bg-[#047857]/30 flex items-center justify-center shrink-0 border border-[#047857]/30 text-[#34d399]">
                       <MessageSquare className="w-5 h-5" />
@@ -368,26 +405,65 @@ export default function Dashboard() {
                       </span>
                     )}
                   </div>
-                  <div className="text-left">
-                    <h4 className="font-black text-white uppercase italic tracking-tighter text-sm leading-none flex items-center gap-1.5">
-                      Join Community Chat
-                      {unreadCommunityMessages > 0 ? (
-                        <span className="bg-[#10b981] text-[#052e16] px-1.5 py-0.5 rounded text-[9px] font-black tracking-normal normal-case leading-none flex items-center">
-                          {unreadCommunityMessages} unread
-                        </span>
-                      ) : (
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#10b981] flex items-center justify-center relative">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />
-                          <span className="absolute w-2 h-2 rounded-full bg-[#10b981] animate-ping opacity-75" />
-                        </span>
-                      )}
-                    </h4>
-                    <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mt-1">Connect, banter, and coordinate with all players</p>
-                  </div>
+
+                  {unreadCommunityMessages > 0 ? (
+                    <span className="bg-[#10b981] text-[#052e16] px-1.5 py-0.5 rounded text-[8px] font-black tracking-normal uppercase leading-none">
+                      {unreadCommunityMessages} unread
+                    </span>
+                  ) : (
+                    <span className="w-2 h-2 rounded-full bg-[#10b981] relative mt-1 mr-1">
+                      <span className="absolute w-2 h-2 rounded-full bg-[#10b981] animate-ping opacity-75" />
+                    </span>
+                  )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">Open Chat</span>
-                  <ArrowUpRight className="w-4 h-4 text-[#34d399] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+
+                <div className="text-left w-full mt-2">
+                  <h4 className="font-black text-white uppercase italic tracking-tighter text-sm leading-tight group-hover:text-[#34d399] transition-colors">
+                    Community Chat
+                  </h4>
+                  <p className="text-[9px] text-emerald-400 font-bold uppercase tracking-wider mt-0.5 line-clamp-1">Connect & Banter</p>
+                </div>
+
+                <div className="flex items-center justify-between w-full mt-2 pt-2 border-t border-[#047857]/20">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-emerald-400">Open Chat</span>
+                  <ArrowUpRight className="w-3.5 h-3.5 text-[#34d399] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                </div>
+              </button>
+
+              {/* Right Card: 1v1 Challenge */}
+              <button 
+                type="button"
+                onClick={() => navigate('/challenge-lobby')}
+                className="flex-1 bg-[#1e1b4b] hover:bg-[#312e81] text-[#818cf8] border border-[#3730a3]/50 rounded-3xl p-4 flex flex-col justify-between h-[130px] transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl shadow-[#1e1b4b]/20 hover:scale-[1.01]"
+              >
+                <div className="flex items-start justify-between w-full">
+                  <div className="relative">
+                    <div className="w-10 h-10 rounded-2xl bg-[#312e81]/30 flex items-center justify-center shrink-0 border border-[#3730a3]/30 text-[#818cf8]">
+                      <Swords className="w-5 h-5" />
+                    </div>
+                  </div>
+
+                  {openChallengesCount > 0 ? (
+                    <span className="bg-[#818cf8] text-black px-1.5 py-0.5 rounded text-[8px] font-black tracking-normal uppercase leading-none">
+                      {openChallengesCount} active
+                    </span>
+                  ) : (
+                    <span className="text-[8px] font-bold text-indigo-400 uppercase tracking-widest mt-1 mr-1">
+                      0 open
+                    </span>
+                  )}
+                </div>
+
+                <div className="text-left w-full mt-2">
+                  <h4 className="font-black text-white uppercase italic tracking-tighter text-sm leading-tight group-hover:text-[#818cf8] transition-colors">
+                    1v1 Challenge
+                  </h4>
+                  <p className="text-[9px] text-[#a5b4fc] font-bold uppercase tracking-wider mt-0.5 line-clamp-1">Battle & Win Prizes</p>
+                </div>
+
+                <div className="flex items-center justify-between w-full mt-2 pt-2 border-t border-[#3730a3]/20">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-[#a5b4fc]">Play Now</span>
+                  <ArrowUpRight className="w-3.5 h-3.5 text-[#818cf8] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </div>
               </button>
             </motion.div>

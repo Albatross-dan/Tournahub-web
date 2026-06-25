@@ -26,6 +26,7 @@ export function loadPaystackScript(): Promise<void> {
     script.id     = 'paystack-inline-js';
     script.src    = 'https://js.paystack.co/v2/inline.js';
     script.async  = true;
+    script.crossOrigin = 'anonymous';
 
     script.onload = () => {
       // Paystack script loaded but PaystackPop may not be on window yet.

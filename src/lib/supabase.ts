@@ -1,6 +1,93 @@
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '../types/database';
 
+class SafeLocalStorage implements Storage {
+  private inMemoryStore: Record<string, string> = {};
+  private useMemory = false;
+
+  constructor() {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const testKey = '__storage_test__';
+        window.localStorage.setItem(testKey, testKey);
+        window.localStorage.removeItem(testKey);
+      } else {
+        this.useMemory = true;
+      }
+    } catch (e) {
+      this.useMemory = true;
+    }
+  }
+
+  getItem(key: string): string | null {
+    if (this.useMemory) {
+      return this.inMemoryStore[key] || null;
+    }
+    try {
+      return window.localStorage.getItem(key);
+    } catch (e) {
+      return this.inMemoryStore[key] || null;
+    }
+  }
+
+  setItem(key: string, value: string): void {
+    if (this.useMemory) {
+      this.inMemoryStore[key] = value;
+      return;
+    }
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (e) {
+      this.inMemoryStore[key] = value;
+    }
+  }
+
+  removeItem(key: string): void {
+    if (this.useMemory) {
+      delete this.inMemoryStore[key];
+      return;
+    }
+    try {
+      window.localStorage.removeItem(key);
+    } catch (e) {
+      delete this.inMemoryStore[key];
+    }
+  }
+
+  get length(): number {
+    if (this.useMemory) {
+      return Object.keys(this.inMemoryStore).length;
+    }
+    try {
+      return window.localStorage.length;
+    } catch (e) {
+      return Object.keys(this.inMemoryStore).length;
+    }
+  }
+
+  key(index: number): string | null {
+    if (this.useMemory) {
+      return Object.keys(this.inMemoryStore)[index] || null;
+    }
+    try {
+      return window.localStorage.key(index);
+    } catch (e) {
+      return Object.keys(this.inMemoryStore)[index] || null;
+    }
+  }
+
+  clear(): void {
+    this.inMemoryStore = {};
+    if (!this.useMemory) {
+      try {
+        window.localStorage.clear();
+      } catch (e) {}
+    }
+  }
+}
+
+export const safeLocalStorage = new SafeLocalStorage();
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
@@ -16,7 +103,7 @@ export const supabase = createClient<Database>(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      storage: window.localStorage,
+      storage: safeLocalStorage,
       flowType: 'pkce',
       lock: async (name, _acquireTimeout, fn) => {
         return fn();
@@ -92,19 +179,19 @@ export async function ensureAuthenticated() {
 }
 
 function clearSupabaseSession() {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    console.log('[Supabase] Clearing invalid session from localStorage...');
+  if (typeof window !== 'undefined') {
+    console.log('[Supabase] Clearing invalid session from safeLocalStorage...');
     try {
       const keysToRemove: string[] = [];
-      for (let i = 0; i < window.localStorage.length; i++) {
-        const key = window.localStorage.key(i);
+      for (let i = 0; i < safeLocalStorage.length; i++) {
+        const key = safeLocalStorage.key(i);
         if (key && (key.startsWith('sb-') || key.startsWith('supabase'))) {
           keysToRemove.push(key);
         }
       }
-      keysToRemove.forEach((key) => window.localStorage.removeItem(key));
+      keysToRemove.forEach((key) => safeLocalStorage.removeItem(key));
     } catch (e) {
-      console.error('[Supabase] Error clearing localStorage:', e);
+      console.error('[Supabase] Error clearing safeLocalStorage:', e);
     }
   }
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { matchService } from '../../services/matchService';
 import AdminShell from '../../components/layout/AdminShell';
@@ -15,10 +15,20 @@ import { TournamentLifecycleStats } from '../../components/admin/TournamentLifec
 import { MatchScheduleModal } from '../../components/admin/MatchScheduleModal';
 import { BatchScheduleModal } from '../../components/admin/BatchScheduleModal';
 import { ResultReviewPanel } from '../../components/admin/ResultReviewPanel';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function ScheduleTournament() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { can, loading: authLoading } = useAuth();
+
+  if (authLoading) {
+    return <LoadingState />;
+  }
+
+  if (!can('manage_tournaments')) {
+    return <Navigate to="/admin" replace />;
+  }
   const [tournament, setTournament] = useState<any>(null);
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

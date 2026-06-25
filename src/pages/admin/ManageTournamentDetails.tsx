@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import AdminShell from '../../components/layout/AdminShell';
 import { tournamentService } from '../../services/tournamentService';
@@ -18,6 +18,7 @@ import LoadingState from '../../components/ui/LoadingState';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { TournamentStatus } from '../../constants';
 import { useTournamentBadges } from '../../hooks/useTournamentBadges';
+import { useAuth } from '../../contexts/AuthContext';
 
 import TournamentPrizeConfigComponent from '../../components/admin/TournamentPrizeConfigComponent';
 import TournamentDistributePrizesComponent from '../../components/admin/TournamentDistributePrizesComponent';
@@ -28,6 +29,15 @@ export default function ManageTournamentDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { can, loading: authLoading } = useAuth();
+
+  if (authLoading) {
+    return <LoadingState />;
+  }
+
+  if (!can('manage_tournaments')) {
+    return <Navigate to="/admin" replace />;
+  }
   const { tournament, loading: tournamentLoading } = useRealtimeTournament(id);
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);

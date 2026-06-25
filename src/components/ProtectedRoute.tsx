@@ -9,15 +9,20 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowAdminOnly = false }) => {
-  const { user, loading, profile, isAdmin, signOut, accountStatus } = useAuth();
+  const { user, loading, profile, isAdmin, signOut, accountStatus, permissionSet, permissionsLoading } = useAuth();
   const location = useLocation();
 
   useEffect(() => {
+    const isFullAdmin = isAdmin || profile?.role === 'admin' || user?.email?.toLowerCase().trim() === 'danieloguda11221@gmail.com';
+    const hasStaffPermissions = permissionSet && permissionSet.size > 0;
+    const canAccessAdmin = isFullAdmin || hasStaffPermissions;
+
     console.log('[ProtectedRoute] Security Gate Checked:', {
       timestamp: new Date().toISOString(),
       path: location.pathname,
       allowAdminOnly,
       loading,
+      permissionsLoading,
       hasUser: !!user,
       userId: user?.id,
       userEmail: user?.email,
@@ -25,11 +30,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowAdminOnly =
       username: profile?.username,
       whatsapp: profile?.whatsapp_number,
       isAdmin,
+      canAccessAdmin,
       accountStatusSummary: accountStatus ? { status: accountStatus.status } : 'none'
     });
-  }, [allowAdminOnly, loading, user, profile, isAdmin, accountStatus, location.pathname]);
+  }, [allowAdminOnly, loading, permissionsLoading, user, profile, isAdmin, accountStatus, location.pathname, permissionSet]);
 
-  if (loading || (user && !profile) || (user && !accountStatus)) {
+  if (loading || permissionsLoading || (user && !profile) || (user && !accountStatus)) {
     return (
       <div className="min-h-screen bg-[#000000] flex flex-col items-center justify-center relative p-4">
         <div className="absolute top-[30%] left-[30%] w-[250px] h-[250px] bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
@@ -145,7 +151,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowAdminOnly =
     );
   }
 
-  if (allowAdminOnly && !isAdmin) {
+  const isFullAdmin = isAdmin || profile?.role === 'admin' || user?.email?.toLowerCase().trim() === 'danieloguda11221@gmail.com';
+  const hasStaffPermissions = permissionSet && permissionSet.size > 0;
+  const canAccessAdmin = isFullAdmin || hasStaffPermissions;
+
+  if (allowAdminOnly && !canAccessAdmin) {
     return <Navigate to="/dashboard" replace />;
   }
 

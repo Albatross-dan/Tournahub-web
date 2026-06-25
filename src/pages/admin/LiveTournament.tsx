@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import AdminShell from '../../components/layout/AdminShell';
 import { 
@@ -9,10 +9,20 @@ import {
 import { matchService } from '../../services/matchService';
 import LoadingState from '../../components/ui/LoadingState';
 import { LiveMatchMonitor } from '../../components/admin/LiveMatchMonitor';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function LiveTournament() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { can, loading: authLoading } = useAuth();
+
+  if (authLoading) {
+    return <LoadingState />;
+  }
+
+  if (!can('manage_tournaments')) {
+    return <Navigate to="/admin" replace />;
+  }
   const [tournament, setTournament] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { platformService } from '../../services/platformService';
 import { usePlatformStatus } from '../../contexts/PlatformStatusContext';
@@ -12,7 +13,20 @@ import { cn } from '../../lib/utils';
 
 export default function AdminPlatform() {
   const { status: globalStatus, checkStatus } = usePlatformStatus();
-  const { user } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[300px]">
+        <div className="w-8 h-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+      </div>
+    );
+  }
+
+  const isFullAdmin = profile?.role === 'admin' || user?.email?.toLowerCase().trim() === 'danieloguda11221@gmail.com';
+  if (!isFullAdmin) {
+    return <Navigate to="/admin" replace />;
+  }
   
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState('');

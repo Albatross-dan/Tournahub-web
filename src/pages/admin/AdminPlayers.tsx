@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import AdminShell from '../../components/layout/AdminShell';
 import { 
@@ -85,10 +86,18 @@ function OnlineBadge({ userId, lastSeenAt, onlineUserIds }: { userId: string; la
 }
 
 export default function AdminPlayers() {
-  const { profile: loggedInProfile, onlineUserIds } = useAuth();
+  const { profile: loggedInProfile, onlineUserIds, can, loading: authLoading } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  if (authLoading) {
+    return <LoadingState />;
+  }
+
+  if (!can('view_players')) {
+    return <Navigate to="/admin" replace />;
+  }
 
   // Filter States
   const [search, setSearch] = useState('');

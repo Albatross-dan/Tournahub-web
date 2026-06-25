@@ -9,6 +9,7 @@ import { Trophy, Shield, HelpCircle, CornerDownRight, Compass } from 'lucide-rea
 import { supabase } from '../../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { overrideTournamentChampion } from '../../utils/tournamentOverrides';
+import DownloadShareAction, { DownloadHeader, DownloadFooter } from '../common/DownloadShareAction';
 
 interface KnockoutTreeProps {
   tournamentId: string;
@@ -16,6 +17,7 @@ interface KnockoutTreeProps {
 
 export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
   const [matches, setMatches] = useState<any[]>([]);
+  const [tournament, setTournament] = useState<any>(null);
   const [dbChampion, setDbChampion] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const { refreshCount } = useMatchCompletionSync(tournamentId);
@@ -58,11 +60,13 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
 
   async function fetchMatches() {
     try {
-      const [matchesData, champRes] = await Promise.all([
+      const [matchesData, champRes, tournamentData] = await Promise.all([
         tournamentService.getFixturesWithBadges(tournamentId),
-        (supabase as any).from('tournament_champions').select('*').eq('tournament_id', tournamentId).maybeSingle()
+        (supabase as any).from('tournament_champions').select('*').eq('tournament_id', tournamentId).maybeSingle(),
+        tournamentService.getById(tournamentId).catch(() => null)
       ]);
       
+      setTournament(tournamentData);
       const rawMatches = matchesData || [];
       const seenIds = new Set();
       const uniqueData = [];
@@ -238,14 +242,24 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
             Standard single elimination pathing • Interactive fixture nodes
           </p>
         </div>
-        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/60 border border-slate-800 rounded-xl text-[10px] font-black text-primary uppercase tracking-widest animate-pulse">
-          <Compass className="w-4.5 h-4.5 text-primary" />
-          <span>Swipe or Scroll Horizonally to view full path ➔</span>
+        <div className="flex flex-col sm:flex-row items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/60 border border-slate-800 rounded-xl text-[10px] font-black text-primary uppercase tracking-widest animate-pulse select-none">
+            <Compass className="w-4 h-4 text-primary" />
+            <span>Swipe / Scroll ➔</span>
+          </div>
+          <DownloadShareAction
+            elementId="bracket-scroll-stage"
+            tournamentName={tournament?.name || "Tournament"}
+            fileName={`${tournament?.name || 'tournament'}_bracket`}
+            title="Championship Playoff Bracket"
+            isWide={true}
+          />
         </div>
       </div>
 
       {/* Horizontal Scroll Stage */}
       <div id="bracket-scroll-stage" className="overflow-x-auto pb-6 scrollbar-thin scrollbar-thumb-border-main select-none animate-fade-in">
+        <DownloadHeader tournamentName={tournament?.name || "Tournament"} title="Championship Playoff Bracket" />
         {/* Relative Positioning Base matches the dynamic total height */}
         <div 
           style={{ height: `${totalHeight}px`, minWidth: `${(roundKeys.length + 1) * colStep + 64}px` }} 
@@ -520,6 +534,7 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
           )}
 
         </div>
+        <DownloadFooter />
       </div>
     </div>
   );

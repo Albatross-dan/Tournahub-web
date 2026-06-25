@@ -1,16 +1,29 @@
 
 import React, { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import AdminShell from '../../components/layout/AdminShell';
 import { Wallet, History, Users, ShieldCheck } from 'lucide-react';
 import WithdrawalRequests from '../../components/admin/WithdrawalRequests';
 import UserWalletAudit from '../../components/admin/UserWalletAudit';
 import PlatformRevenueDashboard from '../../components/admin/PlatformRevenueDashboard';
 import { cn } from '../../lib/utils';
+import { useAuth } from '../../contexts/AuthContext';
+import LoadingState from '../../components/ui/LoadingState';
 
 type AdminWalletTab = 'withdrawals' | 'audit' | 'logs';
 
 export default function AdminWallet() {
   const [activeTab, setActiveTab] = useState<AdminWalletTab>('withdrawals');
+  const { user, profile, loading: authLoading } = useAuth();
+
+  if (authLoading) {
+    return <LoadingState />;
+  }
+
+  const isFullAdmin = profile?.role === 'admin' || user?.email?.toLowerCase().trim() === 'danieloguda11221@gmail.com';
+  if (!isFullAdmin) {
+    return <Navigate to="/admin" replace />;
+  }
 
   return (
     <AdminShell>

@@ -2,6 +2,111 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      (function() {
+        var isLocalStorageAccessible = false;
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.setItem('__test_access__', '1');
+            window.localStorage.removeItem('__test_access__');
+            isLocalStorageAccessible = true;
+          }
+        } catch (e) {
+          isLocalStorageAccessible = false;
+        }
+
+        if (!isLocalStorageAccessible) {
+          console.warn('[Polyfill] localStorage is not accessible. Using in-memory polyfill.');
+          var store = {};
+          var mockStorage = {
+            getItem: function(key) {
+              return store.hasOwnProperty(key) ? store[key] : null;
+            },
+            setItem: function(key, value) {
+              store[key] = String(value);
+            },
+            removeItem: function(key) {
+              delete store[key];
+            },
+            clear: function() {
+              store = {};
+            },
+            key: function(index) {
+              var keys = Object.keys(store);
+              return keys[index] || null;
+            },
+            get length() {
+              return Object.keys(store).length;
+            }
+          };
+
+          try {
+            Object.defineProperty(window, 'localStorage', {
+              value: mockStorage,
+              writable: true,
+              configurable: true
+            });
+          } catch (e) {
+            console.warn('[Polyfill] Could not redefine window.localStorage via defineProperty:', e);
+            try {
+              window.localStorage = mockStorage;
+            } catch (err) {
+              console.warn('[Polyfill] Could not assign window.localStorage:', err);
+            }
+          }
+        }
+
+        var isSessionStorageAccessible = false;
+        try {
+          if (typeof window !== 'undefined' && window.sessionStorage) {
+            window.sessionStorage.setItem('__test_access__', '1');
+            window.sessionStorage.removeItem('__test_access__');
+            isSessionStorageAccessible = true;
+          }
+        } catch (e) {
+          isSessionStorageAccessible = false;
+        }
+
+        if (!isSessionStorageAccessible) {
+          console.warn('[Polyfill] sessionStorage is not accessible. Using in-memory polyfill.');
+          var sStore = {};
+          var mockSessionStorage = {
+            getItem: function(key) {
+              return sStore.hasOwnProperty(key) ? sStore[key] : null;
+            },
+            setItem: function(key, value) {
+              sStore[key] = String(value);
+            },
+            removeItem: function(key) {
+              delete sStore[key];
+            },
+            clear: function() {
+              sStore = {};
+            },
+            key: function(index) {
+              var keys = Object.keys(sStore);
+              return keys[index] || null;
+            },
+            get length() {
+              return Object.keys(sStore).length;
+            }
+          };
+
+          try {
+            Object.defineProperty(window, 'sessionStorage', {
+              value: mockSessionStorage,
+              writable: true,
+              configurable: true
+            });
+          } catch (e) {
+            console.warn('[Polyfill] Could not redefine window.sessionStorage via defineProperty:', e);
+            try {
+              window.sessionStorage = mockSessionStorage;
+            } catch (err) {}
+          }
+        }
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#060812" />
     <meta name="description" content="Create and manage football and eFootball tournaments with fixtures, standings, knockout brackets, leagues, and competitions on Tournahub." />

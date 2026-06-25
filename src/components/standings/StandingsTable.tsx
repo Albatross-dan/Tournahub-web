@@ -7,6 +7,7 @@ import { tournamentService } from '../../services/tournamentService';
 import { useMatchCompletionSync } from '../../hooks/useMatchCompletionSync';
 import { PlayerBadge } from '../ui/PlayerBadge';
 import KnockoutTree from '../fixtures/KnockoutTree';
+import DownloadShareAction, { DownloadHeader, DownloadFooter } from '../common/DownloadShareAction';
 
 interface StandingsTableProps {
   tournamentId: string;
@@ -17,6 +18,7 @@ interface StandingsTableProps {
 
 export default function StandingsTable({ tournamentId, groupName, registrations, tournamentType }: StandingsTableProps) {
   const [standings, setStandings] = useState<any[]>([]);
+  const [tournament, setTournament] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { refreshCount } = useMatchCompletionSync(tournamentId);
@@ -49,7 +51,11 @@ export default function StandingsTable({ tournamentId, groupName, registrations,
   async function fetchStandings() {
     try {
       setLoading(true);
-      const data = await tournamentService.getLeaderboard(tournamentId);
+      const [data, tournamentData] = await Promise.all([
+        tournamentService.getLeaderboard(tournamentId),
+        tournamentService.getById(tournamentId).catch(() => null)
+      ]);
+      setTournament(tournamentData);
       const rawStandings = Array.isArray(data) ? data : [];
       
       // Strict deduplication of backend data
@@ -129,79 +135,95 @@ export default function StandingsTable({ tournamentId, groupName, registrations,
   }
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="card overflow-hidden bg-surface border-border-main shadow-sm"
-    >
-      <div className="overflow-x-auto">
-        <table className="w-full text-left min-w-[700px]">
-          <thead className="bg-background border-b border-border-main">
-            <tr className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
-              <th className="px-3 md:px-6 py-4">Rank</th>
-              <th className="px-3 md:px-6 py-4">Player</th>
-              <th className="px-3 md:px-6 py-4 text-center">P</th>
-              <th className="px-3 md:px-6 py-4 text-center">W</th>
-              <th className="px-3 md:px-6 py-4 text-center">D</th>
-              <th className="px-3 md:px-6 py-4 text-center">L</th>
-              <th className="px-3 md:px-6 py-4 text-center">GF</th>
-              <th className="px-3 md:px-6 py-4 text-center">GA</th>
-              <th className="px-3 md:px-6 py-4 text-center">GD</th>
-              <th className="px-3 md:px-6 py-4 text-center text-primary">PTS</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border-main">
-            {standings.map((row, index) => {
-              const isQualified = index < 2; // Highlight top 2
-              return (
-                <tr 
-                  key={row.username || row.id || `std-idx-${index}`} 
-                  className={cn(
-                    "text-sm transition-colors hover:bg-surface-hover",
-                    isQualified && "bg-emerald-500/5"
-                  )}
-                >
-                  <td className="px-3 md:px-6 py-4">
-                    <span className={cn(
-                      "font-black italic px-2 py-1 rounded",
-                      (row.rank || index + 1) <= 2 ? "text-emerald-500 bg-emerald-500/10" : "text-text-muted"
-                    )}>
-                      #{row.rank || index + 1}
-                    </span>
-                  </td>
-                  <td className="px-3 md:px-6 py-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="flex items-center space-x-3 min-w-0">
-                        <PlayerBadge 
-                          badgeId={row.badge_id} 
-                          username={row.username} 
-                          size="sm" 
-                        />
-                        <span className="font-bold text-text-main uppercase italic tracking-tight truncate max-w-[120px] sm:max-w-none">
-                          {row.username}
-                        </span>
+    <div className="space-y-4">
+      {standings.length > 0 && (
+        <div className="flex justify-end">
+          <DownloadShareAction
+            elementId="standings-capture-container"
+            tournamentName={tournament?.name || "Tournament"}
+            fileName={`${tournament?.name || 'tournament'}_standings`}
+            title="Tournament Leaderboard Standings"
+          />
+        </div>
+      )}
+
+      <motion.div 
+        id="standings-capture-container"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="card overflow-hidden bg-surface border-border-main shadow-sm animate-fade-in"
+      >
+        <DownloadHeader tournamentName={tournament?.name || "Tournament"} title="Tournament Leaderboard Standings" />
+        <div className="overflow-x-auto">
+          <table className="w-full text-left min-w-[700px]">
+            <thead className="bg-background border-b border-border-main">
+              <tr className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                <th className="px-3 md:px-6 py-4">Rank</th>
+                <th className="px-3 md:px-6 py-4">Player</th>
+                <th className="px-3 md:px-6 py-4 text-center">P</th>
+                <th className="px-3 md:px-6 py-4 text-center">W</th>
+                <th className="px-3 md:px-6 py-4 text-center">D</th>
+                <th className="px-3 md:px-6 py-4 text-center">L</th>
+                <th className="px-3 md:px-6 py-4 text-center">GF</th>
+                <th className="px-3 md:px-6 py-4 text-center">GA</th>
+                <th className="px-3 md:px-6 py-4 text-center">GD</th>
+                <th className="px-3 md:px-6 py-4 text-center text-primary">PTS</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border-main">
+              {standings.map((row, index) => {
+                const isQualified = index < 2; // Highlight top 2
+                return (
+                  <tr 
+                    key={row.username || row.id || `std-idx-${index}`} 
+                    className={cn(
+                      "text-sm transition-colors hover:bg-surface-hover",
+                      isQualified && "bg-emerald-500/5"
+                    )}
+                  >
+                    <td className="px-3 md:px-6 py-4">
+                      <span className={cn(
+                        "font-black italic px-2 py-1 rounded",
+                        (row.rank || index + 1) <= 2 ? "text-emerald-500 bg-emerald-500/10" : "text-text-muted"
+                      )}>
+                        #{row.rank || index + 1}
+                      </span>
+                    </td>
+                    <td className="px-3 md:px-6 py-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-3 min-w-0">
+                          <PlayerBadge 
+                            badgeId={row.badge_id} 
+                            username={row.username} 
+                            size="sm" 
+                          />
+                          <span className="font-bold text-text-main uppercase italic tracking-tight truncate max-w-[120px] sm:max-w-none">
+                            {row.username}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-3 md:px-6 py-4 text-center text-text-muted">{row.played}</td>
-                  <td className="px-3 md:px-6 py-4 text-center text-text-muted">{row.wins}</td>
-                  <td className="px-3 md:px-6 py-4 text-center text-text-muted">{row.draws}</td>
-                  <td className="px-3 md:px-6 py-4 text-center text-text-muted">{row.losses}</td>
-                  <td className="px-3 md:px-6 py-4 text-center text-text-muted/60">{row.goals_for}</td>
-                  <td className="px-3 md:px-6 py-4 text-center text-text-muted/60">{row.goals_against}</td>
-                  <td className="px-3 md:px-6 py-4 text-center font-bold text-text-main italic">{row.goal_difference}</td>
-                  <td className="px-3 md:px-6 py-4 text-center text-text-main font-black italic">{row.points}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {standings.length === 0 && (
-          <div className="p-12 text-center text-text-muted italic">
-            Standings will update as matches are completed.
-          </div>
-        )}
-      </div>
-    </motion.div>
+                    </td>
+                    <td className="px-3 md:px-6 py-4 text-center text-text-muted">{row.played}</td>
+                    <td className="px-3 md:px-6 py-4 text-center text-text-muted">{row.wins}</td>
+                    <td className="px-3 md:px-6 py-4 text-center text-text-muted">{row.draws}</td>
+                    <td className="px-3 md:px-6 py-4 text-center text-text-muted">{row.losses}</td>
+                    <td className="px-3 md:px-6 py-4 text-center text-text-muted/60">{row.goals_for}</td>
+                    <td className="px-3 md:px-6 py-4 text-center text-text-muted/60">{row.goals_against}</td>
+                    <td className="px-3 md:px-6 py-4 text-center font-bold text-text-main italic">{row.goal_difference}</td>
+                    <td className="px-3 md:px-6 py-4 text-center text-text-main font-black italic">{row.points}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {standings.length === 0 && (
+            <div className="p-12 text-center text-text-muted italic">
+              Standings will update as matches are completed.
+            </div>
+          )}
+        </div>
+        <DownloadFooter />
+      </motion.div>
+    </div>
   );
 }

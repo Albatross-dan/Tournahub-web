@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { matchService } from '../../services/matchService';
 import AdminShell from '../../components/layout/AdminShell';
@@ -11,14 +12,24 @@ import {
 import { formatCurrency, cn, getSignedUrl, getPublicIdentity } from '../../lib/utils';
 import LoadingState from '../../components/ui/LoadingState';
 import StorageImage from '../../components/common/StorageImage';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function AdminFixtures() {
+  const { can, loading: authLoading } = useAuth();
   const [tournaments, setTournaments] = useState<any[]>([]);
   const [selectedTournament, setSelectedTournament] = useState<string | null>(null);
   const [matches, setMatches] = useState<any[]>([]);
   const [matchResults, setMatchResults] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+
+  if (authLoading) {
+    return <LoadingState />;
+  }
+
+  if (!can('manage_matches')) {
+    return <Navigate to="/admin" replace />;
+  }
 
   useEffect(() => {
     fetchTournaments();

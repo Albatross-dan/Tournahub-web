@@ -12,7 +12,12 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window !== 'undefined') {
-      return (localStorage.getItem('theme') as Theme) || 'dark';
+      try {
+        return (localStorage.getItem('theme') as Theme) || 'dark';
+      } catch (e) {
+        console.warn('[ThemeContext] LocalStorage blocked:', e);
+        return 'dark';
+      }
     }
     return 'dark';
   });
@@ -32,7 +37,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
 
     applyTheme(theme);
-    localStorage.setItem('theme', theme);
+    try {
+      localStorage.setItem('theme', theme);
+    } catch (e) {
+      console.warn('[ThemeContext] LocalStorage write blocked:', e);
+    }
 
     // Listen for system changes if set to system
     if (theme === 'system') {

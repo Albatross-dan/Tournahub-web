@@ -2,10 +2,24 @@ import React from 'react';
 import Shell from '../../components/layout/Shell';
 import TournamentForm from '../../components/admin/TournamentForm';
 import { ArrowLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function CreateTournament() {
   const navigate = useNavigate();
+  const { can, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[300px]">
+        <div className="w-8 h-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (!can('manage_tournaments')) {
+    return <Navigate to="/admin" replace />;
+  }
 
   return (
     <Shell>

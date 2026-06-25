@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { tournamentService } from '../../services/tournamentService';
 import { Tournament } from '../../types/database';
 import AdminShell from '../../components/layout/AdminShell';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { 
   Plus, Search, FilterIcon, 
   Edit3, Trash2, Eye,
@@ -13,10 +13,20 @@ import { formatCurrency, cn, getStorageUrl } from '../../lib/utils';
 import { useRealtimeTournaments } from '../../hooks/useRealtimeTournaments';
 import LoadingState from '../../components/ui/LoadingState';
 import StatusBadge from '../../components/ui/StatusBadge';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function ManageTournaments() {
+  const { can, loading: authLoading } = useAuth();
   const [search, setSearch] = useState('');
   const { tournaments, loading } = useRealtimeTournaments();
+
+  if (authLoading) {
+    return <LoadingState />;
+  }
+
+  if (!can('manage_tournaments')) {
+    return <Navigate to="/admin" replace />;
+  }
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);

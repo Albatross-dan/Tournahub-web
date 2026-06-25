@@ -11,6 +11,7 @@ import { cn, getPublicIdentity } from '../../lib/utils';
 import { tournamentService } from '../../services/tournamentService';
 import { useNavigate } from 'react-router-dom';
 import { overrideTournamentChampion } from '../../utils/tournamentOverrides';
+import DownloadShareAction, { DownloadHeader, DownloadFooter } from '../common/DownloadShareAction';
 
 interface GroupStageTournamentViewProps {
   tournamentId: string;
@@ -771,31 +772,41 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
         </div>
       </div>
 
-      {view === 'standings' ? (
-        <div className="space-y-16">
-          <div className="flex items-center justify-between">
+       {view === 'standings' ? (
+        <div id="group-standings-capture-container" className="space-y-16">
+          <DownloadHeader tournamentName={tournament?.name || "Tournament"} title="Group Stage Leaderboard Standings" />
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-2xl font-black text-text-main italic uppercase tracking-tight">GROUP STANDINGS</h2>
               <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Real-time updated standings during the group stage</p>
             </div>
             
-            <button 
-              onClick={async () => {
-                setSyncing(true);
-                await Promise.all([
-                  fetchStandings(),
-                  fetchGroupMatches(),
-                  fetchBracketMatches(),
-                  fetchDbChampion()
-                ]);
-                setSyncing(false);
-              }}
-              disabled={syncing}
-              className="p-1.5 px-3 bg-zinc-900/60 border border-white/5 hover:border-primary/25 hover:text-primary rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all text-zinc-400 cursor-pointer disabled:opacity-50 select-none"
-            >
-              <RefreshCw className={cn("w-3 h-3 text-primary", syncing && "animate-spin")} />
-              <span>{syncing ? 'Syncing...' : 'Sync Now'}</span>
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button 
+                onClick={async () => {
+                  setSyncing(true);
+                  await Promise.all([
+                    fetchStandings(),
+                    fetchGroupMatches(),
+                    fetchBracketMatches(),
+                    fetchDbChampion()
+                  ]);
+                  setSyncing(false);
+                }}
+                disabled={syncing}
+                className="h-9 px-3 bg-zinc-900/60 border border-white/5 hover:border-primary/25 hover:text-primary rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all text-zinc-400 cursor-pointer disabled:opacity-50 select-none"
+              >
+                <RefreshCw className={cn("w-3 h-3 text-primary", syncing && "animate-spin")} />
+                <span>{syncing ? 'Syncing...' : 'Sync Now'}</span>
+              </button>
+
+              <DownloadShareAction
+                elementId="group-standings-capture-container"
+                tournamentName={tournament?.name || "Tournament"}
+                fileName={`${tournament?.name || 'tournament'}_group_standings`}
+                title="Group Stage Leaderboard Standings"
+              />
+            </div>
           </div>
 
           {resolvedGroups.map((group) => {
@@ -998,6 +1009,7 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
               </div>
             );
           })}
+          <DownloadFooter />
         </div>
       ) : (
         <div className="space-y-8">
@@ -1010,16 +1022,27 @@ export default function GroupStageTournamentView({ tournamentId }: GroupStageTou
                 <h2 className="text-2xl font-black text-text-main italic uppercase tracking-tight">CHAMPIONSHIP BRACKET</h2>
                 <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Knockout Stage brackets formulated from group advancements</p>
               </div>
-              <span className="text-[9px] font-black uppercase tracking-[0.15em] text-primary bg-primary/10 border border-primary/25 px-3 py-1 rounded-full animate-pulse self-start sm:self-center select-none">
-                Scroll sideways ⟷
-              </span>
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <span className="text-[9px] font-black uppercase tracking-[0.15em] text-primary bg-primary/10 border border-primary/25 px-3 py-1 rounded-full animate-pulse self-start sm:self-center select-none">
+                  Scroll sideways ⟷
+                </span>
+                <DownloadShareAction
+                  elementId="playoff-bracket-capture-container"
+                  tournamentName={tournament?.name || "Tournament"}
+                  fileName={`${tournament?.name || 'tournament'}_playoff_bracket`}
+                  title="Championship Playoff Bracket"
+                  isWide={true}
+                />
+              </div>
             </div>
           </div>
 
-          <div className="overflow-x-auto pb-8 select-none border border-border-main rounded-[2.5rem] bg-zinc-950 p-6 md:p-10 custom-scrollbar">
+          <div id="playoff-bracket-capture-container" className="overflow-x-auto pb-8 select-none border border-border-main rounded-[2.5rem] bg-zinc-950 p-6 md:p-10 custom-scrollbar">
+            <DownloadHeader tournamentName={tournament?.name || "Tournament"} title="Championship Playoff Bracket" />
             <div className="min-w-[1000px] flex items-center justify-center gap-8 py-5">
               <BracketTree matches={bracketMatches} tournament={tournament} settings={settings} badgeSelectionsMap={badgeSelectionsMap} dbChampion={dbChampion} />
             </div>
+            <DownloadFooter />
           </div>
 
           <ChampionCardSection matches={bracketMatches} dbChampion={dbChampion} />

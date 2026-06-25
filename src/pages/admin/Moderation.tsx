@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Navigate } from 'react-router-dom';
 import { ShieldAlert, RefreshCw, Loader2, Search, Filter, History } from 'lucide-react';
 import AdminShell from '../../components/layout/AdminShell';
 import { MatchDisputeCard } from '../../components/admin/MatchDisputeCard';
@@ -6,9 +7,10 @@ import { MatchNoShowReportCard } from '../../components/admin/MatchNoShowReportC
 import { matchService } from '../../services/matchService';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import LoadingState from '../../components/ui/LoadingState';
 
 export default function Moderation() {
-  const { user } = useAuth();
+  const { user, can, loading: authLoading } = useAuth();
   const [matches, setMatches] = useState<any[]>([]);
   const [noShowReports, setNoShowReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +24,14 @@ export default function Moderation() {
     noShow: 0,
     history: 0
   });
+
+  if (authLoading) {
+    return <LoadingState />;
+  }
+
+  if (!can('manage_disputes')) {
+    return <Navigate to="/admin" replace />;
+  }
 
   const fetchMatches = useCallback(async (isInitial = false) => {
     if (!user) return;

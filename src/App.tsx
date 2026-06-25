@@ -34,6 +34,10 @@ import Rules from './pages/Rules';
 import Help from './pages/Help';
 import CompleteProfile from './pages/CompleteProfile';
 
+import ChallengeLobby from './pages/ChallengeLobby';
+import ChallengeDetails from './pages/ChallengeDetails';
+import ChallengeChat from './pages/ChallengeChat';
+
 // Lazy load admin pages only
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const AdminPlatform = lazy(() => import('./pages/admin/AdminPlatform'));
@@ -49,6 +53,7 @@ const ScheduleTournament = lazy(() => import('./pages/admin/ScheduleTournament')
 const LiveTournament = lazy(() => import('./pages/admin/LiveTournament'));
 const Moderation = lazy(() => import('./pages/admin/Moderation'));
 const ModerationLogs = lazy(() => import('./pages/admin/ModerationLogs'));
+const StaffManagement = lazy(() => import('./pages/admin/StaffManagement'));
 
 function HomeRoute() {
   const { user } = useAuth();
@@ -157,6 +162,9 @@ function AppRoutes() {
                   <Route path="/payment/callback" element={<PaymentCallback />} />
                   <Route path="/profile/wins" element={<WinnerHistory />} />
                   <Route path="/profile" element={<Profile />} />
+                  <Route path="/challenge-lobby" element={<ChallengeLobby />} />
+                  <Route path="/challenges/:id" element={<ChallengeDetails />} />
+                  <Route path="/challenges/:id/chat" element={<ChallengeChat />} />
                 </Route>
 
                 <Route element={<ProtectedRoute allowAdminOnly />}>
@@ -174,6 +182,7 @@ function AppRoutes() {
                   <Route path="/admin/standings" element={<AdminStandings />} />
                   <Route path="/admin/moderation" element={<Moderation />} />
                   <Route path="/admin/logs" element={<ModerationLogs />} />
+                  <Route path="/admin/staff" element={<StaffManagement />} />
                 </Route>
 
                 <Route path="/" element={<HomeRoute />} />

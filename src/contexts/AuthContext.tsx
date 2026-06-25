@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
-import { ensureAuthenticated, supabase } from '../lib/supabase';
+import { ensureAuthenticated, supabase, safeLocalStorage } from '../lib/supabase';
 import { Profile } from '../types/database';
 import { queryClient } from '../lib/queryClient';
 import { requestNotificationPermission, listenForForegroundNotifications, deleteFcmTokenOnLogout, syncTokenToSupabase, registerPushToken } from '../lib/notifications';
@@ -51,6 +51,10 @@ interface AuthContextType {
   unreadChatCount: number;
   refreshWalletAndStatus: () => Promise<void>;
   onlineUserIds: Set<string>;
+  permissionSet: Set<string>;
+  can: (key: string) => boolean;
+  refreshPermissions: () => Promise<void>;
+  permissionsLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -233,6 +237,41 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
   const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+  const [permissions, setPermissions] = useState<string[]>([]);
+  const [permissionsLoading, setPermissionsLoading] = useState(true);
+
+  const fetchMyPermissions = async (userId: string, silent = false) => {
+    if (!silent) {
+      setPermissionsLoading(true);
+    }
+    try {
+      const { data, error } = await supabase
+        .from('staff_permissions')
+        .select('permission')
+        .eq('user_id', userId);
+      if (error) {
+        console.error('[AuthContext] Error fetching permissions:', error);
+        return;
+      }
+      if (data) {
+        setPermissions(data.map((p: any) => p.permission));
+      } else {
+        setPermissions([]);
+      }
+    } catch (err) {
+      console.error('[AuthContext] Exception in fetchMyPermissions:', err);
+    } finally {
+      if (!silent) {
+        setPermissionsLoading(false);
+      }
+    }
+  };
+
+  const refreshPermissions = async () => {
+    if (user?.id) {
+      await fetchMyPermissions(user.id, true);
+    }
+  };
 
   const fetchWalletAndStatus = async (userId: string) => {
     try {
@@ -345,20 +384,23 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       setWalletSummary(null);
       setUnreadNotificationsCount(0);
       setUnreadChatCount(0);
+      setPermissions([]);
+      setPermissionsLoading(false);
       return;
     }
 
     let isMounted = true;
     const userId = user.id;
 
-    const refreshAll = () => {
+    const refreshAll = (silent = false) => {
       if (isMounted) {
         fetchWalletAndStatus(userId);
+        fetchMyPermissions(userId, silent);
       }
     };
 
     // Initial load
-    refreshAll();
+    refreshAll(false);
 
     // Set up real-time subscriptions for immediate reactivity:
     const notificationsChannel = supabase
@@ -369,7 +411,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         table: 'notifications',
         filter: `user_id=eq.${userId}`
       }, () => {
-        refreshAll();
+        refreshAll(true);
       })
       .subscribe();
 
@@ -380,7 +422,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         schema: 'public',
         table: 'messages'
       }, () => {
-        refreshAll();
+        refreshAll(true);
       })
       .subscribe();
 
@@ -407,9 +449,21 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       })
       .subscribe();
 
+    const permissionsChannel = supabase
+      .channel(`auth-permissions-${userId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'staff_permissions',
+        filter: `user_id=eq.${userId}`
+      }, () => {
+        fetchMyPermissions(userId, true);
+      })
+      .subscribe();
+
     // Periodic poll every 10 seconds to ensure consistency
     const interval = setInterval(() => {
-      refreshAll();
+      refreshAll(true);
     }, 10000);
 
     return () => {
@@ -418,6 +472,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       supabase.removeChannel(notificationsChannel);
       supabase.removeChannel(messagesChannel);
       supabase.removeChannel(walletChannel);
+      supabase.removeChannel(permissionsChannel);
     };
   }, [user?.id]);
 
@@ -571,6 +626,8 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
           setWalletSummary(null);
           setUnreadNotificationsCount(0);
           setUnreadChatCount(0);
+          setPermissions([]);
+          setPermissionsLoading(false);
           lastUserIdRef.current = null;
           try {
             queryClient.clear();
@@ -661,7 +718,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
 
       if (event === 'SIGNED_OUT') {
         const userId = lastUserIdRef.current;
-        const currentToken = localStorage.getItem('fcm_token');
+        const currentToken = safeLocalStorage.getItem('fcm_token');
         if (userId && currentToken) {
           console.log('[AuthContext] SIGNED_OUT event detected. Deleting notification token for user:', userId);
           try {
@@ -678,7 +735,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
             console.error('[AuthContext] Exception while deleting token on SIGNED_OUT:', deleteErr);
           }
         }
-        localStorage.removeItem('fcm_token');
+        safeLocalStorage.removeItem('fcm_token');
 
         if (!isMounted) return;
         setUser(null);
@@ -688,6 +745,8 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         setWalletSummary(null);
         setUnreadNotificationsCount(0);
         setUnreadChatCount(0);
+        setPermissions([]);
+        setPermissionsLoading(false);
         lastUserIdRef.current = null;
         try {
           queryClient.clear();
@@ -716,22 +775,26 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         console.error('[AuthContext] Error getting session on init:', error);
         if (error.message?.toLowerCase().includes('refresh token') || error.message?.toLowerCase().includes('refresh_token')) {
           const keysToRemove: string[] = [];
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
+          for (let i = 0; i < safeLocalStorage.length; i++) {
+            const key = safeLocalStorage.key(i);
             if (key && (key.startsWith('sb-') || key.startsWith('supabase'))) {
               keysToRemove.push(key);
             }
           }
-          keysToRemove.forEach((key) => localStorage.removeItem(key));
+          keysToRemove.forEach((key) => safeLocalStorage.removeItem(key));
         }
       }
       if (!session) {
         if (!isMounted) return;
+        setPermissions([]);
+        setPermissionsLoading(false);
         setLoading(false);
       }
     }).catch(err => {
       console.error('[AuthContext] Unhandled rejection getting session on init:', err);
       if (!isMounted) return;
+      setPermissions([]);
+      setPermissionsLoading(false);
       setLoading(false);
     });
 
@@ -739,6 +802,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     const timer = setTimeout(() => {
       if (isMounted) {
         console.warn('[AuthContext] Safety warm start timer fired. Unblocking initialization screen...');
+        setPermissionsLoading(false);
         setLoading(false);
       }
     }, 2000);
@@ -876,9 +940,9 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       }
 
       if (!existingProfile) {
-        const pendingUsername = localStorage.getItem('pending_oauth_username');
-        const pendingWhatsapp = localStorage.getItem('pending_oauth_whatsapp_number');
-        const pendingTimezone = localStorage.getItem('pending_oauth_timezone');
+        const pendingUsername = safeLocalStorage.getItem('pending_oauth_username');
+        const pendingWhatsapp = safeLocalStorage.getItem('pending_oauth_whatsapp_number');
+        const pendingTimezone = safeLocalStorage.getItem('pending_oauth_timezone');
         const metadataUsername = user.user_metadata?.username;
         const finalUsername = pendingUsername || metadataUsername || `temp_user_${user.id.slice(0, 8)}`;
 
@@ -891,18 +955,18 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         await withTimeout(insertPromise, 3000, null);
 
         if (pendingUsername) {
-          localStorage.removeItem('pending_oauth_username');
+          safeLocalStorage.removeItem('pending_oauth_username');
         }
         if (pendingWhatsapp) {
-          localStorage.removeItem('pending_oauth_whatsapp_number');
+          safeLocalStorage.removeItem('pending_oauth_whatsapp_number');
         }
         if (pendingTimezone) {
-          localStorage.removeItem('pending_oauth_timezone');
+          safeLocalStorage.removeItem('pending_oauth_timezone');
         }
       } else {
-        const pendingUsername = localStorage.getItem('pending_oauth_username');
-        const pendingWhatsapp = localStorage.getItem('pending_oauth_whatsapp_number');
-        const pendingTimezone = localStorage.getItem('pending_oauth_timezone');
+        const pendingUsername = safeLocalStorage.getItem('pending_oauth_username');
+        const pendingWhatsapp = safeLocalStorage.getItem('pending_oauth_whatsapp_number');
+        const pendingTimezone = safeLocalStorage.getItem('pending_oauth_timezone');
         const metadataUsername = user.user_metadata?.username;
         const targetUsername = pendingUsername || metadataUsername;
         
@@ -923,13 +987,13 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         }
 
         if (pendingUsername) {
-          localStorage.removeItem('pending_oauth_username');
+          safeLocalStorage.removeItem('pending_oauth_username');
         }
         if (pendingWhatsapp) {
-          localStorage.removeItem('pending_oauth_whatsapp_number');
+          safeLocalStorage.removeItem('pending_oauth_whatsapp_number');
         }
         if (pendingTimezone) {
-          localStorage.removeItem('pending_oauth_timezone');
+          safeLocalStorage.removeItem('pending_oauth_timezone');
         }
       }
     } catch (err) {
@@ -977,15 +1041,15 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         console.warn('[Auth] Supabase signOut failed or timed out:', err);
       });
 
-      // 3. Explicitly clear Supabase-owned keys from localStorage
+      // 3. Explicitly clear Supabase-owned keys from safeLocalStorage
       const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
+      for (let i = 0; i < safeLocalStorage.length; i++) {
+        const key = safeLocalStorage.key(i);
         if (key && (key.startsWith('sb-') || key.startsWith('supabase'))) {
           keysToRemove.push(key);
         }
       }
-      keysToRemove.forEach((key) => localStorage.removeItem(key));
+      keysToRemove.forEach((key) => safeLocalStorage.removeItem(key));
       
       console.log('[Auth] State cleared, redirecting...');
       
@@ -998,13 +1062,13 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       console.error('[Auth] Critical sign out failure:', err);
       // Hard fallback
       const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
+      for (let i = 0; i < safeLocalStorage.length; i++) {
+        const key = safeLocalStorage.key(i);
         if (key && (key.startsWith('sb-') || key.startsWith('supabase'))) {
           keysToRemove.push(key);
         }
       }
-      keysToRemove.forEach((key) => localStorage.removeItem(key));
+      keysToRemove.forEach((key) => safeLocalStorage.removeItem(key));
       if (onNavigate) {
         onNavigate('/login');
       } else {
@@ -1038,6 +1102,29 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     }
   };
 
+  const permissionSet = React.useMemo(() => new Set(permissions), [permissions]);
+  const can = React.useCallback(
+    (key: string) => 
+      profile?.role === 'admin' || 
+      user?.email?.toLowerCase().trim() === 'danieloguda11221@gmail.com' || 
+      permissionSet.has(key),
+    [profile?.role, user?.email, permissionSet]
+  );
+
+  useEffect(() => {
+    if (!loading && !permissionsLoading && user && profile && profile.role !== 'admin' && user.email?.toLowerCase().trim() !== 'danieloguda11221@gmail.com') {
+      const isTryingAdmin = window.location.pathname.startsWith('/admin');
+      if (isTryingAdmin && permissions.length === 0) {
+        console.warn('[AuthContext] Evicting user from admin area due to missing permissions.');
+        if (onNavigate) {
+          onNavigate('/dashboard');
+        } else {
+          window.location.href = '/dashboard';
+        }
+      }
+    }
+  }, [permissions, permissionsLoading, profile?.role, user, loading, onNavigate]);
+
   const value = {
     user,
     profile,
@@ -1052,6 +1139,10 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     unreadChatCount,
     refreshWalletAndStatus,
     onlineUserIds,
+    permissionSet,
+    can,
+    refreshPermissions,
+    permissionsLoading,
   };
 
   return (

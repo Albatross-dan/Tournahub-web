@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import AdminShell from '../../components/layout/AdminShell';
 import { 
@@ -7,12 +8,22 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import LoadingState from '../../components/ui/LoadingState';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function AdminStandings() {
+  const { can, loading: authLoading } = useAuth();
   const [tournaments, setTournaments] = useState<any[]>([]);
   const [selectedTournament, setSelectedTournament] = useState<string | null>(null);
   const [standings, setStandings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  if (authLoading) {
+    return <LoadingState />;
+  }
+
+  if (!can('manage_tournaments')) {
+    return <Navigate to="/admin" replace />;
+  }
 
   useEffect(() => {
     fetchTournaments();

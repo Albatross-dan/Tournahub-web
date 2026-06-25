@@ -115,6 +115,7 @@ const getTimezones = () => {
 const SYSTEM_TIMEZONES = getTimezones();
 import TrophyWall from '../components/profile/TrophyWall';
 import SettingsMenu from '../components/profile/SettingsMenu';
+import PlayerLegacy from '../components/profile/PlayerLegacy';
 
 export default function Profile() {
   const { profile, user, signOut, refetchSignal, refreshAuth, isAdmin } = useAuth();
@@ -159,7 +160,7 @@ export default function Profile() {
   const returnTo = location.state?.returnTo;
 
   useRefetchOnFocus(loadStats);
-  const [activeTab, setActiveTab] = useState<'overview' | 'settings'>(
+  const [activeTab, setActiveTab] = useState<'overview' | 'legacy' | 'settings'>(
     location.state?.returnTo ? 'settings' : 'overview'
   );
   const [username, setUsername] = useState(profile?.username || '');
@@ -427,16 +428,25 @@ export default function Profile() {
             <button
               onClick={() => setActiveTab('overview')}
               className={cn(
-                "px-6 py-2 rounded-lg text-xs font-black uppercase tracking-[0.2em] transition-all",
+                "px-3 sm:px-6 py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] transition-all",
                 activeTab === 'overview' ? "bg-primary text-slate-900 shadow-[0_0_10px_rgba(var(--color-primary),0.5)]" : "text-text-muted hover:text-text-main"
               )}
             >
               Overview
             </button>
             <button
+              onClick={() => setActiveTab('legacy')}
+              className={cn(
+                "px-3 sm:px-6 py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] transition-all",
+                activeTab === 'legacy' ? "bg-primary text-slate-900 shadow-[0_0_10px_rgba(var(--color-primary),0.5)]" : "text-text-muted hover:text-text-main"
+              )}
+            >
+              Legacy
+            </button>
+            <button
               onClick={() => setActiveTab('settings')}
               className={cn(
-                "px-6 py-2 rounded-lg text-xs font-black uppercase tracking-[0.2em] transition-all",
+                "px-3 sm:px-6 py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] transition-all",
                 activeTab === 'settings' ? "bg-primary text-slate-900 shadow-[0_0_10px_rgba(var(--color-primary),0.5)]" : "text-text-muted hover:text-text-main"
               )}
             >
@@ -573,6 +583,8 @@ export default function Profile() {
               </div>
             </div>
           </>
+        ) : activeTab === 'legacy' ? (
+          user && <PlayerLegacy userId={user.id} />
         ) : (
           <div className="space-y-8">
             {/* Gamer Identity Modification Terminal */}

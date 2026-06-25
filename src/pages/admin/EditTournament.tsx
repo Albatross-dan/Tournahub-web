@@ -1,19 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import Shell from '../../components/layout/Shell';
 import { tournamentService } from '../../services/tournamentService';
 import TournamentForm from '../../components/admin/TournamentForm';
 import { Tournament } from '../../types/database';
 import { Loader2, ArrowLeft, Trash2 } from 'lucide-react';
 import LoadingState from '../../components/ui/LoadingState';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function EditTournament() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { can, loading: authLoading } = useAuth();
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  if (authLoading) {
+    return <LoadingState />;
+  }
+
+  if (!can('manage_tournaments')) {
+    return <Navigate to="/admin" replace />;
+  }
 
   useEffect(() => {
     if (id) loadTournament();
