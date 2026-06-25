@@ -89,12 +89,46 @@ function ActiveChallengeCountdown({ autoCancelAt }: { autoCancelAt: string | nul
   return <span>{timeLeft}</span>;
 }
 
+function ExpiresCountdown({ autoCancelAt }: { autoCancelAt: string | null | undefined }) {
+  const [timeLeft, setTimeLeft] = useState<string>('Expires soon');
+
+  useEffect(() => {
+    if (!autoCancelAt) {
+      setTimeLeft('Expired');
+      return;
+    }
+    const updateTime = () => {
+      const targetTime = new Date(autoCancelAt).getTime();
+      if (isNaN(targetTime)) {
+        setTimeLeft('Expired');
+        return;
+      }
+      const diff = targetTime - Date.now();
+      if (diff <= 0) {
+        setTimeLeft('Expired');
+        return;
+      }
+      const totalMinutes = Math.floor(diff / 60000);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      setTimeLeft(`Expires in ${hours}h ${minutes}m`);
+    };
+
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, [autoCancelAt]);
+
+  return <span>{timeLeft}</span>;
+}
+
 export default function ChallengeLobby() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [activeChallenge, setActiveChallenge] = useState<any | null>(null);
-  const [hasSubmittedActive, setHasSubmittedActive] = useState<boolean>(false);
+  const [activeChallenges, setActiveChallenges] = useState<any[]>([]);
+  const [activeLoading, setActiveLoading] = useState<boolean>(true);
+  const [activeError, setActiveError] = useState<string | null>(null);
 
   const [challenges, setChallenges] = useState<LobbyChallenge[]>([]);
   const [history, setHistory] = useState<ChallengeHistory[]>([]);
@@ -156,38 +190,23 @@ export default function ChallengeLobby() {
     }
   };
 
-  // Fetch Active Challenge
-  const fetchActiveChallenge = async () => {
+  // Fetch Active Challenges
+  const fetchActiveChallenges = async () => {
     if (!user) return;
     try {
+      setActiveLoading(true);
+      setActiveError(null);
       const { data, error: activeErr } = await (supabase as any)
-        .from('v_challenge_detail')
-        .select('*')
-        .in('challenge_status', ['matched', 'in_progress', 'disputed'])
-        .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
-        .maybeSingle();
+        .from('v_my_active_challenges')
+        .select('*');
 
-      if (!activeErr && data) {
-        setActiveChallenge(data);
-
-        // Fetch if already submitted
-        if (data.match_id) {
-          const { data: subData } = await (supabase as any)
-            .from('challenge_match_results')
-            .select('id')
-            .eq('challenge_match_id', data.match_id)
-            .eq('submitted_by', user.id)
-            .maybeSingle();
-          setHasSubmittedActive(!!subData);
-        } else {
-          setHasSubmittedActive(false);
-        }
-      } else {
-        setActiveChallenge(null);
-        setHasSubmittedActive(false);
-      }
-    } catch (err) {
-      console.error('[ChallengeLobby] Exception fetching active challenge:', err);
+      if (activeErr) throw activeErr;
+      setActiveChallenges(data || []);
+    } catch (err: any) {
+      console.error('[ChallengeLobby] Error fetching active challenges:', err);
+      setActiveError(err.message || 'Error loading active challenges');
+    } finally {
+      setActiveLoading(false);
     }
   };
 
@@ -268,7 +287,7 @@ export default function ChallengeLobby() {
         table: 'challenges'
       }, () => {
         fetchLobby(false);
-        fetchActiveChallenge();
+        fetchActiveChallenges();
       })
       .subscribe();
 
@@ -280,26 +299,33 @@ export default function ChallengeLobby() {
   useEffect(() => {
     if (!user) return;
     
-    fetchActiveChallenge();
+    fetchActiveChallenges();
 
     // Subscribe to active challenge changes
     const activeSubscription = supabase
       .channel('my-active-challenge-' + user.id)
       .on('postgres_changes', {
-        event: 'UPDATE',
+        event: '*',
         schema: 'public',
         table: 'challenge_matches',
         filter: `player1_id=eq.${user.id}`,
       }, () => {
-        fetchActiveChallenge();
+        fetchActiveChallenges();
       })
       .on('postgres_changes', {
-        event: 'UPDATE',
+        event: '*',
         schema: 'public',
         table: 'challenge_matches',
         filter: `player2_id=eq.${user.id}`,
       }, () => {
-        fetchActiveChallenge();
+        fetchActiveChallenges();
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'challenges'
+      }, () => {
+        fetchActiveChallenges();
       })
       .subscribe();
 
@@ -540,8 +566,6 @@ export default function ChallengeLobby() {
     }
   };
 
-  const isPlayer1 = activeChallenge?.player1_id === user?.id;
-
   return (
     <Shell>
       <div className="space-y-6">
@@ -565,140 +589,181 @@ export default function ChallengeLobby() {
           </button>
         </div>
 
-        {activeChallenge && (
-          <div className="space-y-3 animate-in fade-in slide-in-from-top-3 duration-300">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse inline-block" />
-              <span className="text-xs font-black uppercase tracking-widest text-red-500 italic">Your Active Challenge</span>
-            </div>
-
-            <div className="bg-zinc-950 rounded-3xl border border-red-500/20 p-5 shadow-xl relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-red-500/5 via-transparent to-transparent pointer-events-none" />
-              
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
-                {/* Players Section */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-8">
-                  {/* P1 / You */}
-                  <div className="flex items-center gap-3">
-                    <PlayerBadge 
-                      badgeId={isPlayer1 ? activeChallenge.player1_badge_id : activeChallenge.player2_badge_id} 
-                      username={isPlayer1 ? activeChallenge.player1_username : activeChallenge.player2_username} 
-                      size="md"
-                      className="w-12 h-12 ring-2 ring-blue-500/20"
-                    />
-                    <div>
-                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">You</span>
-                      <span className="text-sm font-black text-white italic truncate max-w-[120px] block">
-                        {isPlayer1 ? activeChallenge.player1_username : activeChallenge.player2_username}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* VS Divider */}
-                  <div className="flex items-center gap-2 self-stretch sm:self-auto justify-center">
-                    <div className="h-px bg-zinc-800 w-8 sm:hidden" />
-                    <span className="px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[9px] font-black text-zinc-400 italic">
-                      VS
-                    </span>
-                    <div className="h-px bg-zinc-800 w-8 sm:hidden" />
-                  </div>
-
-                  {/* P2 / Opponent */}
-                  <div className="flex items-center gap-3">
-                    <PlayerBadge 
-                      badgeId={isPlayer1 ? activeChallenge.player2_badge_id : activeChallenge.player1_badge_id} 
-                      username={isPlayer1 ? activeChallenge.player2_username : activeChallenge.player1_username} 
-                      size="md"
-                      className="w-12 h-12 ring-2 ring-red-500/20"
-                    />
-                    <div>
-                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Opponent</span>
-                      <span className="text-sm font-black text-white italic truncate max-w-[120px] block">
-                        {isPlayer1 ? activeChallenge.player2_username : activeChallenge.player1_username}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Status & Countdown */}
-                <div className="flex flex-col sm:flex-row lg:flex-col items-start gap-4 lg:gap-1 text-left sm:w-full lg:w-auto justify-between lg:justify-start">
-                  <div>
-                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block">Status</span>
-                    <span className="text-xs font-black text-blue-400 uppercase tracking-wide">
-                      {{
-                        matched: '⚔️ MATCHED — Play now!',
-                        in_progress: hasSubmittedActive ? '📊 Result submitted — awaiting opponent' : '⚔️ MATCHED — Submit result!',
-                        disputed: '⚠️ DISPUTED — Admin reviewing',
-                      }[activeChallenge.challenge_status as string] || '⚔️ CHALLENGE IN PROGRESS'}
-                    </span>
-                  </div>
-
-                  <div className="sm:ml-auto lg:ml-0">
-                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block">Time Remaining</span>
-                    <div className="flex items-center gap-1.5 text-xs font-mono font-black text-red-400">
-                      <Timer className="w-3.5 h-3.5 text-red-500" />
-                      <ActiveChallengeCountdown autoCancelAt={activeChallenge.auto_cancel_at} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2 sm:w-full lg:w-auto sm:justify-end">
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/challenges/${activeChallenge.challenge_id}`)}
-                    className="flex-1 sm:flex-initial px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-xl text-xs font-black uppercase tracking-wider border border-zinc-800 transition-all cursor-pointer text-center"
-                  >
-                    Arena
-                  </button>
-
-                  {activeChallenge.conversation_id && (
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/challenges/${activeChallenge.challenge_id}/chat`)}
-                      className="flex-1 sm:flex-initial px-4 py-2.5 bg-blue-950/40 hover:bg-blue-950/80 text-blue-400 rounded-xl text-xs font-black uppercase tracking-wider border border-blue-900/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      Chat
-                    </button>
-                  )}
-
-                  {activeChallenge.challenge_status === 'matched' && (
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/challenges/${activeChallenge.challenge_id}`)}
-                      className="flex-1 sm:flex-initial px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-blue-500/20 active:scale-95 cursor-pointer text-center"
-                    >
-                      Submit Result
-                    </button>
-                  )}
-
-                  {activeChallenge.challenge_status === 'in_progress' && !hasSubmittedActive && (
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/challenges/${activeChallenge.challenge_id}`)}
-                      className="flex-1 sm:flex-initial px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-blue-500/20 active:scale-95 cursor-pointer text-center"
-                    >
-                      Submit Result
-                    </button>
-                  )}
-
-                  {activeChallenge.challenge_status === 'in_progress' && hasSubmittedActive && (
-                    <span className="flex-1 sm:flex-initial px-3 py-2.5 bg-zinc-900 text-zinc-500 border border-zinc-800 rounded-xl text-xs font-black uppercase tracking-wider text-center cursor-not-allowed">
-                      Awaiting Opponent
-                    </span>
-                  )}
-
-                  {activeChallenge.challenge_status === 'disputed' && (
-                    <span className="flex-1 sm:flex-initial px-3 py-2.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-xl text-xs font-black uppercase tracking-wider text-center">
-                      Under Review
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
+        <div className="space-y-3 animate-in fade-in slide-in-from-top-3 duration-300">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-pulse inline-block" />
+            <span className="text-xs font-black uppercase tracking-widest text-zinc-400 italic">My Active Challenges</span>
           </div>
-        )}
+
+          {activeLoading ? (
+            <div className="flex flex-col items-center justify-center py-10 space-y-3 bg-zinc-950 rounded-3xl border border-zinc-800/80">
+              <RefreshCw className="w-6 h-6 text-blue-500 animate-spin" />
+              <p className="text-[10px] uppercase tracking-widest text-zinc-500 animate-pulse">Loading active challenges...</p>
+            </div>
+          ) : activeError ? (
+            <div className="text-center py-6 bg-zinc-950 rounded-3xl border border-red-500/20 text-red-400">
+              <p className="text-xs font-bold uppercase tracking-wider">{activeError}</p>
+            </div>
+          ) : activeChallenges.length === 0 ? (
+            <div className="text-center py-10 bg-zinc-950 rounded-3xl border border-zinc-800 border-dashed">
+              <p className="text-sm text-zinc-500">No active challenges</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {activeChallenges.map((match) => {
+                const myBadgeId = match.my_role === 'player1' ? match.player1_badge_id : match.player2_badge_id;
+                const myUsername = match.my_role === 'player1' ? match.player1_username : match.player2_username;
+
+                return (
+                  <div key={match.match_id} className="bg-zinc-950 rounded-3xl border border-zinc-800/80 p-5 shadow-xl relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-transparent to-transparent pointer-events-none" />
+                    
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+                      {/* Players & VS section */}
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-8">
+                        {/* VS Separator with both badges facing each other */}
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-2">
+                            <PlayerBadge 
+                              badgeId={myBadgeId} 
+                              username={myUsername || 'You'} 
+                              size="md"
+                              className="w-12 h-12 ring-2 ring-blue-500/20"
+                            />
+                            <div className="hidden sm:block">
+                              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">You</span>
+                              <span className="text-sm font-black text-white italic truncate max-w-[100px] block">
+                                {myUsername || 'You'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <span className="px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[9px] font-black text-zinc-400 italic">
+                            VS
+                          </span>
+
+                          <div className="flex items-center gap-2">
+                            <PlayerBadge 
+                              badgeId={match.opponent_badge_id} 
+                              username={match.opponent_username || 'Opponent'} 
+                              size="md"
+                              className="w-12 h-12 ring-2 ring-red-500/20"
+                            />
+                            <div>
+                              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Opponent</span>
+                              <div className="flex items-center gap-1">
+                                <span className="text-sm font-black text-white italic truncate max-w-[120px] block">
+                                  {match.opponent_username || 'Opponent'}
+                                </span>
+                                {match.opponent_country && (
+                                  <span className="text-xs" title={match.opponent_country}>🌐</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Opponent Legacy Score */}
+                        {match.opponent_legacy_score !== null && match.opponent_legacy_score !== undefined && match.opponent_legacy_score > 0 && (
+                          <div className="flex flex-col items-start">
+                            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block">Opponent Score</span>
+                            <span className="flex items-center gap-1 text-xs font-black text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full mt-0.5">
+                              🏆 {match.opponent_legacy_score}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Status / Countdown / Paid info */}
+                      <div className="flex flex-wrap items-center gap-6">
+                        {/* Match Status Pill */}
+                        <div>
+                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block mb-1">Status</span>
+                          {match.match_status === 'pending' ? (
+                            <span className="px-2.5 py-1 text-[10px] font-black bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-full uppercase tracking-wider">
+                              Waiting to Start
+                            </span>
+                          ) : match.match_status === 'active' ? (
+                            <span className="px-2.5 py-1 text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full uppercase tracking-wider">
+                              In Progress
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 text-[10px] font-black bg-zinc-800 text-zinc-400 border border-zinc-700 rounded-full uppercase tracking-wider">
+                              {match.match_status || 'Unknown'}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Result Verification Status */}
+                        {match.match_status === 'active' && (
+                          <div>
+                            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block">Verification</span>
+                            <span className={cn(
+                              "text-xs font-black uppercase tracking-wide",
+                              match.result_verification_status === 'disputed' ? "text-red-500" :
+                              match.result_verification_status === 'pending' ? "text-amber-500" : "text-blue-400"
+                            )}>
+                              {
+                                {
+                                  none: 'Awaiting Result',
+                                  pending: 'Result Submitted',
+                                  disputed: 'Disputed'
+                                }[match.result_verification_status as string] || 'Awaiting Result'
+                              }
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Entry Fee / Paid information */}
+                        {match.entry_type === 'paid' && (
+                          <div>
+                            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block">Prize Pool</span>
+                            <span className="text-xs font-black text-amber-400 uppercase tracking-wide">
+                              {match.prize_pool} {match.currency || 'USD'}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* auto_cancel_at Countdown */}
+                        {match.match_status === 'pending' && match.auto_cancel_at && (
+                          <div>
+                            <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block">Time Remaining</span>
+                            <div className="flex items-center gap-1.5 text-xs font-mono font-black text-red-400 mt-0.5">
+                              <Timer className="w-3.5 h-3.5 text-red-500" />
+                              <ExpiresCountdown autoCancelAt={match.auto_cancel_at} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Go to Match button / actions */}
+                      <div className="flex items-center gap-2">
+                        {match.conversation_id && (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/challenges/${match.challenge_id}/chat`)}
+                            className="px-4 py-2.5 bg-blue-950/40 hover:bg-blue-950/80 text-blue-400 rounded-xl text-xs font-black uppercase tracking-wider border border-blue-900/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            Chat
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/challenges/${match.challenge_id}`, { state: { match_id: match.match_id } })}
+                          className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-blue-500/20 active:scale-95 cursor-pointer text-center"
+                        >
+                          Go to Match
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {/* Tab Selection */}
         <div className="flex border-b border-zinc-800">
