@@ -6,8 +6,8 @@ import './index.css';
 // Register PWA service worker and clean up legacy non-PWA workbox registrations safely
 try {
   if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-    // Register the PWA service worker
-    navigator.serviceWorker.register('/sw.js')
+    // Register the PWA service worker with updateViaCache: 'none' to bypass browser caching of sw.js itself
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
       .then((reg) => {
         console.log('[SW] PWA Service Worker registered successfully with scope:', reg.scope);
       })

@@ -36,6 +36,25 @@ export const PwaUpdateProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const handleWaitingWorker = (worker: ServiceWorker) => {
       waitingWorkerRef.current = worker;
       setUpdateAvailable(true);
+
+      // Check if this is a fresh start/session reopen (session_active is not set in sessionStorage)
+      // If it is fresh, we auto-apply the update instantly without prompting!
+      let isFreshSession = false;
+      try {
+        isFreshSession = !sessionStorage.getItem('tournahub_session_active');
+      } catch (e) {
+        console.warn('[PWA Update] sessionStorage blocked:', e);
+      }
+
+      if (isFreshSession) {
+        console.log('[PWA Update] Fresh session detected with waiting service worker. Auto-applying update...');
+        try {
+          sessionStorage.setItem('tournahub_session_active', 'true');
+        } catch (e) {}
+        worker.postMessage({ type: 'SKIP_WAITING' });
+        return;
+      }
+
       setShowBanner(true);
     };
 
@@ -67,6 +86,11 @@ export const PwaUpdateProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       console.warn('[PWA Update] Failed to get SW registration:', err);
     });
 
+    // Mark active session so we don't reload aggressively while user is interacting in a single active session
+    try {
+      sessionStorage.setItem('tournahub_session_active', 'true');
+    } catch (e) {}
+
     // 2. Refresh page when active service worker changes (controllerchange)
     const handleControllerChange = () => {
       if (isRefreshingRef.current) return;
@@ -82,29 +106,36 @@ export const PwaUpdateProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   }, []);
 
-  // 3. Resume handling: check for updates when returning from background
+  // 3. Resume and Background handling:
+  // - Check for updates when returning from background
+  // - Auto-apply waiting updates silently when app goes to background (hidden)
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
       return;
     }
 
-    const checkUpdateOnResume = async () => {
-      if (document.visibilityState === 'visible') {
-        try {
-          const reg = await navigator.serviceWorker.getRegistration();
-          if (reg) {
-            console.log('[PWA Update] App resumed. Triggering registration update check...');
-            await reg.update();
-          }
-        } catch (err) {
-          console.warn('[PWA Update] Failed to check update on resume:', err);
+    const checkUpdateAndAutoApply = async () => {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (!reg) return;
+
+        if (document.visibilityState === 'visible') {
+          console.log('[PWA Update] App resumed. Triggering registration update check...');
+          await reg.update();
+        } else if (document.visibilityState === 'hidden' && reg.waiting) {
+          // Silent background update: if user minimizes the app or turns off the screen
+          // and an update is waiting, we activate it immediately so next launch is fresh!
+          console.log('[PWA Update] App went to hidden state. Silent update triggered...');
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
         }
+      } catch (err) {
+        console.warn('[PWA Update] Background update check/apply failed:', err);
       }
     };
 
-    document.addEventListener('visibilitychange', checkUpdateOnResume);
+    document.addEventListener('visibilitychange', checkUpdateAndAutoApply);
     return () => {
-      document.removeEventListener('visibilitychange', checkUpdateOnResume);
+      document.removeEventListener('visibilitychange', checkUpdateAndAutoApply);
     };
   }, []);
 

@@ -26,9 +26,23 @@ const STATIC_ASSETS_REGEX = /\.(js|css|woff2?|ttf|png|jpe?g|gif|svg|ico)$/i;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(SHELL_CACHE).then((cache) => {
-      console.log('[SW] Pre-caching application shell assets...');
-      return cache.addAll(PRECACHE_ASSETS);
+    caches.open(SHELL_CACHE).then(async (cache) => {
+      console.log('[SW] Pre-caching application shell assets with cache-busting...');
+      // Fetch each precached asset with a cache-buster but store it under its clean URL path
+      for (const asset of PRECACHE_ASSETS) {
+        try {
+          const cacheBustedUrl = `${asset}${asset.includes('?') ? '&' : '?'}cb=${Date.now()}`;
+          const response = await fetch(new Request(cacheBustedUrl, { cache: 'reload' }));
+          if (response.ok) {
+            await cache.put(asset, response);
+            console.log(`[SW] Pre-cached asset successfully: ${asset}`);
+          } else {
+            console.warn(`[SW] Pre-cache returned status ${response.status} for asset: ${asset}`);
+          }
+        } catch (err) {
+          console.error(`[SW] Pre-cache failed for asset: ${asset}`, err);
+        }
+      }
     })
   );
 });
@@ -87,7 +101,7 @@ self.addEventListener('fetch', (event) => {
   // 4. SPA Navigation Strategy: Network-First falling back to Cached SPA shell
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
+      fetch(new Request(request, { cache: 'no-cache' }))
         .then((response) => {
           // Keep navigation cache updated
           const responseClone = response.clone();
