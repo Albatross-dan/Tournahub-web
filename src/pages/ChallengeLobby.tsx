@@ -1,17 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import Shell from '../components/layout/Shell';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   Swords, Plus, Trophy, Wallet, RefreshCw, Search, X, Shield, 
   HelpCircle, ArrowRight, User, Check, Flame, MessageSquare, ShieldAlert,
-  Timer
+  Timer, Zap
 } from 'lucide-react';
 import { PlayerBadge } from '../components/ui/PlayerBadge';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { tournamentService } from '../services/tournamentService';
+
+function getFlagEmoji(countryCode: string | null | undefined): string {
+  if (!countryCode) return '';
+  const codePoints = countryCode
+    .toUpperCase()
+    .split('')
+    .map(char => 127397 + char.charCodeAt(0));
+  try {
+    return String.fromCodePoint(...codePoints);
+  } catch (e) {
+    return '🌐';
+  }
+}
 
 interface LobbyChallenge {
   id: string;
@@ -125,6 +138,31 @@ function ExpiresCountdown({ autoCancelAt }: { autoCancelAt: string | null | unde
 export default function ChallengeLobby() {
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  const location = useLocation();
+  const initOpponentUsername = location.state?.opponentUsername || null;
+  const initOpponentId = location.state?.opponentId || null;
+
+  const [opponentUsername, setOpponentUsername] = useState<string | null>(null);
+  const [opponentId, setOpponentId] = useState<string | null>(null);
+
+  const [recentWinners, setRecentWinners] = useState<any[]>([]);
+  const [winnersLoading, setWinnersLoading] = useState(true);
+
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const [isPaused, setIsPaused] = useState(false);
+  const pauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollDirectionRef = useRef<1 | -1>(1); // 1 = right, -1 = left
+
+  const handleInteraction = () => {
+    setIsPaused(true);
+    if (pauseTimeoutRef.current) {
+      clearTimeout(pauseTimeoutRef.current);
+    }
+    pauseTimeoutRef.current = setTimeout(() => {
+      setIsPaused(false);
+    }, 5000);
+  };
 
   const [activeChallenges, setActiveChallenges] = useState<any[]>([]);
   const [activeLoading, setActiveLoading] = useState<boolean>(true);
@@ -359,14 +397,98 @@ export default function ChallengeLobby() {
     }
   }, [activeTab]);
 
-  const handleOpenCreateModal = () => {
+  const fetchRecentWinners = async () => {
+    try {
+      const { data, error: fetchErr } = await supabase
+        .from('v_challenge_recent_winners')
+        .select('*');
+      if (fetchErr) throw fetchErr;
+      setRecentWinners(data || []);
+    } catch (err) {
+      console.error('[ChallengeLobby] Silent error fetching recent winners:', err);
+      setRecentWinners([]);
+    } finally {
+      setWinnersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRecentWinners();
+
+    const winnersSubscription = supabase
+      .channel('challenge-winners-realtime')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'challenge_matches'
+      }, () => {
+        fetchRecentWinners();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(winnersSubscription);
+      if (pauseTimeoutRef.current) {
+        clearTimeout(pauseTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isPaused || recentWinners.length <= 1) return;
+
+    const interval = setInterval(() => {
+      const container = carouselRef.current;
+      if (!container) return;
+
+      const cardWidth = 140; // width of card
+      const gap = 16; // gap-4 is 16px
+      const totalWidthOfItem = cardWidth + gap;
+
+      const maxScrollLeft = container.scrollWidth - container.clientWidth;
+      
+      let direction = scrollDirectionRef.current;
+      if (direction === 1 && container.scrollLeft >= maxScrollLeft - 5) {
+        direction = -1;
+        scrollDirectionRef.current = -1;
+      } else if (direction === -1 && container.scrollLeft <= 5) {
+        direction = 1;
+        scrollDirectionRef.current = 1;
+      }
+
+      const nextScrollLeft = container.scrollLeft + (direction * totalWidthOfItem);
+
+      container.scrollTo({
+        left: nextScrollLeft,
+        behavior: 'smooth'
+      });
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [isPaused, recentWinners.length]);
+
+  useEffect(() => {
+    if (initOpponentUsername) {
+      handleOpenCreateModal(initOpponentUsername, initOpponentId);
+    }
+  }, [initOpponentUsername, initOpponentId]);
+
+  const handleOpenCreateModal = (oppUsername?: string | null, oppId?: string | null) => {
     setError(null);
     setTitle('');
     setEntryType('free');
     setEntryFee(0);
     setSelectedBadgeId(null);
+    setOpponentUsername(oppUsername || null);
+    setOpponentId(oppId || null);
     setIsCreateOpen(true);
     fetchWalletAndBadges();
+  };
+
+  const handleCloseCreateModal = () => {
+    setIsCreateOpen(false);
+    setOpponentUsername(null);
+    setOpponentId(null);
   };
 
   const handleOpenJoinModal = (challenge: LobbyChallenge) => {
@@ -600,13 +722,123 @@ export default function ChallengeLobby() {
           </div>
           <button
             type="button"
-            onClick={handleOpenCreateModal}
+            onClick={() => handleOpenCreateModal()}
             className="shrink-0 inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all duration-300 shadow-md shadow-blue-500/20 active:scale-95 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             Create Challenge
           </button>
         </div>
+
+        {/* Featured Winners Carousel Section */}
+        {recentWinners.length > 0 && (
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse inline-block" />
+                <span className="text-xs font-black uppercase tracking-widest text-zinc-400 italic">🏆 WINNERS</span>
+              </div>
+              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider pl-[18px]">
+                tap a card to challenge a player
+              </p>
+            </div>
+
+            <div className="relative w-full">
+              {/* Fade masks */}
+              <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-zinc-950 to-transparent pointer-events-none z-10" />
+              <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-zinc-950 to-transparent pointer-events-none z-10" />
+
+              <div 
+                ref={carouselRef}
+                onScroll={handleInteraction}
+                onTouchStart={handleInteraction}
+                onMouseDown={handleInteraction}
+                className="flex gap-4 overflow-x-auto scrollbar-hide snap-x snap-mandatory -webkit-overflow-scrolling-touch pb-2 scroll-smooth"
+              >
+                {recentWinners.map((winner, idx) => (
+                  <div 
+                    key={`${winner.user_id}-${idx}`}
+                    onClick={!winner.is_current_user ? () => handleOpenCreateModal(winner.username, winner.user_id) : undefined}
+                    className={cn(
+                      "w-[140px] shrink-0 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 flex flex-col justify-between items-center text-center snap-start relative group transition-all duration-300",
+                      !winner.is_current_user && "cursor-pointer hover:border-blue-500/50 hover:bg-zinc-900/40 active:scale-[0.98]"
+                    )}
+                  >
+                    {winner.country_code && (
+                      <span className="absolute top-2.5 right-2.5 text-xs filter drop-shadow" title={winner.country_code}>
+                        {getFlagEmoji(winner.country_code)}
+                      </span>
+                    )}
+
+                    {/* Winner Badge */}
+                    <div className="w-12 h-12 flex items-center justify-center mt-2 mb-1">
+                      <PlayerBadge 
+                        badgeId={winner.winner_badge_id} 
+                        username={winner.username || 'Winner'} 
+                        size="md"
+                        className="w-10 h-10"
+                      />
+                    </div>
+
+                    {/* Winner Username */}
+                    <div className="w-full">
+                      <span className="block text-xs font-black text-white uppercase italic tracking-tight truncate max-w-full">
+                        {winner.username}
+                      </span>
+                    </div>
+
+                    {/* Stats */}
+                    <div className="space-y-0.5 my-1 text-center">
+                      <div className="text-[11px] font-bold text-emerald-400">
+                        🏆 {winner.winner_score} – {winner.loser_score}
+                      </div>
+                      <div className="text-[10px] text-zinc-400 font-mono">
+                        ★ {winner.legacy_score || 0}
+                      </div>
+                    </div>
+
+                    {/* Challenge Button or Current User Badge */}
+                    {winner.is_current_user ? (
+                      <div className="w-full py-1.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-zinc-950 text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md select-none text-center">
+                        YOU 🏆
+                      </div>
+                    ) : (
+                      <div
+                        className="w-full py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 group-hover:from-blue-500 group-hover:to-indigo-500 text-white text-[10px] font-black uppercase tracking-wider rounded-lg transition-all shadow-md text-center select-none"
+                      >
+                        Challenge
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Loading/Skeleton state while fetching */}
+        {winnersLoading && (
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 bg-zinc-700 rounded-full animate-pulse inline-block" />
+                <span className="text-xs font-black uppercase tracking-widest text-zinc-500 italic">🏆 WINNERS</span>
+              </div>
+              <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-wider pl-[18px]">
+                tap a card to challenge a player
+              </p>
+            </div>
+
+            <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2">
+              {[1, 2, 3].map((i) => (
+                <div 
+                  key={i}
+                  className="w-[140px] h-[185px] bg-zinc-900/50 border border-zinc-800/80 rounded-2xl animate-pulse shrink-0"
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="space-y-3 animate-in fade-in slide-in-from-top-3 duration-300">
           <div className="flex items-center gap-2">
@@ -1011,7 +1243,7 @@ export default function ChallengeLobby() {
                     <h3 className="font-black text-lg text-white uppercase italic tracking-tight">Create Challenge</h3>
                   </div>
                   <button 
-                    onClick={() => setIsCreateOpen(false)}
+                    onClick={handleCloseCreateModal}
                     className="p-1 rounded-lg bg-zinc-900 text-zinc-400 hover:text-white cursor-pointer"
                   >
                     <X className="w-4 h-4" />
@@ -1019,6 +1251,25 @@ export default function ChallengeLobby() {
                 </div>
 
                 <form onSubmit={handleCreateChallenge} className="space-y-4 overflow-y-auto flex-1 pr-1.5 -mr-1.5 scrollbar-thin scrollbar-thumb-zinc-800">
+                  {opponentUsername && (
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 flex items-center justify-between">
+                      <div>
+                        <span className="block text-[10px] font-black uppercase text-blue-400 tracking-wider mb-0.5">Challenging Player</span>
+                        <span className="text-sm font-black text-white italic">@{opponentUsername}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpponentUsername(null);
+                          setOpponentId(null);
+                        }}
+                        className="text-[10px] font-black uppercase text-zinc-500 hover:text-zinc-300 transition-all cursor-pointer"
+                      >
+                        [ Clear ]
+                      </button>
+                    </div>
+                  )}
+
                   <div>
                     <label className="block text-[10px] font-black uppercase text-zinc-400 tracking-wider mb-1.5">Challenge Title (Optional)</label>
                     <input 

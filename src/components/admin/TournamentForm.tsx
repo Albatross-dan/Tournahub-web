@@ -22,6 +22,7 @@ const tournamentSchema = z.object({
   start_date: z.string().min(1, "Start date is required"),
   end_date: z.string().min(1, "End date is required"),
   banner_url: z.string().optional(),
+  double_round_robin: z.boolean().optional(),
 }).refine(data => {
   const start = new Date(data.start_date);
   const end = new Date(data.end_date);
@@ -48,7 +49,7 @@ export default function TournamentForm({ initialData, mode }: TournamentFormProp
     initialData?.banner_url ? (getStorageUrl('tournament-banners', initialData.banner_url) || '') : ''
   );
 
-  const { register, handleSubmit, formState: { errors }, watch } = useForm<TournamentFormData>({
+  const { register, handleSubmit, formState: { errors }, watch, setValue } = useForm<TournamentFormData>({
     resolver: zodResolver(tournamentSchema),
     defaultValues: initialData ? {
       name: initialData.name,
@@ -61,6 +62,9 @@ export default function TournamentForm({ initialData, mode }: TournamentFormProp
       start_date: initialData.start_date ? new Date(initialData.start_date).toISOString().split('T')[0] : '',
       end_date: initialData.end_date ? new Date(initialData.end_date).toISOString().split('T')[0] : '',
       banner_url: initialData.banner_url || '',
+      double_round_robin: (Array.isArray((initialData as any).tournament_settings) 
+        ? (initialData as any).tournament_settings[0] 
+        : (initialData as any).tournament_settings)?.double_round_robin ?? false,
     } : {
       name: '',
       type: 'knockout',
@@ -71,6 +75,7 @@ export default function TournamentForm({ initialData, mode }: TournamentFormProp
       status: TournamentStatus.DRAFT,
       start_date: new Date().toISOString().split('T')[0],
       end_date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+      double_round_robin: false,
     }
   });
 
@@ -132,9 +137,9 @@ export default function TournamentForm({ initialData, mode }: TournamentFormProp
 
       try {
         if (mode === 'create') {
-          await tournamentService.create(tournamentData);
+          await tournamentService.create(tournamentData, data.double_round_robin);
         } else if (initialData) {
-          await tournamentService.update(initialData.id, tournamentData);
+          await tournamentService.update(initialData.id, tournamentData, data.double_round_robin);
         }
         navigate('/admin/tournaments');
       } catch (dbErr: any) {
@@ -192,6 +197,38 @@ export default function TournamentForm({ initialData, mode }: TournamentFormProp
                 ))}
               </select>
             </div>
+
+            {watch('type') === 'league' && (
+              <div className="col-span-2 space-y-3 p-4 bg-slate-900/50 rounded-xl border border-slate-800 animate-in fade-in slide-in-from-top-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">League Format</label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <label className="flex items-center space-x-3 text-sm text-slate-300 cursor-pointer p-2 rounded-lg hover:bg-slate-800/40 transition-colors">
+                    <input
+                      type="radio"
+                      checked={!watch('double_round_robin')}
+                      onChange={() => setValue('double_round_robin', false)}
+                      className="w-4 h-4 text-primary focus:ring-primary bg-slate-950 border-slate-800"
+                    />
+                    <div>
+                      <span className="font-bold text-white block text-xs">Single Leg</span>
+                      <span className="text-[11px] text-slate-400">each team plays every opponent once</span>
+                    </div>
+                  </label>
+                  <label className="flex items-center space-x-3 text-sm text-slate-300 cursor-pointer p-2 rounded-lg hover:bg-slate-800/40 transition-colors">
+                    <input
+                      type="radio"
+                      checked={!!watch('double_round_robin')}
+                      onChange={() => setValue('double_round_robin', true)}
+                      className="w-4 h-4 text-primary focus:ring-primary bg-slate-950 border-slate-800"
+                    />
+                    <div>
+                      <span className="font-bold text-white block text-xs">Double Leg</span>
+                      <span className="text-[11px] text-slate-400">home and away (each opponent twice)</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-6">

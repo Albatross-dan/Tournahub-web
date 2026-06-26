@@ -129,7 +129,7 @@ export const tournamentService = {
     }
   },
 
-  async create(tournament: any) {
+  async create(tournament: any, doubleRoundRobin?: boolean) {
     await ensureAuthenticated();
     const { data, error } = await (supabase as any)
       .from('tournaments')
@@ -145,10 +145,28 @@ export const tournamentService = {
       }
       throw error;
     }
+
+    // Insert or upsert settings
+    if (data?.id) {
+      const { error: settingsError } = await (supabase as any)
+        .from('tournament_settings')
+        .upsert({
+          tournament_id: data.id,
+          format: tournament.type || 'league',
+          double_round_robin: doubleRoundRobin ?? false,
+          points_win: 3,
+          points_draw: 1,
+          points_loss: 0
+        }, { onConflict: 'tournament_id' });
+      if (settingsError) {
+        console.error('Error upserting tournament settings on create:', settingsError);
+      }
+    }
+
     return data;
   },
 
-  async update(id: string, updates: Partial<Tournament>) {
+  async update(id: string, updates: Partial<Tournament>, doubleRoundRobin?: boolean) {
     await ensureAuthenticated();
     const { data, error } = await (supabase as any)
       .from('tournaments')
@@ -163,6 +181,23 @@ export const tournamentService = {
       }
       throw error;
     }
+
+    if (doubleRoundRobin !== undefined) {
+      const { error: settingsError } = await (supabase as any)
+        .from('tournament_settings')
+        .upsert({
+          tournament_id: id,
+          format: updates.type || 'league',
+          double_round_robin: doubleRoundRobin,
+          points_win: 3,
+          points_draw: 1,
+          points_loss: 0
+        }, { onConflict: 'tournament_id' });
+      if (settingsError) {
+        console.error('Error upserting tournament settings on update:', settingsError);
+      }
+    }
+
     return data;
   },
 

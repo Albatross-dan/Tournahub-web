@@ -64,23 +64,34 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
 
   async function fetchMatchesAndTournament() {
     try {
-      const [matchesData, tournamentData] = await Promise.all([
+      const [matchesData, tournamentData, dbMatchesRes] = await Promise.all([
         tournamentService.getFixturesWithBadges(tournamentId),
         tournamentService.getById(tournamentId),
+        supabase.from('matches').select('id, leg').eq('tournament_id', tournamentId)
       ]);
       const rawMatches = matchesData || [];
+      const legMap = new Map<string, number>();
+      if (dbMatchesRes?.data) {
+        dbMatchesRes.data.forEach((m: any) => {
+          if (m.id && m.leg) {
+            legMap.set(m.id, m.leg);
+          }
+        });
+      }
       const seenIds = new Set();
       const uniqueMatches = [];
       for (const m of rawMatches) {
         if (!m) continue;
         const mId = m.match_id || m.id;
+        const leg = m.leg ?? (mId ? legMap.get(mId) : undefined) ?? 1;
+        const updatedMatch = { ...m, leg };
         if (mId) {
           if (!seenIds.has(mId)) {
             seenIds.add(mId);
-            uniqueMatches.push(m);
+            uniqueMatches.push(updatedMatch);
           }
         } else {
-          uniqueMatches.push(m);
+          uniqueMatches.push(updatedMatch);
         }
       }
       setMatches(uniqueMatches);
@@ -401,10 +412,19 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
 
   const isKnockout = tournament?.type === 'knockout';
 
+  const hasSecondLeg = tournament?.type === 'league' && matches.some(f => f.leg === 2);
+  let maxLeg1Round = 0;
+  if (hasSecondLeg) {
+    matches.forEach(m => {
+      if (m.leg === 1 && m.round > maxLeg1Round) {
+        maxLeg1Round = m.round;
+      }
+    });
+  }
+
   // Group matches by stage and round
   const groupedMatches = matches.reduce((acc: any, match) => {
-    const stage = match.stage || 'knockout';
-    if (!acc[stage]) acc[stage] = {};
+    let stage = match.stage || 'knockout';
     
     let roundLabel = 'General';
     if (match.round) {
@@ -416,17 +436,33 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
         else if (rNum === 3) roundLabel = 'Final';
         else roundLabel = `Round ${match.round}`;
       } else {
-        roundLabel = `Round ${match.round}`;
+        if (hasSecondLeg && stage === 'league') {
+          if (match.leg === 2) {
+            stage = 'league_second_leg';
+            const matchdayWithinLeg = match.round - maxLeg1Round;
+            roundLabel = `Matchday ${matchdayWithinLeg}`;
+          } else {
+            stage = 'league_first_leg';
+            roundLabel = `Matchday ${match.round}`;
+          }
+        } else {
+          if (stage === 'league') {
+            roundLabel = `Matchday ${match.round}`;
+          } else {
+            roundLabel = `Round ${match.round}`;
+          }
+        }
       }
     }
 
+    if (!acc[stage]) acc[stage] = {};
     if (!acc[stage][roundLabel]) acc[stage][roundLabel] = [];
     acc[stage][roundLabel].push(match);
     return acc;
   }, {});
 
   const dataStages = Object.keys(groupedMatches);
-  const stagesInOrderPredefined = ['group', 'group_stage', 'league', 'knockout', 'main', 'quarterfinal', 'semifinal', 'final'];
+  const stagesInOrderPredefined = ['group', 'group_stage', 'league_first_leg', 'league_second_leg', 'league', 'knockout', 'main', 'quarterfinal', 'semifinal', 'final'];
   
   const stagesInOrder = [
     ...stagesInOrderPredefined.filter(s => dataStages.includes(s)),
@@ -477,7 +513,9 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
                     : "bg-slate-900/60 text-slate-400 border-white/5 hover:border-white/15 hover:text-slate-200"
                 )}
               >
-                {r.stage !== 'knockout' && r.stage !== 'main' ? `${r.stage.replace('_', ' ')} - ${r.roundLabel}` : r.roundLabel}
+                {r.stage === 'league_first_leg' ? `First Leg — ${r.roundLabel}` :
+                 r.stage === 'league_second_leg' ? `Second Leg — ${r.roundLabel}` :
+                 r.stage !== 'knockout' && r.stage !== 'main' ? `${r.stage.replace('_', ' ')} - ${r.roundLabel}` : r.roundLabel}
               </button>
             ))}
           </div>
@@ -604,7 +642,9 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
           return (
             <div key={stage} className="space-y-6">
               <h3 className="text-xl font-black text-text-main italic uppercase tracking-tighter border-l-4 border-primary pl-4">
-                {stage.replace('_', ' ')} Stage
+                {stage === 'league_first_leg' ? 'First Leg' :
+                 stage === 'league_second_leg' ? 'Second Leg' :
+                 `${stage.replace('_', ' ')} Stage`}
               </h3>
               
               {visibleRounds.map(([roundLabel, roundMatches]: [string, any]) => {
@@ -618,7 +658,11 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
                     {/* Image download header */}
                     <DownloadHeader 
                       tournamentName={tournament?.name || "Tournament"} 
-                      title={stage !== 'knockout' && stage !== 'main' ? `${stage.replace('_', ' ')} Stage - ${roundLabel}` : roundLabel}
+                      title={
+                        stage === 'league_first_leg' ? `First Leg — ${roundLabel}` :
+                        stage === 'league_second_leg' ? `Second Leg — ${roundLabel}` :
+                        stage !== 'knockout' && stage !== 'main' ? `${stage.replace('_', ' ')} Stage - ${roundLabel}` : roundLabel
+                      }
                       logoUrl={tournament?.banner_url ? getStorageUrl('tournament-banners', tournament.banner_url) : undefined}
                     />
 
