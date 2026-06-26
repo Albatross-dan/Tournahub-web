@@ -335,6 +335,25 @@ export default function ChallengeLobby() {
   }, [user?.id]);
 
   useEffect(() => {
+    if (!user) return;
+
+    const matchStatusSubscription = supabase
+      .channel('challenge_match_status')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'challenge_matches'
+      }, () => {
+        fetchActiveChallenges();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(matchStatusSubscription);
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
     if (activeTab === 'history') {
       fetchHistory();
     }

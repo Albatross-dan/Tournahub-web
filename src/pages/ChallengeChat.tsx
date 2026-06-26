@@ -14,10 +14,85 @@ import { motion, AnimatePresence } from 'motion/react';
 interface Message {
   id: string;
   sender_id: string | null;
-  message_type: 'text' | 'system';
+  message_type: 'text' | 'system' | 'whatsapp_action';
   content: string;
   created_at: string;
   read_by: string[] | null;
+}
+
+function WhatsAppCard({ message, currentUserId }: any) {
+  let payload: any = null;
+  try {
+    payload = JSON.parse(message.content);
+  } catch (err) {
+    console.warn('Failed to parse whatsapp_action message content:', err);
+    return (
+      <div className="w-full text-center py-3 bg-zinc-900/50 border border-zinc-800 rounded-2xl text-xs text-zinc-500 italic">
+        ⚠️ Failed to load coordination info.
+      </div>
+    );
+  }
+
+  if (!payload) return null;
+
+  const isPlayer1 = currentUserId === payload.player1?.id;
+  const mySlot = isPlayer1 ? payload.player1 : payload.player2;
+  const opponentSlot = isPlayer1 ? payload.player2 : payload.player1;
+
+  if (!mySlot || !opponentSlot) {
+    return (
+      <div className="w-full text-center py-3 bg-zinc-900/50 border border-zinc-800 rounded-2xl text-xs text-zinc-500 italic">
+        ⚠️ Participant slot info mismatch.
+      </div>
+    );
+  }
+
+  const opponentHasWa = opponentSlot.whatsapp && opponentSlot.whatsapp.trim() !== '';
+  const handleOpenWhatsApp = () => {
+    if (!opponentHasWa) return;
+    const number = opponentSlot.whatsapp.replace(/\D/g, '');
+    const text = encodeURIComponent(mySlot.wa_text || '');
+    window.open(`https://wa.me/${number}?text=${text}`, '_blank');
+  };
+
+  return (
+    <div className="w-full bg-zinc-950/85 rounded-2xl border border-emerald-500/30 p-5 shadow-lg my-3 max-w-md mx-auto relative overflow-hidden text-left">
+      <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 via-transparent to-transparent pointer-events-none" />
+      <div className="relative z-10 flex flex-col space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="p-1.5 rounded-full bg-emerald-500/10 text-emerald-400">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M13.601 2.326A7.85 7.85 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.9 7.9 0 0 0 3.79.949h.004c4.368 0 7.927-3.561 7.928-7.928a7.82 7.82 0 0 0-2.325-5.6zM7.994 14.521a6.6 6.6 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.56 6.56 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592m3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.065-.315-.099-.445.099-.133.197-.513.646-.627.775-.114.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.114-.198-.011-.304.088-.403.087-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.323-.335-.445-.34-.114-.007-.247-.007-.38-.007a.73.73 0 0 0-.529.247c-.182.198-.691.677-.691 1.654s.71 1.916.81 2.049c.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.129 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.114-.943-.049-.084-.182-.133-.38-.232"/>
+            </svg>
+          </span>
+          <span className="text-xs font-black text-white italic tracking-widest uppercase">Coordinate via WhatsApp</span>
+        </div>
+        
+        <div>
+          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block">Match Deadline</span>
+          <span className="text-sm font-black text-zinc-200">{mySlot.deadline_display || 'Not specified'}</span>
+        </div>
+
+        {opponentHasWa ? (
+          <button
+            type="button"
+            onClick={handleOpenWhatsApp}
+            className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-emerald-600/20 active:scale-95 cursor-pointer"
+          >
+            WhatsApp {opponentSlot.username || 'Opponent'} →
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled
+            className="w-full mt-2 px-4 py-2.5 bg-zinc-800 text-zinc-500 rounded-xl text-xs font-black uppercase tracking-wider cursor-not-allowed border border-zinc-700/50"
+          >
+            Opponent hasn't set a WhatsApp number
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function ChallengeChat() {
@@ -228,6 +303,10 @@ export default function ChallengeChat() {
             </div>
           ) : (
             messages.map((msg) => {
+              if (msg.message_type === 'whatsapp_action') {
+                return <WhatsAppCard key={msg.id} message={msg} currentUserId={user?.id} />;
+              }
+
               const isSystem = msg.message_type === 'system';
               if (isSystem) {
                 return (
