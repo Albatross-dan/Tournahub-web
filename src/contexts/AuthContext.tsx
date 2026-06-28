@@ -226,8 +226,17 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
   useEffect(() => {
     if (user) {
       lastUserIdRef.current = user.id;
+      // Identify user in Sentry with safety dynamic import
+      import('../lib/sentry').then(({ identifySentryUser }) => {
+        identifySentryUser(user, profile || undefined);
+      }).catch((e) => console.warn('[Sentry User Context] failed:', e));
+    } else {
+      // Clear user in Sentry
+      import('../lib/sentry').then(({ clearSentryUser }) => {
+        clearSentryUser();
+      }).catch((e) => console.warn('[Sentry User Context] failed:', e));
     }
-  }, [user]);
+  }, [user, profile]);
   const [refetchSignal, setRefetchSignal] = useState(0);
   const [needsUsernameSetup, setNeedsUsernameSetup] = useState(false);
 

@@ -112,6 +112,23 @@ export const supabase = createClient<Database>(
     global: {
       headers: {
         'x-client-info': 'tournament-hub-web'
+      },
+      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = input.toString();
+        try {
+          const response = await fetch(input, init);
+          // Safely log success or HTTP failure using cloned response
+          import('./sentry').then(({ instrumentSupabaseFetch }) => {
+            instrumentSupabaseFetch(url, init, response.clone(), null);
+          }).catch(() => {});
+          return response;
+        } catch (error) {
+          // Log network or connection crash
+          import('./sentry').then(({ instrumentSupabaseFetch }) => {
+            instrumentSupabaseFetch(url, init, null, error);
+          }).catch(() => {});
+          throw error;
+        }
       }
     }
   }

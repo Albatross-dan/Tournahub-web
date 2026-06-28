@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import { sentryVitePlugin } from '@sentry/vite-plugin';
 import path from 'path';
 import fs from 'fs';
 import {defineConfig, loadEnv} from 'vite';
@@ -26,7 +27,15 @@ export default defineConfig(({mode}) => {
       },
       react(),
       tailwindcss(),
+      sentryVitePlugin({
+        org: 'danieloguda',
+        project: 'tournahub-web',
+        authToken: process.env.SENTRY_AUTH_TOKEN || env.SENTRY_AUTH_TOKEN,
+      }),
     ],
+    build: {
+      sourcemap: true,
+    },
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       'process.env.APP_VERSION': JSON.stringify(pkg.version),
