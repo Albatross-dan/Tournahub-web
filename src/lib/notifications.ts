@@ -4,6 +4,12 @@ import { getMessagingInstance } from './firebase';
 import { supabase } from './supabase';
 import { toast } from 'react-hot-toast';
 
+const APP_VERSION = '1.0.24';
+
+let tokenRegistrationInProgress = false;
+let tokenRegistered = false;
+let visibilityCleanup: (() => void) | null = null;
+
 /**
  * Requests browser notification permission, registers the messaging service worker,
  * retrieves the Firebase Cloud Messaging (FCM) token, and saves it to the
@@ -15,134 +21,183 @@ import { toast } from 'react-hot-toast';
  * @param userId The ID of the authenticated user
  */
 export async function requestNotificationPermission(userId: string, isRetry = false): Promise<string | null> {
-  // 1. Safety Checks for Browser APIs
-  if (typeof window === 'undefined') {
-    console.log('[Notifications] requestNotificationPermission called server-side. Aborting.');
-    return null;
+  // GUARD: prevent React StrictMode / re-render double-firing
+  if (tokenRegistrationInProgress || tokenRegistered) {
+    return localStorage.getItem('fcm_token');
   }
-  
-  console.log('[Notifications] requestNotificationPermission triggered for user:', userId);
-  console.log('[Notifications] Browser sandbox status: run-time window top level =', window.self === window.top);
-
-  if (!('serviceWorker' in navigator) || !('Notification' in window) || !('PushManager' in window)) {
-    console.log('[Notifications] Push notifications are not supported in this browser. Main criteria check failed:', {
-      serviceWorkerSupport: 'serviceWorker' in navigator,
-      notificationSupport: 'Notification' in window,
-      pushManagerSupport: 'PushManager' in window
-    });
-    return null;
-  }
+  tokenRegistrationInProgress = true;
 
   try {
-    // 2. Request / Check Notification Permission First
-    let permission = Notification.permission;
-    console.log('[Notifications] Initial notification permission on-entry state is:', permission);
-
-    if (permission === 'default') {
-      console.log('[Notifications] Permission is currently default. Triggering interactive permission prompt...');
-      try {
-        permission = await Notification.requestPermission();
-        console.log('[Notifications] Promisified Notification.requestPermission returned:', permission);
-      } catch (permErr) {
-        console.warn('[Notifications] Notification.requestPermission promise form failed, trying fallback callback pattern:', permErr);
-        permission = await new Promise<NotificationPermission>((resolve) => {
-          Notification.requestPermission(resolve);
-        });
-        console.log('[Notifications] Callback Notification.requestPermission returned:', permission);
-      }
-    } else {
-      console.log('[Notifications] System skipping permission prompt. Relying on existing state:', permission);
-    }
-
-    if (permission !== 'granted') {
-      console.warn(`[Notifications] Permission blocked or denied: "${permission}". Aborting setup.`);
+    // 1. Safety Checks for Browser APIs
+    if (typeof window === 'undefined') {
+      console.log('[Notifications] requestNotificationPermission called server-side. Aborting.');
       return null;
     }
+    
+    console.log('[Notifications] requestNotificationPermission triggered for user:', userId);
+    console.log('[Notifications] Browser sandbox status: run-time window top level =', window.self === window.top);
 
-    const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
-    console.log('[Notifications] Checking VITE_FIREBASE_VAPID_KEY:', vapidKey ? 'PASSED (value hidden)' : 'FAILED (missing)');
-    if (!vapidKey) {
-      console.warn('[Notifications] VITE_FIREBASE_VAPID_KEY is missing in environment variables. FCM registration aborted.');
-      return null;
-    }
-
-    // 3. Get Firebase Messaging Instance
-    console.log('[Notifications] Querying getMessagingInstance from firebase helper...');
-    const messaging = await getMessagingInstance();
-    if (!messaging) {
-      console.warn('[Notifications] Unable to retrieve Firebase Messaging instance because app/messaging check failed in firebase.ts.');
-      return null;
-    }
-    console.log('[Notifications] Firebase Messaging instance retrieved successfully.');
-
-    // 4. Custom registration of the Service Worker to guarantee it resolves correctly in Vite/Vercel
-    let swRegistration: ServiceWorkerRegistration | undefined;
-    try {
-      const config = {
-        apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
-        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-        storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
-        messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-        appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
-      };
-
-      const swUrl = `/firebase-messaging-sw.js?apiKey=${encodeURIComponent(config.apiKey)}&authDomain=${encodeURIComponent(config.authDomain)}&projectId=${encodeURIComponent(config.projectId)}&storageBucket=${encodeURIComponent(config.storageBucket)}&messagingSenderId=${encodeURIComponent(config.messagingSenderId)}&appId=${encodeURIComponent(config.appId)}`;
-      console.log('[Notifications] Registering dynamic service worker path:', swUrl);
-
-      swRegistration = await navigator.serviceWorker.register(swUrl);
-      console.log('[Notifications] Service Worker registration promise successful. Active scope:', swRegistration.scope);
-
-      // Wait for service worker to finish activating if needed
-      console.log('[Notifications] Waiting for navigator.serviceWorker.ready...');
-      await navigator.serviceWorker.ready;
-      console.log('[Notifications] Service Worker is ready and active.');
-    } catch (swErr) {
-      console.warn('[Notifications] Custom Service Worker registration failed:', swErr);
-    }
-
-    // 5. Generate FCM token
-    console.log('[Notifications] Calling Firebase getToken() method with active dynamic service Worker registration...');
-    const token = await getToken(messaging, {
-      vapidKey,
-      serviceWorkerRegistration: swRegistration,
-    });
-
-    if (!token) {
-      console.warn('[Notifications] Generated FCM token is empty. The getToken call did not return any value.');
-      return null;
-    }
-
-    console.log('[Notifications] FCM token successfully generated. Character preview:', token.substring(0, 10) + '...');
-    localStorage.setItem('fcm_token', token);
-
-    // 6. Save and Sync to Supabase table: 'notification_tokens'
-    console.log('[Notifications] Initiating Supabase database synchronization...');
-    const activeToken = await syncTokenToSupabase(userId, token, isRetry);
-    console.log('[Notifications] Completed token synchronization process.');
-
-    // 7. Handle token refresh inside callback if supported
-    if (typeof (messaging as any).onTokenRefresh === 'function') {
-      (messaging as any).onTokenRefresh(async () => {
-        try {
-          const newToken = await getToken(messaging, { vapidKey });
-          if (newToken) {
-            console.log('[Notifications] FCM Token refreshed.');
-            localStorage.setItem('fcm_token', newToken);
-            await syncTokenToSupabase(userId, newToken);
-          }
-        } catch (err) {
-          console.warn('[Notifications] Token refresh handling failed:', err);
-        }
+    if (!('serviceWorker' in navigator) || !('Notification' in window) || !('PushManager' in window)) {
+      console.log('[Notifications] Push notifications are not supported in this browser. Main criteria check failed:', {
+        serviceWorkerSupport: 'serviceWorker' in navigator,
+        notificationSupport: 'Notification' in window,
+        pushManagerSupport: 'PushManager' in window
       });
-    } else {
-      console.log('[Notifications] FCM onTokenRefresh is not natively present on this messaging version. Auto-refresh relies on getToken callbacks.');
+      return null;
     }
 
-    return activeToken;
-  } catch (error: any) {
-    console.warn('[Notifications] Failed to obtain token or request permission:', error);
-    return null;
+    try {
+      // 2. Request / Check Notification Permission First
+      let permission = Notification.permission;
+      console.log('[Notifications] Initial notification permission on-entry state is:', permission);
+
+      if (permission === 'default') {
+        console.log('[Notifications] Permission is currently default. Triggering interactive permission prompt...');
+        try {
+          permission = await Notification.requestPermission();
+          console.log('[Notifications] Promisified Notification.requestPermission returned:', permission);
+        } catch (permErr) {
+          console.warn('[Notifications] Notification.requestPermission promise form failed, trying fallback callback pattern:', permErr);
+          permission = await new Promise<NotificationPermission>((resolve) => {
+            Notification.requestPermission(resolve);
+          });
+          console.log('[Notifications] Callback Notification.requestPermission returned:', permission);
+        }
+      } else {
+        console.log('[Notifications] System skipping permission prompt. Relying on existing state:', permission);
+      }
+
+      if (permission !== 'granted') {
+        console.warn(`[Notifications] Permission blocked or denied: "${permission}". Aborting setup.`);
+        return null;
+      }
+
+      const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+      console.log('[Notifications] Checking VITE_FIREBASE_VAPID_KEY:', vapidKey ? 'PASSED (value hidden)' : 'FAILED (missing)');
+      if (!vapidKey) {
+        console.warn('[Notifications] VITE_FIREBASE_VAPID_KEY is missing in environment variables. FCM registration aborted.');
+        return null;
+      }
+
+      // 3. Get Firebase Messaging Instance
+      console.log('[Notifications] Querying getMessagingInstance from firebase helper...');
+      const messaging = await getMessagingInstance();
+      if (!messaging) {
+        console.warn('[Notifications] Unable to retrieve Firebase Messaging instance because app/messaging check failed in firebase.ts.');
+        return null;
+      }
+      console.log('[Notifications] Firebase Messaging instance retrieved successfully.');
+
+      // 4. Custom registration of the Service Worker to guarantee it resolves correctly in Vite/Vercel
+      let swRegistration: ServiceWorkerRegistration | undefined;
+      try {
+        const config = {
+          apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+          authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+          projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
+          storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+          messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+          appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+        };
+
+        const swUrl = `/firebase-messaging-sw.js?apiKey=${encodeURIComponent(config.apiKey)}&authDomain=${encodeURIComponent(config.authDomain)}&projectId=${encodeURIComponent(config.projectId)}&storageBucket=${encodeURIComponent(config.storageBucket)}&messagingSenderId=${encodeURIComponent(config.messagingSenderId)}&appId=${encodeURIComponent(config.appId)}`;
+        console.log('[Notifications] Registering dynamic service worker path:', swUrl);
+
+        swRegistration = await navigator.serviceWorker.register(swUrl);
+        console.log('[Notifications] Service Worker registration promise successful. Active scope:', swRegistration.scope);
+
+        // Wait for service worker to finish activating if needed
+        console.log('[Notifications] Waiting for navigator.serviceWorker.ready...');
+        await navigator.serviceWorker.ready;
+        console.log('[Notifications] Service Worker is ready and active.');
+      } catch (swErr) {
+        console.warn('[Notifications] Custom Service Worker registration failed:', swErr);
+      }
+
+      // 5. Generate FCM token
+      console.log('[Notifications] Calling Firebase getToken() method with active dynamic service Worker registration...');
+      const token = await getToken(messaging, {
+        vapidKey,
+        serviceWorkerRegistration: swRegistration,
+      });
+
+      if (!token) {
+        console.warn('[Notifications] Generated FCM token is empty. The getToken call did not return any value.');
+        return null;
+      }
+
+      console.log('[Notifications] FCM token successfully generated. Character preview:', token.substring(0, 10) + '...');
+      localStorage.setItem('fcm_token', token);
+
+      // 6. Save and Sync to Supabase table: 'notification_tokens'
+      console.log('[Notifications] Initiating Supabase database synchronization...');
+      const activeToken = await syncTokenToSupabase(userId, token, isRetry);
+      console.log('[Notifications] Completed token synchronization process.');
+
+      // Add visibilitychange handler for token refresh
+      if (typeof window !== 'undefined' && 'addEventListener' in window) {
+        if (visibilityCleanup) visibilityCleanup();
+        
+        const handleVisibilityChange = async () => {
+          if (document.visibilityState !== 'visible') return;
+          if (!tokenRegistered) return;
+
+          // Refresh last_seen_at so token stays active in database
+          const currentToken = await getToken(messaging, {
+            vapidKey,
+            serviceWorkerRegistration: swRegistration
+          }).catch(() => null);
+
+          if (!currentToken) return;
+
+          const uId = (await supabase.auth.getUser()).data.user?.id;
+          if (!uId) return;
+
+          try {
+            await (supabase as any).rpc('fn_upsert_push_token', {
+              p_user_id:  uId,
+              p_token:    currentToken,
+              p_platform: 'web',
+              p_device:   navigator.userAgent.slice(0, 200),
+              p_app_ver:  APP_VERSION ?? null
+            });
+          } catch (visibilityErr) {
+            // silent — never block the app
+          }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        visibilityCleanup = () => {
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+      }
+
+      // Handle FCM token rotation
+      try {
+        if (typeof (messaging as any).onTokenRefresh === 'function') {
+          (messaging as any).onTokenRefresh(async () => {
+            console.log('[Push] FCM token rotated — re-registering');
+            // Reset guard so re-registration runs
+            tokenRegistered = false;
+            tokenRegistrationInProgress = false;
+            // Re-run full registration to get new token and upsert it
+            await requestNotificationPermission(userId);
+          });
+        } else {
+          console.log('[Notifications] FCM onTokenRefresh is not natively present on this messaging version. Auto-refresh relies on periodic getToken calls (e.g. visibility changes).');
+        }
+      } catch (tokenRefErr) {
+        console.warn('[Notifications] onTokenRefresh registration failed:', tokenRefErr);
+      }
+
+      tokenRegistered = true;
+      return activeToken;
+    } catch (error: any) {
+      console.warn('[Notifications] Failed to obtain token or request permission:', error);
+      return null;
+    }
+  } finally {
+    tokenRegistrationInProgress = false;
   }
 }
 
@@ -187,104 +242,35 @@ export async function syncTokenToSupabase(userId: string, token: string, isRetry
       localStorage.removeItem('fcm_token');
       console.log('[Notifications] Retrying requestNotificationPermission recursively with isRetry=true to obtain fresh token...');
       await requestNotificationPermission(userId, true);
-      return;
+      return null;
     }
   } catch (conflictCheckErr) {
     console.warn('[Notifications] Error checking cross-user token conflict:', conflictCheckErr);
   }
   
-  // 1. Try syncing to "notification_tokens"
   try {
-    const { data: existing, error: selectErr } = await supabaseAny
-      .from('notification_tokens')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('token', token)
-      .maybeSingle();
-
-    if (!selectErr && existing) {
-      console.log('[Notifications] Token already exists in "notification_tokens". Skipping insert.');
-    } else {
-      const { error: insertErr } = await supabaseAny.from('notification_tokens').insert({
-        user_id: userId,
-        token: token,
-        platform: 'web',
-        device_name: navigator.userAgent.slice(0, 100)
-      });
-      
-      if (insertErr) {
-        // Fallback to standard upsert with onConflict in case of race condition
-        const { error: upsertErr } = await supabaseAny.from('notification_tokens').upsert(
-          {
-            user_id: userId,
-            token: token,
-            platform: 'web',
-            device_name: navigator.userAgent.slice(0, 100)
-          },
-          { onConflict: 'user_id,token' }
-        );
-        if (upsertErr) {
-          console.warn('[Notifications] Both insert and upsert failed for "notification_tokens":', upsertErr.message);
-        } else {
-          console.log('[Notifications] FCM token successfully upserted to "notification_tokens" after insert block.');
-        }
-      } else {
-        console.log('[Notifications] FCM token successfully inserted to "notification_tokens".');
+    const { data: upsertResult, error: upsertError } = await (supabase as any).rpc(
+      'fn_upsert_push_token',
+      {
+        p_user_id:  userId,
+        p_token:    token,
+        p_platform: 'web',
+        p_device:   navigator.userAgent.slice(0, 200),  // DB column limit
+        p_app_ver:  APP_VERSION ?? null
       }
+    );
+
+    if (upsertError) {
+      console.warn('[Push] Token upsert failed:', upsertError.message);
+      // Do NOT throw — never crash the app on token failure
+      return token;
     }
-  } catch (err) {
-    console.warn('[Notifications] Exception syncing to "notification_tokens":', err);
+
+    console.log('[Push] Token', (upsertResult as any)?.action ?? 'processed');
+  } catch (err: any) {
+    console.warn('[Push] Exception in token upsert RPC:', err.message || err);
   }
 
-  // 2. Try syncing to "user_push_tokens" (fallback schema table)
-  try {
-    const { data: existing, error: selectErr } = await supabaseAny
-      .from('user_push_tokens')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('token', token)
-      .maybeSingle();
-
-    if (!selectErr && existing) {
-      console.log('[Notifications] Token already exists in "user_push_tokens". Updating last seen and ensuring un-revoked.');
-      await supabaseAny.from('user_push_tokens').update({
-        last_seen_at: new Date().toISOString(),
-        revoked_at: null
-      }).eq('id', existing.id);
-    } else {
-      const { error: insertErr } = await supabaseAny.from('user_push_tokens').insert({
-        user_id: userId,
-        token: token,
-        platform: 'web',
-        device_name: navigator.userAgent.slice(0, 100),
-        last_seen_at: new Date().toISOString(),
-        revoked_at: null
-      });
-      
-      if (insertErr) {
-        const { error: upsertErr } = await supabaseAny.from('user_push_tokens').upsert(
-          {
-            user_id: userId,
-            token: token,
-            platform: 'web',
-            device_name: navigator.userAgent.slice(0, 100),
-            last_seen_at: new Date().toISOString(),
-            revoked_at: null
-          },
-          { onConflict: 'user_id,token' }
-        );
-        if (upsertErr) {
-          console.warn('[Notifications] Both insert and upsert failed for "user_push_tokens":', upsertErr.message);
-        } else {
-          console.log('[Notifications] FCM token successfully upserted to "user_push_tokens" after insert block.');
-        }
-      } else {
-        console.log('[Notifications] FCM token successfully inserted to "user_push_tokens".');
-      }
-    }
-  } catch (err) {
-    console.warn('[Notifications] Exception syncing to "user_push_tokens":', err);
-  }
   return token;
 }
 
@@ -292,6 +278,13 @@ export async function syncTokenToSupabase(userId: string, token: string, isRetry
  * Disposes of the FCM token registration on logout to prevent subsequent invalid deliveries.
  */
 export async function deleteFcmTokenOnLogout(userId: string): Promise<void> {
+  // Reset guards so next user login registers cleanly
+  tokenRegistered = false;
+  tokenRegistrationInProgress = false;
+  if (visibilityCleanup) {
+    visibilityCleanup();
+    visibilityCleanup = null;
+  }
   try {
     const token = localStorage.getItem('fcm_token');
     if (!token) {

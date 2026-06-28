@@ -137,16 +137,49 @@ export const moderationService = {
   async getUser(userId: string) {
     await ensureAuthenticated();
     try {
-      const { data, error } = await (supabase as any).rpc('admin_get_user', {
-        p_target_user_id: userId
-      });
+      const { data, error } = await supabase
+        .from('v_admin_profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
       if (error) {
-        console.warn('[moderationService] admin_get_user failed, using fallback:', error);
+        console.warn('[moderationService] v_admin_profiles select failed, using fallback:', error);
         return await this.fallbackGetUser(userId);
       }
-      return data;
+
+      // Fetch logs and notes for this user
+      let notes: any[] = [];
+      try {
+        const { data: notesData } = await supabase
+          .from('moderation_notes')
+          .select('*')
+          .eq('target_id', userId)
+          .order('created_at', { ascending: false });
+        if (notesData) notes = notesData;
+      } catch (e) {
+        console.warn('[moderationService] Notes select failed:', e);
+      }
+
+      let logs: any[] = [];
+      try {
+        const { data: logsData } = await supabase
+          .from('moderation_logs')
+          .select('*')
+          .eq('target_id', userId)
+          .order('created_at', { ascending: false });
+        if (logsData) logs = logsData;
+      } catch (e) {
+        console.warn('[moderationService] Logs select failed:', e);
+      }
+
+      return {
+        profile: data,
+        notes: notes,
+        logs: logs
+      };
     } catch (err) {
-      console.warn('[moderationService] admin_get_user exception, using fallback:', err);
+      console.warn('[moderationService] v_admin_profiles select exception, using fallback:', err);
       return await this.fallbackGetUser(userId);
     }
   },

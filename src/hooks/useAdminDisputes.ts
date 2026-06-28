@@ -79,7 +79,91 @@ export function useAdminDisputes(adminId: string) {
       const abandonedList = (rpcData?.abandoned || []).map((m: any) => mapMatch(m, 'abandoned'));
       const historyList = (rpcData?.history || []).map((m: any) => mapMatch(m, 'completed'));
 
-      const combined = [...disputedList, ...awaitingList, ...abandonedList, ...historyList];
+      // Fetch 1v1 challenge disputes
+      let challengeDisputesMapped: any[] = [];
+      try {
+        const { data: challengeMatchesData, error: chErr } = await supabase
+          .from('challenge_matches')
+          .select(`
+            id,
+            status,
+            result_verification_status,
+            score1,
+            score2,
+            result_deadline,
+            player1_id,
+            player2_id,
+            challenge_id,
+            challenges ( title, entry_type, prize_pool, currency ),
+            player1:profiles!challenge_matches_player1_id_fkey (
+              id, username, avatar_url
+            ),
+            player2:profiles!challenge_matches_player2_id_fkey (
+              id, username, avatar_url
+            ),
+            challenge_match_results (
+              id, submitted_by, player1_score, player2_score,
+              screenshot_url, status, created_at
+            )
+          `)
+          .in('status', ['disputed', 'in_progress'])
+          .in('result_verification_status', ['disputed', 'pending'])
+          .order('result_deadline', { ascending: true });
+
+        const challengeMatches = challengeMatchesData as any[] | null;
+
+        if (!chErr && challengeMatches && challengeMatches.length > 0) {
+          challengeDisputesMapped = challengeMatches.map((c: any) => {
+            const results = c.challenge_match_results || [];
+            const subs = results.map((r: any) => {
+              const isP1 = r.submitted_by === c.player1_id;
+              const submitterProfile = isP1 ? c.player1 : c.player2;
+              return {
+                id: r.id,
+                username: submitterProfile?.username || 'Unknown',
+                avatar_url: submitterProfile?.avatar_url || null,
+                score1: r.player1_score,
+                score2: r.player2_score,
+                player1_score: r.player1_score,
+                player2_score: r.player2_score,
+                screenshot_url: r.screenshot_url,
+                status: r.status,
+                created_at: r.created_at,
+                is_canonical: r.is_active || false,
+                disputed: r.disputed,
+                dispute_reason: r.dispute_reason,
+                admin_notes: r.admin_notes
+              };
+            });
+
+            return {
+              id: c.id,
+              match_id: c.id,
+              challenge_id: c.challenge_id,
+              tournament_name: c.challenges?.title || '1v1 Challenge',
+              tournament_type: '1v1',
+              round: 1,
+              stage: 'Challenge Match',
+              verification_status: c.result_verification_status,
+              match_status: c.status,
+              player1_username: c.player1?.username || 'Unknown',
+              player2_username: c.player2?.username || 'Unknown',
+              player1: { id: c.player1_id, username: c.player1?.username },
+              player2: { id: c.player2_id, username: c.player2?.username },
+              winner_username: null,
+              submissions: subs,
+              is_challenge: true,
+              required_action: c.result_verification_status === 'disputed' 
+                ? 'pick_winner_or_override' 
+                : 'approve_or_reject_single_submission'
+            };
+          });
+        }
+      } catch (err) {
+        console.error('[useAdminDisputes] Exception fetching challenge disputes:', err);
+      }
+
+      const combined = [...disputedList, ...awaitingList, ...abandonedList, ...historyList, ...challengeDisputesMapped];
 
       setDisputes(combined);
       setAbandonedMatches(abandonedList);
@@ -176,7 +260,7 @@ export function useAdminDisputes(adminId: string) {
     sendReminder,
     forceApprove,
     abandonedMatches,
-    disputedMatches: disputes.filter(d => d.verification_status === 'disputed'),
+    disputedMatches: disputes.filter(d => d.verification_status === 'disputed' || d.verification_status === 'pending'),
     singleSubmissionMatches: disputes.filter(d => d.verification_status === 'single_submission' || d.verification_status === 'awaiting_admin_review')
   };
 }

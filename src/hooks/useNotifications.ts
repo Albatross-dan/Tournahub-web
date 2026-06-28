@@ -169,6 +169,32 @@ interface NotificationUpdateBuilder {
     };
   }, [fetchNotifications]);
 
+  useEffect(() => {
+    // Listen to messages broadcasted by the Service Worker (e.g. NOTIFICATION_CLICKED)
+    const handleSwMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'NOTIFICATION_CLICKED') {
+        console.log('[Push Hook] Background notification clicked event received:', event.data);
+        const notificationId = event.data.notification_id;
+        if (notificationId) {
+          // 1. Mark notification as read in Supabase instantly
+          markAsRead(notificationId);
+        }
+        // 2. Fetch fresh notifications list to clear stale state
+        fetchNotifications();
+      }
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+    }
+
+    return () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      }
+    };
+  }, [markAsRead, fetchNotifications]);
+
   return {
     notifications,
     unreadCount,

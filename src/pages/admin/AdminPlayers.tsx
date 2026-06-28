@@ -62,6 +62,84 @@ function formatRelativeTime(isoString: string | null) {
   }
 }
 
+function getCountryFromWhatsApp(whatsappNumber: string | null, existingCountry: string | null): string {
+  if (existingCountry && existingCountry.toLowerCase() !== 'unknown' && existingCountry.trim() !== '') {
+    return existingCountry;
+  }
+  if (!whatsappNumber) return "Unknown";
+
+  const cleaned = whatsappNumber.replace(/[\s()-]/g, '');
+  
+  const prefixMap: { [key: string]: string } = {
+    '234': 'Nigeria (NG)',
+    '254': 'Kenya (KE)',
+    '233': 'Ghana (GH)',
+    '256': 'Uganda (UG)',
+    '255': 'Tanzania (TZ)',
+    '27': 'South Africa (ZA)',
+    '227': 'Niger (NE)',
+    '229': 'Benin (BJ)',
+    '228': 'Togo (TG)',
+    '235': 'Chad (TD)',
+    '237': 'Cameroon (CM)',
+    '241': 'Gabon (GA)',
+    '242': 'Congo (CG)',
+    '243': 'DR Congo (CD)',
+    '244': 'Angola (AO)',
+    '250': 'Rwanda (RW)',
+    '251': 'Ethiopia (ET)',
+    '211': 'South Sudan (SS)',
+    '252': 'Somalia (SO)',
+    '253': 'Djibouti (DJ)',
+    '257': 'Burundi (BI)',
+    '260': 'Zambia (ZM)',
+    '261': 'Madagascar (MG)',
+    '263': 'Zimbabwe (ZW)',
+    '264': 'Namibia (NA)',
+    '265': 'Malawi (MW)',
+    '266': 'Lesotho (LS)',
+    '267': 'Botswana (BW)',
+    '268': 'Eswatini (SZ)',
+    '269': 'Comoros (KM)',
+    '230': 'Mauritius (MU)',
+    '248': 'Seychelles (SC)',
+    '249': 'Sudan (SD)',
+    '212': 'Morocco (MA)',
+    '213': 'Algeria (DZ)',
+    '216': 'Tunisia (TN)',
+    '218': 'Libya (LY)',
+    '20': 'Egypt (EG)',
+    '1': 'United States / Canada (US/CA)',
+    '44': 'United Kingdom (UK)',
+    '33': 'France (FR)',
+    '49': 'Germany (DE)',
+    '39': 'Italy (IT)',
+    '34': 'Spain (ES)',
+    '91': 'India (IN)',
+    '86': 'China (CN)',
+    '81': 'Japan (JP)',
+    '61': 'Australia (AU)',
+    '64': 'New Zealand (NZ)',
+    '55': 'Brazil (BR)',
+    '52': 'Mexico (MX)',
+    '7': 'Russia (RU)',
+  };
+
+  let digits = cleaned;
+  if (digits.startsWith('+')) {
+    digits = digits.slice(1);
+  }
+
+  const sortedPrefixes = Object.keys(prefixMap).sort((a, b) => b.length - a.length);
+  for (const prefix of sortedPrefixes) {
+    if (digits.startsWith(prefix)) {
+      return prefixMap[prefix];
+    }
+  }
+
+  return "Unknown";
+}
+
 function OnlineBadge({ userId, lastSeenAt, onlineUserIds }: { userId: string; lastSeenAt: string | null; onlineUserIds: Set<string> }) {
   const isOnline = onlineUserIds.has(userId);
 
@@ -615,6 +693,39 @@ export default function AdminPlayers() {
                           <Copy className="w-3 h-3" />
                         </button>
                       </div>
+
+                      <div className="space-y-1.5 mt-3 text-xs text-slate-400 font-bold border-t border-slate-800/40 pt-2.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span>📱 WhatsApp:</span>
+                          <span className="text-slate-300 select-all">{selectedUserFull.profile?.whatsapp_number || "Not set"}</span>
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase border leading-none ${
+                            selectedUserFull.profile?.whatsapp_number_verified 
+                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
+                              : "bg-red-500/10 text-red-400 border-red-500/20"
+                          }`}>
+                            {selectedUserFull.profile?.whatsapp_number_verified ? "✅ Verified" : "❌ Unverified"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span>🌍 Country:</span>
+                          <span className="text-slate-300 uppercase">
+                            {getCountryFromWhatsApp(
+                              selectedUserFull.profile?.whatsapp_number,
+                              selectedUserFull.profile?.country_code
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span>🕐 Timezone:</span>
+                          <span className="text-slate-300">{selectedUserFull.profile?.timezone || "Africa/Nairobi"}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span>👁 Last Seen:</span>
+                          <span className="text-slate-300 font-mono text-[11px]">
+                            {formatRelativeTime(selectedUserFull.profile?.last_seen_at)}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -686,31 +797,67 @@ export default function AdminPlayers() {
                         <div className="p-2 bg-slate-950/40 rounded-xl border border-white/[0.02]">
                           <span>Deposits:</span>
                           <span className="block text-slate-300 font-black font-mono text-xs mt-0.5">
-                            {formatCurrency(selectedUserFull.walletAdmin.total_deposited_usd || 0)}
+                            {formatCurrency(selectedUserFull.profile?.total_deposited_usd ?? selectedUserFull.walletAdmin.total_deposited_usd ?? 0)}
                           </span>
                         </div>
                         <div className="p-2 bg-slate-950/40 rounded-xl border border-white/[0.02]">
                           <span>Withdrawals:</span>
                           <span className="block text-slate-300 font-black font-mono text-xs mt-0.5">
-                            {formatCurrency(selectedUserFull.walletAdmin.total_withdrawn_usd || 0)}
+                            {formatCurrency(selectedUserFull.profile?.total_withdrawn_usd ?? selectedUserFull.walletAdmin.total_withdrawn_usd ?? 0)}
                           </span>
                         </div>
                       </div>
                     )}
 
+                    {/* Detailed limits and extra wallet fields */}
+                    <div className="p-4 bg-slate-950/40 border border-slate-850 rounded-2xl text-[10px] space-y-2">
+                      <div className="flex justify-between">
+                        <span className="font-bold text-slate-500 uppercase tracking-widest">Total Deposited:</span>
+                        <span className="text-slate-300 font-bold font-mono">
+                          {formatCurrency(selectedUserFull.profile?.total_deposited_usd ?? selectedUserFull.walletAdmin?.total_deposited_usd ?? 0)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-bold text-slate-500 uppercase tracking-widest">Total Withdrawn:</span>
+                        <span className="text-slate-300 font-bold font-mono">
+                          {formatCurrency(selectedUserFull.profile?.total_withdrawn_usd ?? selectedUserFull.walletAdmin?.total_withdrawn_usd ?? 0)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-bold text-slate-500 uppercase tracking-widest">Daily Limit:</span>
+                        <span className="text-slate-300 font-bold font-mono">
+                          {formatCurrency(selectedUserFull.profile?.daily_withdrawal_limit ?? selectedUserFull.walletAdmin?.daily_withdrawal_limit ?? 0)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-bold text-slate-500 uppercase tracking-widest">Single Tx Limit:</span>
+                        <span className="text-slate-300 font-bold font-mono">
+                          {formatCurrency(selectedUserFull.profile?.single_tx_limit ?? selectedUserFull.walletAdmin?.single_tx_limit ?? 0)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-bold text-slate-500 uppercase tracking-widest">Last Large Tx:</span>
+                        <span className="text-slate-300 font-bold font-mono">
+                          {selectedUserFull.profile?.last_large_tx_at || selectedUserFull.walletAdmin?.last_large_tx_at
+                            ? formatLocalTime(selectedUserFull.profile?.last_large_tx_at || selectedUserFull.walletAdmin?.last_large_tx_at)
+                            : "None"}
+                        </span>
+                      </div>
+                    </div>
+
                     {/* Locked alert / Controls */}
-                    {selectedUserFull.walletAdmin?.is_locked ? (
+                    {(selectedUserFull.profile?.wallet_is_locked || selectedUserFull.walletAdmin?.is_locked) ? (
                       <div className="p-4 bg-red-950/25 border border-red-900/30 rounded-2xl space-y-3">
                         <div className="flex gap-3 text-xs text-red-400 font-bold">
                           <ShieldAlert className="w-5 h-5 shrink-0 text-red-500" />
                           <div>
                             <p className="font-extrabold uppercase mb-0.5">Wallet Restraint Locked</p>
                             <p className="text-[11px] font-medium leading-relaxed text-red-300/80">
-                              Reason: {selectedUserFull.walletAdmin.locked_reason || 'Administrative restriction.'}
+                              Reason: {selectedUserFull.profile?.wallet_locked_reason || selectedUserFull.walletAdmin?.locked_reason || 'Administrative restriction.'}
                             </p>
-                            {selectedUserFull.walletAdmin.locked_at && (
+                            {(selectedUserFull.profile?.wallet_locked_at || selectedUserFull.walletAdmin?.locked_at) && (
                               <p className="text-[9px] text-red-400/50 font-mono mt-1">
-                                Restricted at {new Date(selectedUserFull.walletAdmin.locked_at).toLocaleString()}
+                                Restricted at {new Date(selectedUserFull.profile?.wallet_locked_at || selectedUserFull.walletAdmin?.locked_at).toLocaleString()}
                               </p>
                             )}
                           </div>
@@ -757,6 +904,108 @@ export default function AdminPlayers() {
                         </button>
                       </div>
                     )}
+                  </div>
+
+                  {/* Legacy & Career Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                      <h5 className="text-xs font-black uppercase text-white tracking-widest italic flex items-center gap-1.5">
+                        <span className="text-amber-400 text-sm">⭐</span>
+                        Legacy & Career
+                      </h5>
+                    </div>
+                    <div className="p-4 bg-slate-950/40 border border-slate-850 rounded-2xl text-[10px] space-y-2">
+                      <div className="flex justify-between">
+                        <span className="font-bold text-slate-500 uppercase tracking-widest">⭐ Legacy Score:</span>
+                        <span className="text-slate-200 font-bold font-mono">
+                          {selectedUserFull.profile?.legacy_score ?? 0}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-bold text-slate-500 uppercase tracking-widest">🏆 Trophy Points:</span>
+                        <span className="text-slate-200 font-bold font-mono">
+                          {selectedUserFull.profile?.trophy_points ?? 0}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-bold text-slate-500 uppercase tracking-widest">🎖️ Achievement Pts:</span>
+                        <span className="text-slate-200 font-bold font-mono">
+                          {selectedUserFull.profile?.achievement_points ?? 0}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tournament Record Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                      <h5 className="text-xs font-black uppercase text-white tracking-widest italic flex items-center gap-1.5">
+                        <span className="text-blue-400 text-sm">🏆</span>
+                        Tournament Record
+                      </h5>
+                    </div>
+                    <div className="p-4 bg-slate-950/40 border border-slate-850 rounded-2xl text-[10px] space-y-2">
+                      <div className="flex justify-between">
+                        <span className="font-bold text-slate-500 uppercase tracking-widest">Tournaments Joined:</span>
+                        <span className="text-slate-200 font-bold font-mono">
+                          {selectedUserFull.profile?.tournaments_joined ?? 0}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-bold text-slate-500 uppercase tracking-widest">Currently Active:</span>
+                        <span className="text-slate-200 font-bold font-mono">
+                          {selectedUserFull.profile?.tournaments_active ?? 0}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-bold text-slate-500 uppercase tracking-widest">Completed:</span>
+                        <span className="text-slate-200 font-bold font-mono">
+                          {selectedUserFull.profile?.tournaments_completed ?? 0}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 1v1 Challenge Record Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                      <h5 className="text-xs font-black uppercase text-white tracking-widest italic flex items-center gap-1.5">
+                        <span className="text-purple-400 text-sm">⚔️</span>
+                        1v1 Challenge Record
+                      </h5>
+                    </div>
+                    <div className="p-4 bg-slate-950/40 border border-slate-850 rounded-2xl text-[10px] space-y-2">
+                      <div className="flex justify-between">
+                        <span className="font-bold text-slate-500 uppercase tracking-widest">Matches Played:</span>
+                        <span className="text-slate-200 font-bold font-mono">
+                          {selectedUserFull.profile?.challenge_matches_played ?? 0}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-bold text-slate-500 uppercase tracking-widest">Wins:</span>
+                        <span className="text-slate-200 font-bold font-mono">
+                          {selectedUserFull.profile?.challenge_wins ?? 0}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-bold text-slate-500 uppercase tracking-widest">Losses:</span>
+                        <span className="text-slate-200 font-bold font-mono">
+                          {selectedUserFull.profile?.challenge_losses ?? 0}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-bold text-slate-500 uppercase tracking-widest">Draws:</span>
+                        <span className="text-slate-200 font-bold font-mono">
+                          {selectedUserFull.profile?.challenge_draws ?? 0}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-bold text-slate-500 uppercase tracking-widest">Entered:</span>
+                        <span className="text-slate-200 font-bold font-mono">
+                          {selectedUserFull.profile?.challenges_entered ?? 0}
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Transaction History Section */}

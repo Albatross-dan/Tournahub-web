@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { DisputedMatch, ResultSubmission } from '../../types/verification.types';
-import { Gavel, ImageOff, ExternalLink, ThumbsUp, AlertCircle, Loader2, Image as ImageIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { Gavel, ImageOff, ExternalLink, ThumbsUp, AlertCircle, Loader2, Image as ImageIcon, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn, getPublicIdentity, getSignedUrl } from '../../lib/utils';
@@ -39,6 +39,327 @@ export default function DisputeMatchCard({
   const player2Id = typeof (dispute as any)?.player2 === 'object' ? ((dispute as any)?.player2?.id || (dispute as any)?.player2) : (dispute as any)?.player2;
   const isMyMatch = !!(adminId && (adminId === player1Id || adminId === player2Id));
   const isAlreadyFinalised = (dispute.verification_status as any) === 'completed' || (dispute.verification_status as any) === 'verified' || (dispute as any).match_status === 'completed' || (dispute as any).match_status === 'verified';
+
+  // State for challenge resolution
+  const [isResolvingChallenge, setIsResolvingChallenge] = useState(false);
+  const [challengeResolvedMessage, setChallengeResolvedMessage] = useState<string | null>(null);
+  const [challengeError, setChallengeError] = useState<string | null>(null);
+
+  const [challengeScore1, setChallengeScore1] = useState(() => {
+    if (dispute.submissions && dispute.submissions.length === 1) {
+      return dispute.submissions[0].player1_score ?? 0;
+    }
+    return 0;
+  });
+  const [challengeScore2, setChallengeScore2] = useState(() => {
+    if (dispute.submissions && dispute.submissions.length === 1) {
+      return dispute.submissions[0].player2_score ?? 0;
+    }
+    return 0;
+  });
+
+  const [selectedWinner, setSelectedWinner] = useState<string | 'draw' | null>(null);
+  const [challengeAdminNotes, setChallengeAdminNotes] = useState('Resolved by admin moderation team');
+
+  const handleResolveChallenge = async () => {
+    if (!selectedWinner) return;
+    setIsResolvingChallenge(true);
+    setChallengeError(null);
+
+    const winnerId = selectedWinner === 'draw' 
+      ? null 
+      : (selectedWinner === 'p1' ? player1Id : player2Id);
+
+    try {
+      const { data, error } = await (supabase as any).rpc(
+        'fn_admin_resolve_challenge_match',
+        {
+          p_match_id: dispute.match_id,
+          p_winner_id: winnerId,
+          p_score1: challengeScore1,
+          p_score2: challengeScore2,
+          p_notes: challengeAdminNotes
+        }
+      );
+
+      if (error) throw error;
+
+      if (data && (data as any).success === false) {
+        throw new Error((data as any).message || 'Resolution RPC returned unsuccessful status.');
+      }
+
+      setChallengeResolvedMessage('✅ Match Resolved Successfully!');
+      setTimeout(() => {
+        onResolved(dispute.match_id);
+      }, 2000);
+    } catch (err: any) {
+      console.error('[ChallengeResolution] RPC Failed:', err);
+      setChallengeError(err.message || 'Failed to execute challenge resolution.');
+    } finally {
+      setIsResolvingChallenge(false);
+    }
+  };
+
+  if ((dispute as any).is_challenge) {
+    return (
+      <motion.div
+        layout
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="card bg-slate-900 border-l-4 border-red-500 overflow-hidden relative shadow-2xl"
+      >
+        <div className="p-6 md:p-8">
+          {isMyMatch && (
+            <div className="mb-6 bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-2xl p-4 text-xs font-bold uppercase tracking-tight flex items-center space-x-2">
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+              <span>You cannot resolve or override disputes for your own match. Please request another administrator to audit this conflict.</span>
+            </div>
+          )}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div className="space-y-1">
+              <div className="flex items-center space-x-3 flex-wrap">
+                <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">1v1 Challenge Match</h3>
+                <span className="px-2 py-0.5 bg-white/5 border border-white/10 rounded text-[8px] font-black italic uppercase tracking-widest text-slate-400">
+                  1V1
+                </span>
+                {(dispute.verification_status as any) === 'disputed' && (
+                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-red-500/10 text-red-400 border border-red-500/20">
+                    🔴 Score Dispute
+                  </span>
+                )}
+                {(dispute.verification_status as any) === 'pending' && (
+                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+                    🟡 No Response
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                Verification: {dispute.verification_status}
+              </p>
+            </div>
+            <div className="text-[10px] font-bold text-red-500 bg-red-500/10 px-3 py-1 rounded-full uppercase tracking-widest animate-pulse">
+              Challenge Dispute
+            </div>
+          </div>
+
+          <div className="flex items-center justify-center space-x-12 mb-12 py-4 border-y border-white/5 bg-white/[0.02]">
+            <div className="text-center">
+              <p className="text-lg font-black text-white italic uppercase tracking-tighter">{p1Name}</p>
+              <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Contender Alpha</p>
+            </div>
+            <div className="text-3xl font-black text-slate-800 italic">VS</div>
+            <div className="text-center">
+              <p className="text-lg font-black text-white italic uppercase tracking-tighter">{p2Name}</p>
+              <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Contender Beta</p>
+            </div>
+          </div>
+
+          {/* Submitted Result Display */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {(dispute.submissions || []).map((sub) => (
+              <div key={sub.id} className="bg-black/40 rounded-3xl border border-white/5 p-6 relative group h-full flex flex-col">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                    Submitted by {getPublicIdentity(sub.username)}
+                  </span>
+                  {sub.created_at && (
+                    <span className="text-[10px] font-medium text-slate-500">
+                      {formatDistanceToNow(new Date(sub.created_at))} ago
+                    </span>
+                  )}
+                </div>
+                
+                <div className="flex items-end justify-between flex-grow">
+                  <div>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Claimed Score</p>
+                    <div className="text-4xl font-black text-white italic tracking-tighter">
+                      {sub.player1_score} – {sub.player2_score}
+                    </div>
+                  </div>
+
+                  <div className="relative">
+                    {sub.screenshot_url ? (
+                      <div 
+                        onClick={async () => {
+                          let url = sub.screenshot_url;
+                          if (!url.startsWith('http')) {
+                            url = await getSignedUrl('result-screenshots', sub.screenshot_url);
+                          }
+                          setViewerImage(url);
+                        }}
+                        className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-white/10 hover:border-primary transition-all cursor-zoom-in relative"
+                      >
+                        {sub.screenshot_url.startsWith('http') ? (
+                          <img 
+                            src={sub.screenshot_url} 
+                            alt="Evidence" 
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover" 
+                          />
+                        ) : (
+                          <StorageImage 
+                            bucket="result-screenshots" 
+                            path={sub.screenshot_url} 
+                            alt="Evidence" 
+                            className="w-full h-full object-cover" 
+                          />
+                        )}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity">
+                          <ExternalLink className="w-5 h-5 text-white" />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="w-20 h-20 rounded-2xl bg-slate-800 flex flex-col items-center justify-center border-2 border-white/5">
+                        <ImageOff className="w-5 h-5 text-slate-600 mb-1" />
+                        <span className="text-[8px] font-bold text-slate-600 uppercase">No Screenshot</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Resolution Form (inline, below the submitted result) */}
+          <div className="bg-black/20 border border-white/5 rounded-3xl p-6 space-y-6">
+            <h4 className="text-sm font-black text-white uppercase italic tracking-widest">
+              ⚖️ Challenge Resolution Panel
+            </h4>
+
+            {/* Score inputs */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  {p1Name}'s Final Score
+                </label>
+                <input 
+                  type="number" 
+                  value={challengeScore1}
+                  onChange={(e) => setChallengeScore1(parseInt(e.target.value) || 0)}
+                  className="w-full bg-black border border-white/10 rounded-xl p-4 text-white text-2xl font-black italic outline-none focus:border-primary"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  {p2Name}'s Final Score
+                </label>
+                <input 
+                  type="number" 
+                  value={challengeScore2}
+                  onChange={(e) => setChallengeScore2(parseInt(e.target.value) || 0)}
+                  className="w-full bg-black border border-white/10 rounded-xl p-4 text-white text-2xl font-black italic outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+
+            {/* Winner selector */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Winner Selector <span className="text-red-500">*</span>
+              </label>
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedWinner('p1')}
+                  className={cn(
+                    "py-3 rounded-xl font-bold uppercase text-xs border transition-all",
+                    selectedWinner === 'p1' 
+                      ? "bg-amber-500 text-slate-950 border-amber-500 shadow-lg shadow-amber-500/20" 
+                      : "bg-white/5 border-white/10 text-white hover:bg-white/10"
+                  )}
+                >
+                  🏆 {p1Name} Wins
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedWinner('p2')}
+                  className={cn(
+                    "py-3 rounded-xl font-bold uppercase text-xs border transition-all",
+                    selectedWinner === 'p2' 
+                      ? "bg-amber-500 text-slate-950 border-amber-500 shadow-lg shadow-amber-500/20" 
+                      : "bg-white/5 border-white/10 text-white hover:bg-white/10"
+                  )}
+                >
+                  🏆 {p2Name} Wins
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedWinner('draw')}
+                  className={cn(
+                    "py-3 rounded-xl font-bold uppercase text-xs border transition-all",
+                    selectedWinner === 'draw' 
+                      ? "bg-slate-600 text-white border-slate-600 shadow-lg" 
+                      : "bg-white/5 border-white/10 text-white hover:bg-white/10"
+                  )}
+                >
+                  🤝 Draw
+                </button>
+              </div>
+            </div>
+
+            {/* Admin notes */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Admin Notes (visible to both players)
+              </label>
+              <textarea
+                value={challengeAdminNotes}
+                onChange={(e) => setChallengeAdminNotes(e.target.value)}
+                placeholder="Admin decision explanation..."
+                className="w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-xs text-white focus:border-primary outline-none min-h-[80px]"
+              />
+            </div>
+
+            {/* Resolve Button and Status Messages */}
+            <div className="space-y-3 pt-2">
+              {challengeError && (
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-xs font-bold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{challengeError}</span>
+                </div>
+              )}
+
+              {challengeResolvedMessage && (
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-500 text-xs font-bold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{challengeResolvedMessage}</span>
+                </div>
+              )}
+
+              <button
+                type="button"
+                disabled={!selectedWinner || isResolvingChallenge || !!challengeResolvedMessage || isMyMatch}
+                onClick={handleResolveChallenge}
+                className={cn(
+                  "w-full py-4 rounded-2xl font-black uppercase italic tracking-tighter transition-all flex items-center justify-center space-x-2 text-sm",
+                  (!selectedWinner || isResolvingChallenge || !!challengeResolvedMessage || isMyMatch)
+                    ? "bg-white/5 border border-white/5 text-slate-500 cursor-not-allowed"
+                    : "bg-primary text-slate-900 hover:scale-[1.02]"
+                )}
+              >
+                {isResolvingChallenge ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Resolving Challenge Match...</span>
+                  </>
+                ) : challengeResolvedMessage ? (
+                  <span>✅ Resolved</span>
+                ) : (
+                  <span>Resolve Challenge Match</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <FullScreenImageViewer 
+          isOpen={!!viewerImage} 
+          imageUrl={viewerImage || ''} 
+          onClose={() => setViewerImage(null)} 
+          caption="Match Evidence Screenshot"
+        />
+      </motion.div>
+    );
+  }
 
   const handleApproveSubmission = async (notes: string) => {
     if (!selectedSub) return;

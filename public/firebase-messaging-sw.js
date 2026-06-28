@@ -37,30 +37,28 @@ if (isValidConfig) {
 
     // 2. Handle background message notifications
     messaging.onBackgroundMessage((payload) => {
-      console.log('[firebase-messaging-sw.js] Background message payload:', payload);
-
-      if (!payload) return;
-
-      const { title, body, image } = payload.notification ?? {};
-      const data = payload.data ?? {};
-
-      const notificationTitle = title || data.title || 'Tournahub Announcement';
+      console.log('[Push SW] Background message received:', payload);
+      
+      // Fallbacks for data-only or legacy notification structures
+      const title = payload.notification?.title || payload.data?.title || 'Tournahub Alert';
+      const body = payload.notification?.body || payload.data?.body || '';
+      const icon = payload.notification?.image || payload.data?.image || '/favicon.ico';
+      
+      // Critical: construct structured data payload so click handler knows where to go
       const notificationOptions = {
-        body: body || data.body || '',
-        icon: image || data.image || '/icons/icon-192x192.png',
-        badge: '/icons/badge-72x72.png',
-        vibrate: [200, 100, 200],
-        // Preserve all incoming payload data for click action matching
+        body,
+        icon,
+        badge: '/favicon.ico',
         data: {
-          url: data.url || data.click_action || '/',
-          notification_id: data.notification_id,
-          type: data.type,
-          priority: data.priority,
+          // Essential: backend can send routes in multiple keys
+          click_action: payload.data?.click_action || payload.data?.url || '/notifications',
+          notification_id: payload.data?.notification_id
         },
-        requireInteraction: ['high', 'critical'].includes(data.priority),
+        tag: payload.data?.notification_id || 'tournahub-alert', // consolidate duplicates
+        renotify: true
       };
 
-      return self.registration.showNotification(notificationTitle, notificationOptions);
+      return self.registration.showNotification(title, notificationOptions);
     });
     
     console.log('[firebase-messaging-sw.js] Configured and fully operational.');
@@ -71,40 +69,47 @@ if (isValidConfig) {
   console.warn('[firebase-messaging-sw.js] Placeholders/empty configuration detected. Waiting for credentials via script query registration params.');
 }
 
-/**
- * Handle notification click behavior
- * Navigates to click_action or focuses an existing window if possible.
- */
+// CLICK ACTION HANDLER
 self.addEventListener('notificationclick', (event) => {
-  console.log('[firebase-messaging-sw.js] Notification click detected.', event);
+  console.log('[Push SW] Notification click:', event);
   event.notification.close();
 
-  // Extract click_action or fallback to home page representation
-  let clickAction = '/';
-  if (event.notification.data) {
-    clickAction = event.notification.data.click_action || event.notification.data.url || '/';
-  }
-
-  // Resolve target location relative to domain host URL if short-form pathing is set
-  let targetUrl = clickAction;
-  if (targetUrl.startsWith('/')) {
-    targetUrl = new URL(targetUrl, self.location.origin).toString();
-  }
+  const clickAction = event.notification.data?.click_action || '/';
+  
+  // Construct absolute URL
+  const targetUrl = new URL(clickAction, self.location.origin).toString();
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      // 1. Traverse and find if a matching window is open, then focus it
-      for (let i = 0; i < windowClients.length; i++) {
-        const client = windowClients[i];
-        if (client.url === targetUrl && 'focus' in client) {
-          return client.focus();
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((windowClients) => {
+        // Check if tab is already open and navigate it, or focus it,
+        // OR open a brand new tab and broadcast the click event to it
+        for (let i = 0; i < windowClients.length; i++) {
+          const client = windowClients[i];
+          if (client.url === targetUrl && 'focus' in client) {
+            // Send message to the active client so it can reload or update state
+            client.postMessage({
+              type: 'NOTIFICATION_CLICKED',
+              notification_id: event.notification.data?.notification_id
+            });
+            return client.focus();
+          }
         }
-      }
-      
-      // 2. Otherwise open a new window to target URL route
-      if (clients.openWindow) {
-        return clients.openWindow(targetUrl);
-      }
-    })
+        
+        if (clients.openWindow) {
+          return clients.openWindow(targetUrl).then((windowClient) => {
+            if (windowClient) {
+              // Wait for the new tab to load, then postMessage
+              // This is captured by the useNotifications hook
+              setTimeout(() => {
+                windowClient.postMessage({
+                  type: 'NOTIFICATION_CLICKED',
+                  notification_id: event.notification.data?.notification_id
+                });
+              }, 2000);
+            }
+          });
+        }
+      })
   );
 });

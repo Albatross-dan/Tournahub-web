@@ -20,7 +20,90 @@ interface CommunityMessage {
     username: string;
     avatar_url: string | null;
     role: string | null;
+    country_code?: string | null;
   } | null;
+  _isOptimistic?: boolean;
+  _confirmed?: boolean;
+}
+
+interface ChatInputProps {
+  onSend: (text: string) => void;
+  disabled: boolean;
+  profile: any;
+  onFocusChange: (focused: boolean) => void;
+}
+
+function ChatInput({ onSend, disabled, profile, onFocusChange }: ChatInputProps) {
+  const [text, setText] = useState('');
+
+  const handleSend = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!text.trim() || disabled) return;
+    onSend(text.trim());
+    setText('');
+  };
+
+  const isInputOverLimit = text.length > 1000;
+
+  return (
+    <form onSubmit={handleSend} className="space-y-1.5">
+      <div className="flex items-center space-x-3">
+        {/* Current User Avatar on the left */}
+        <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-750 overflow-hidden shrink-0 flex items-center justify-center font-black text-xs text-emerald-450 shadow-inner">
+          {profile?.avatar_url ? (
+            <img 
+              src={profile.avatar_url} 
+              alt="" 
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            (profile?.username || 'U').slice(0, 2).toUpperCase()
+          )}
+        </div>
+
+        {/* Text Input in Middle */}
+        <div className="relative flex-1">
+          <input
+            type="text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onFocus={() => onFocusChange(true)}
+            onBlur={() => {
+              // Slight delay to allow clicking on nav buttons before they hide/unhide
+              setTimeout(() => onFocusChange(false), 150);
+            }}
+            placeholder="Message..."
+            className="w-full bg-[#182236] border border-slate-700 focus:border-[#10b981]/80 rounded-2xl pl-4 pr-4 py-3 text-xs text-white placeholder-slate-400 tracking-wide outline-none transition-all shadow-md focus:bg-[#1a263d]"
+          />
+        </div>
+
+        {/* Send trigger on Right */}
+        <button
+          type="submit"
+          disabled={!text.trim() || isInputOverLimit || disabled}
+          className={cn(
+            "w-10 h-10 rounded-xl flex items-center justify-center shadow-md transition-all shrink-0 cursor-pointer z-30",
+            text.trim() && !isInputOverLimit && !disabled
+              ? "bg-emerald-500 text-slate-950 hover:bg-emerald-400 active:scale-95 shadow-lg shadow-emerald-500/20"
+              : "bg-emerald-500/10 border border-emerald-500/20 text-emerald-500/40 opacity-40 cursor-not-allowed"
+          )}
+        >
+          <Send className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Warning appears only when character limit is exceeded */}
+      {isInputOverLimit && (
+        <div className="flex justify-end items-center space-x-1.5 px-2 mt-1 animate-in fade-in duration-100">
+          <AlertCircle className="w-3.5 h-3.5 text-rose-500 animate-bounce" />
+          <span className="text-[10px] font-bold text-rose-550 uppercase tracking-widest text-rose-500 italic">
+            Maximum limit of 1000 characters exceeded!
+          </span>
+        </div>
+      )}
+    </form>
+  );
 }
 
 export default function CommunityChat() {
@@ -37,7 +120,6 @@ export default function CommunityChat() {
       return [];
     }
   });
-  const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [errorHeader, setErrorHeader] = useState<string | null>(null);
@@ -46,7 +128,7 @@ export default function CommunityChat() {
   // Cache messages to localStorage whenever they are updated/fetched
   useEffect(() => {
     try {
-      const persistentMessages = messages.filter(m => m && m.id && !m.id.startsWith('temp-'));
+      const persistentMessages = messages.filter(m => m && m.id && !m.id.startsWith('temp-') && !m.id.startsWith('optimistic-'));
       // Keep only the last 100 messages to keep cache size very small and clean
       const toCache = persistentMessages.slice(-100);
       if (toCache.length > 0) {
@@ -78,19 +160,6 @@ export default function CommunityChat() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Instant scroll on mount if we have cached messages
-  useEffect(() => {
-    if (messages && messages.length > 0) {
-      scrollToBottom('instant');
-      const timer1 = setTimeout(() => scrollToBottom('instant'), 50);
-      const timer2 = setTimeout(() => scrollToBottom('instant'), 150);
-      return () => {
-        clearTimeout(timer1);
-        clearTimeout(timer2);
-      };
-    }
-  }, []);
-
   // Bottom Navigation Items (matches Shell.tsx)
   const bottomNavItems = [
     { name: 'Home', path: '/dashboard', icon: LayoutDashboard },
@@ -120,7 +189,8 @@ export default function CommunityChat() {
           profiles:sender_id (
             username,
             avatar_url,
-            role
+            role,
+            country_code
           )
         `)
         .eq('id', messageId)
@@ -165,91 +235,50 @@ export default function CommunityChat() {
     }
   };
 
-  // Load old messages & subscribe to realtime
+  // FIX 1 — Isolate Realtime subscription in its own useEffect with ONLY [user.id] as dependency
   useEffect(() => {
-    let isMounted = true;
+    if (!user?.id) return;
 
-    async function loadMessages() {
-      try {
-        setLoading(true);
-        const { data, error } = await (supabase as any)
-          .from('community_chat_messages')
-          .select(`
-            id,
-            content,
-            message_type,
-            created_at,
-            sender_id,
-            profiles:sender_id (
-              username,
-              avatar_url,
-              role
-            )
-          `)
-          .order('created_at', { ascending: true })
-          .limit(100);
-
-        if (error) {
-          console.error('[CommunityChat] Error loading messages:', error);
-          setErrorHeader('Failed to load chat history');
-          return;
-        }
-
-        if (isMounted) {
-          setMessages((data as unknown as CommunityMessage[]) || []);
-          setTimeout(() => scrollToBottom('instant'), 100);
-        }
-      } catch (err) {
-        console.error('[CommunityChat] Exception loading messages:', err);
-        setErrorHeader('Offline or connection issues');
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    }
-
-    loadMessages();
-
-    // Subscribe to Postgres Changes
     const channel = supabase
-      .channel('community-chat-room')
+      .channel('community-chat-global')
       .on(
         'postgres_changes',
-        { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'community_chat_messages' 
+        {
+          event:  'INSERT',
+          schema: 'public',
+          table:  'community_chat_messages'
         },
-        async (payload) => {
-          const msgId = payload.new.id;
-          const fullMsg = await fetchSingleMessage(msgId);
-          
-          if (fullMsg && isMounted) {
-            setMessages(prev => {
-              if (prev.some(m => m.id === fullMsg.id)) return prev;
-              
-              // Replace optimistic temp message if found
-              const firstTempIndex = prev.findIndex(
-                m => m.id.startsWith('temp-') && 
-                     m.sender_id === fullMsg.sender_id && 
-                     m.content === fullMsg.content
-              );
-              
-              if (firstTempIndex !== -1) {
-                const updated = [...prev];
-                updated[firstTempIndex] = fullMsg;
-                return updated;
-              }
-              
-              return [...prev, fullMsg];
-            });
+        (payload) => {
+          const newMessage = payload.new;
 
-            // If user has scrolled up, show "New message" indicator instead of force scrolling
-            if (scrolledUpRef.current) {
-              setHasNewMessagesNotification(true);
-            } else {
-              setTimeout(() => scrollToBottom('smooth'), 100);
-            }
-          }
+          // Fetch single message with profile join asynchronously so user details are present
+          fetchSingleMessage((newMessage as any).id).then((fullMsg) => {
+            const msgToUse: CommunityMessage = fullMsg || {
+              ...(newMessage as any),
+              profiles: {
+                username: 'Contender',
+                avatar_url: null,
+                role: null,
+                country_code: null
+              }
+            };
+
+            setMessages(prev => {
+              // Deduplication: if this exact ID already exists
+              // (from optimistic update), replace it with the
+              // confirmed DB record. Never add a duplicate.
+              const exists = prev.some(m => m.id === msgToUse.id);
+              if (exists) {
+                return prev.map(m =>
+                  m.id === msgToUse.id
+                    ? { ...msgToUse, _confirmed: true }
+                    : m
+                );
+              }
+              // First time seeing this message — append it
+              return [...prev, { ...msgToUse, _confirmed: true }];
+            });
+          });
         }
       )
       .on(
@@ -261,82 +290,126 @@ export default function CommunityChat() {
         },
         (payload) => {
           const deletedId = payload.old.id;
-          if (isMounted) {
-            setMessages(prev => prev.filter(m => m.id !== deletedId));
-          }
+          setMessages(prev => prev.filter(m => m.id !== deletedId));
         }
       )
-      .subscribe((status) => {
-        console.log(`[CommunityChat] Realtime channel status:`, status);
-      });
+      .subscribe();
 
     return () => {
-      isMounted = false;
       supabase.removeChannel(channel);
     };
-  }, []);
 
-  // Send message
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-    if (profile?.status !== 'active') return;
+  }, [user?.id]);
 
-    const trimmed = inputText.trim();
-    if (!trimmed || trimmed.length > 1000) return;
-
-    // Generate optimistic/instant temporary ID and message
-    const tempId = `temp-${Date.now()}-${Math.random()}`;
-    const optimisticMsg: CommunityMessage = {
-      id: tempId,
-      content: trimmed,
-      message_type: 'text',
-      created_at: new Date().toISOString(),
-      sender_id: user.id,
-      profiles: {
-        username: profile?.username || 'Contender',
-        avatar_url: profile?.avatar_url || null,
-        role: profile?.role || null,
-      }
-    };
-
-    // Instant UI feedback: empty the text field, add message, scroll down immediately
-    setInputText('');
-    setMessages(prev => [...prev, optimisticMsg]);
-    setTimeout(() => scrollToBottom('smooth'), 50);
-
-    try {
-      setSending(true);
-      const { data, error } = await (supabase as any)
+  // FIX 2 — Fetch messages ONCE on mount, never again
+  useEffect(() => {
+    const loadMessages = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
         .from('community_chat_messages')
-        .insert({
-          sender_id: user.id,
-          content: trimmed,
-          message_type: 'text'
-        })
-        .select()
-        .single();
+        .select(`
+          id,
+          sender_id,
+          content,
+          message_type,
+          created_at,
+          profiles:sender_id (
+            username,
+            avatar_url,
+            role,
+            country_code
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(100);
 
       if (error) {
-        console.error('[CommunityChat] Error saving message:', error);
-        setErrorHeader('Message not delivered');
-        // Remove optimistic message on actual failure
-        setMessages(prev => prev.filter(m => m.id !== tempId));
+        console.error('[CommunityChat] Error loading messages:', error);
+        setErrorHeader('Failed to load chat history');
       } else if (data) {
-        // Swap local temporary message id with permanent database id immediately
-        setMessages(prev => prev.map(m => m.id === tempId ? {
-          ...m,
-          id: data.id,
-          created_at: data.created_at,
-        } : m));
+        // Reverse descending order to render chronologically ascending (oldest to newest)
+        const reversed = [...data].reverse();
+        setMessages(reversed as any);
+        setTimeout(() => scrollToBottom('instant'), 100);
       }
-    } catch (err) {
-      console.error('[CommunityChat] Send message exception:', err);
-      // Remove optimistic message on exception
+      setLoading(false);
+    };
+
+    loadMessages();
+  }, []);  // ← empty array: runs ONCE on mount only
+
+  // FIX 3 — Optimistic send with proper ID reconciliation
+  const sendMessage = async (text: string) => {
+    if (!text || !user?.id || sending) return;
+
+    // Generate a temporary ID for the optimistic message
+    const tempId = `optimistic-${Date.now()}-${Math.random()}`;
+
+    // Build optimistic message using the same shape as DB rows
+    const optimisticMessage = {
+      id:           tempId,
+      sender_id:    user.id,
+      content:      text,
+      message_type: 'text' as const,
+      created_at:   new Date().toISOString(),
+      profiles:     {
+        username:    profile?.username || 'Contender',
+        avatar_url:  profile?.avatar_url || null,
+        role:        profile?.role || null,
+        country_code: profile?.country_code || null
+      },
+      _isOptimistic: true,   // flag for optional styling
+      _confirmed:    false
+    };
+
+    // 1. Show immediately in UI — do not wait for network
+    setMessages(prev => [...prev, optimisticMessage]);
+
+    // 2. Clear input is already handled in the ChatInput component
+    setSending(true);
+
+    // 3. Insert to database
+    const { data: savedMessage, error } = await (supabase as any)
+      .from('community_chat_messages')
+      .insert({
+        sender_id:    user.id,
+        content:      text,
+        message_type: 'text'
+      })
+      .select(`
+        id,
+        sender_id,
+        content,
+        message_type,
+        created_at,
+        profiles:sender_id (
+          username,
+          avatar_url,
+          role,
+          country_code
+        )
+      `)
+      .single();
+
+    setSending(false);
+
+    if (error) {
+      // Remove optimistic message on failure, restore input (or show error)
       setMessages(prev => prev.filter(m => m.id !== tempId));
-    } finally {
-      setSending(false);
+      setErrorHeader('Failed to send message: ' + error.message);
+      return;
     }
+
+    // 4. Replace temp optimistic message with confirmed DB record
+    // The Realtime event (Fix 1) will also fire — Fix 1 handles
+    // deduplication so no double message will appear.
+    setMessages(prev =>
+      prev.map(m =>
+        m.id === tempId
+          ? { ...savedMessage as any, _confirmed: true, _isOptimistic: false }
+          : m
+      )
+    );
   };
 
   // Delete message
@@ -359,8 +432,15 @@ export default function CommunityChat() {
   };
 
   const isActiveUser = user && profile?.status === 'active';
-  const charCount = inputText.length;
-  const isInputOverLimit = charCount > 1000;
+
+  // FIX 5 — Scroll to bottom on new message
+  useEffect(() => {
+    if (!scrolledUpRef.current) {
+      scrollToBottom('smooth');
+    } else {
+      setHasNewMessagesNotification(true);
+    }
+  }, [messages.length]);  // only scroll when count changes, not on re-renders
 
   // Render message list with date separators and consecutive grouping
   const renderMessageList = () => {
@@ -527,67 +607,12 @@ export default function CommunityChat() {
         )}
 
         {isActiveUser ? (
-          <form onSubmit={handleSendMessage} className="space-y-1.5">
-            <div className="flex items-center space-x-3">
-              {/* Current User Avatar on the left */}
-              <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 overflow-hidden shrink-0 flex items-center justify-center font-black text-xs text-emerald-450 shadow-inner">
-                {profile?.avatar_url ? (
-                  <img 
-                    src={profile.avatar_url} 
-                    alt="" 
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  (profile?.username || 'U').slice(0, 2).toUpperCase()
-                )}
-              </div>
-
-              {/* Text Input in Middle */}
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  maxLength={1010}
-                  value={inputText}
-                  onChange={(e) => {
-                    setInputText(e.target.value);
-                    if (errorHeader) setErrorHeader(null);
-                  }}
-                  onFocus={() => setIsInputFocused(true)}
-                  onBlur={() => {
-                    // Slight delay to allow clicking on nav buttons before they hide/unhide
-                    setTimeout(() => setIsInputFocused(false), 150);
-                  }}
-                  placeholder="Message..."
-                  className="w-full bg-[#182236] border border-slate-700 focus:border-[#10b981]/80 rounded-2xl pl-4 pr-4 py-3 text-xs text-white placeholder-slate-400 tracking-wide outline-none transition-all shadow-md focus:bg-[#1a263d]"
-                />
-              </div>
-
-              {/* Send trigger on Right */}
-              <button
-                type="submit"
-                disabled={!inputText.trim() || isInputOverLimit}
-                className={cn(
-                  "w-10 h-10 rounded-xl flex items-center justify-center shadow-md transition-all shrink-0 cursor-pointer z-30",
-                  inputText.trim() && !isInputOverLimit
-                    ? "bg-emerald-500 text-slate-950 hover:bg-emerald-400 active:scale-95 shadow-lg shadow-emerald-500/20"
-                    : "bg-emerald-500/10 border border-emerald-500/20 text-emerald-500/40 opacity-40 cursor-not-allowed"
-                )}
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Warning appears only when character limit is exceeded */}
-            {isInputOverLimit && (
-              <div className="flex justify-end items-center space-x-1.5 px-2 mt-1 animate-in fade-in duration-100">
-                <AlertCircle className="w-3.5 h-3.5 text-rose-500 animate-bounce" />
-                <span className="text-[10px] font-bold text-rose-550 uppercase tracking-widest text-rose-500 italic">
-                  Maximum limit of 1000 characters exceeded!
-                </span>
-              </div>
-            )}
-          </form>
+          <ChatInput 
+            onSend={sendMessage} 
+            disabled={sending} 
+            profile={profile} 
+            onFocusChange={setIsInputFocused} 
+          />
         ) : (
           <div className="p-3 bg-slate-950/40 rounded-xl border border-slate-800/50 text-center">
             <p className="text-[10px] font-black text-text-muted uppercase tracking-widest italic">
@@ -708,7 +733,7 @@ function MessageBubble({ msg, isMe, isConsecutive, isLastInGroup, onDelete }: Bu
 
         {/* Message bubble card */}
         <div 
-          style={{ backgroundColor: isMe ? '#005c4b' : '#1f2c34', borderRadius: '10px' }}
+          style={{ backgroundColor: isMe ? '#005c4b' : '#1f2c34', borderRadius: '10px', opacity: msg._isOptimistic ? 0.6 : 1 }}
           className="px-4 py-2.5 relative transition-all text-left min-w-[90px] flex flex-col space-y-1.5"
         >
           {/* Main Content layout */}

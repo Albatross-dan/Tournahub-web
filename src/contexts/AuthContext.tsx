@@ -250,7 +250,8 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         .select('permission')
         .eq('user_id', userId);
       if (error) {
-        console.error('[AuthContext] Error fetching permissions:', error);
+        console.warn('[AuthContext] Info: Error fetching permissions (normal for non-admin players):', error);
+        setPermissions([]);
         return;
       }
       if (data) {
@@ -259,7 +260,8 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         setPermissions([]);
       }
     } catch (err) {
-      console.error('[AuthContext] Exception in fetchMyPermissions:', err);
+      console.warn('[AuthContext] Info: Exception in fetchMyPermissions:', err);
+      setPermissions([]);
     } finally {
       if (!silent) {
         setPermissionsLoading(false);

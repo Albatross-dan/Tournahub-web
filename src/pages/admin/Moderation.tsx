@@ -16,6 +16,7 @@ export default function Moderation() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'disputed' | 'awaiting' | 'abandoned' | 'no_show' | 'history'>('disputed');
+  const [formatFilter, setFormatFilter] = useState<'all' | 'tournaments' | 'challenges'>('all');
   const [cutoff] = useState(() => new Date().toISOString());
   const [counts, setCounts] = useState({
     disputed: 0,
@@ -99,22 +100,91 @@ export default function Moderation() {
       }
       setNoShowReports(noShowReportsList);
 
-      // Section badge counts
-      const disCount = rpcData?.disputed_count ?? 0;
-      const awCount = rpcData?.awaiting_count ?? 0;
-      const abCount = rpcData?.abandoned_count ?? 0;
-      const noShowCount = noShowReportsList.length;
-      const histCount = rpcData?.history_count ?? 0;
+      // Fetch 1v1 challenge disputes
+      let challengeDisputesMapped: any[] = [];
+      try {
+        const { data: challengeMatchesData, error: chErr } = await supabase
+          .from('challenge_matches')
+          .select(`
+            id,
+            status,
+            result_verification_status,
+            score1,
+            score2,
+            result_deadline,
+            player1_id,
+            player2_id,
+            challenge_id,
+            challenges ( title, entry_type, prize_pool, currency ),
+            player1:profiles!challenge_matches_player1_id_fkey (
+              id, username, avatar_url
+            ),
+            player2:profiles!challenge_matches_player2_id_fkey (
+              id, username, avatar_url
+            ),
+            challenge_match_results (
+              id, submitted_by, player1_score, player2_score,
+              screenshot_url, status, created_at
+            )
+          `)
+          .in('status', ['disputed', 'in_progress'])
+          .in('result_verification_status', ['disputed', 'pending'])
+          .order('result_deadline', { ascending: true });
 
-      setCounts({
-        disputed: disCount,
-        awaiting: awCount,
-        abandoned: abCount,
-        noShow: noShowCount,
-        history: histCount
-      });
+        const challengeMatches = challengeMatchesData as any[] | null;
 
-      // Mapping function
+        if (!chErr && challengeMatches && challengeMatches.length > 0) {
+          challengeDisputesMapped = challengeMatches.map((c: any) => {
+            const results = c.challenge_match_results || [];
+            const subs = results.map((r: any) => {
+              const isP1 = r.submitted_by === c.player1_id;
+              const submitterProfile = isP1 ? c.player1 : c.player2;
+              return {
+                id: r.id,
+                username: submitterProfile?.username || 'Unknown',
+                avatar_url: submitterProfile?.avatar_url || null,
+                score1: r.player1_score,
+                score2: r.player2_score,
+                player1_score: r.player1_score,
+                player2_score: r.player2_score,
+                screenshot_url: r.screenshot_url,
+                status: r.status,
+                created_at: r.created_at,
+                is_canonical: r.is_active || false,
+                disputed: r.disputed,
+                dispute_reason: r.dispute_reason,
+                admin_notes: r.admin_notes
+              };
+            });
+
+            return {
+              id: c.id,
+              match_id: c.id,
+              challenge_id: c.challenge_id,
+              tournament_name: c.challenges?.title || '1v1 Challenge',
+              tournament_type: '1v1',
+              round: 1,
+              stage: 'Challenge Match',
+              verification_status: c.result_verification_status,
+              match_status: c.status,
+              player1_username: c.player1?.username || 'Unknown',
+              player2_username: c.player2?.username || 'Unknown',
+              player1: { id: c.player1_id, username: c.player1?.username },
+              player2: { id: c.player2_id, username: c.player2?.username },
+              winner_username: null,
+              submissions: subs,
+              is_challenge: true,
+              required_action: c.result_verification_status === 'disputed' 
+                ? 'pick_winner_or_override' 
+                : 'approve_or_reject_single_submission'
+            };
+          });
+        }
+      } catch (err) {
+        console.error('[Moderation] Exception fetching challenge disputes:', err);
+      }
+
+      // Mapping function for tournament matches
       const mapMatch = (m: any, defaultStatus: string) => {
         const isRpc = 'match_id' in m;
         const mId = isRpc ? m.match_id : m.id;
@@ -143,8 +213,23 @@ export default function Moderation() {
       const abandonedMapped = (rpcData?.abandoned || []).map((m: any) => mapMatch(m, 'abandoned'));
       const historyMapped = (rpcData?.history || []).map((m: any) => mapMatch(m, 'completed'));
 
-      const allMapped = [...disputedMapped, ...awaitingMapped, ...abandonedMapped, ...historyMapped];
+      const allMapped = [...disputedMapped, ...awaitingMapped, ...abandonedMapped, ...historyMapped, ...challengeDisputesMapped];
       setMatches(allMapped);
+
+      // Section badge counts based on actual items
+      const disCount = allMapped.filter(m => m.verification_status === 'disputed' || m.verification_status === 'pending').length;
+      const awCount = allMapped.filter(m => m.verification_status === 'awaiting_admin_review' || m.verification_status === 'single_submission').length;
+      const abCount = allMapped.filter(m => m.verification_status === 'abandoned').length;
+      const noShowCount = noShowReportsList.length;
+      const histCount = allMapped.filter(m => m.verification_status === 'completed' || m.verification_status === 'verified').length;
+
+      setCounts({
+        disputed: disCount,
+        awaiting: awCount,
+        abandoned: abCount,
+        noShow: noShowCount,
+        history: histCount
+      });
     } catch (err) {
       console.error('[Moderation] General Signal fetch failure:', err);
     } finally {
@@ -173,12 +258,21 @@ export default function Moderation() {
     };
   }, [fetchMatches]);
 
-  const filteredMatches = matches.filter(m => {
-    if (activeTab === 'disputed') return m.verification_status === 'disputed';
+  const activeTabMatches = matches.filter(m => {
+    if (activeTab === 'disputed') return m.verification_status === 'disputed' || m.verification_status === 'pending';
     if (activeTab === 'awaiting') return m.verification_status === 'awaiting_admin_review' || m.verification_status === 'single_submission';
     if (activeTab === 'abandoned') return m.verification_status === 'abandoned';
     if (activeTab === 'history') return m.verification_status === 'completed' || m.verification_status === 'verified';
     return false;
+  });
+
+  const tournamentCountInTab = activeTabMatches.filter(m => !m.is_challenge).length;
+  const challengeCountInTab = activeTabMatches.filter(m => m.is_challenge).length;
+
+  const filteredMatches = activeTabMatches.filter(m => {
+    if (formatFilter === 'tournaments') return !m.is_challenge;
+    if (formatFilter === 'challenges') return !!m.is_challenge;
+    return true;
   });
 
   const getCount = (status: string) => {
@@ -258,6 +352,44 @@ export default function Moderation() {
             </button>
           ))}
         </div>
+
+        {/* Format Sub-Filter (only visible for tabs with matches) */}
+        {activeTab !== 'no_show' && (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 py-4 px-6 bg-slate-900/40 rounded-3xl border border-slate-800/80 justify-between">
+            <div className="flex items-center space-x-3">
+              <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 italic">
+                TACTICAL FREQUENCY FILTER:
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {[
+                { id: 'all', label: 'All Formats', count: activeTabMatches.length },
+                { id: 'tournaments', label: 'Tournament Matches', count: tournamentCountInTab },
+                { id: 'challenges', label: '1v1 Challenge Disputes', count: challengeCountInTab }
+              ].map(sub => (
+                <button
+                  key={sub.id}
+                  onClick={() => setFormatFilter(sub.id as any)}
+                  className={cn(
+                    "px-4 py-2.5 rounded-xl font-black uppercase text-[9px] tracking-wider transition-all flex items-center space-x-2 border",
+                    formatFilter === sub.id
+                      ? "bg-primary text-slate-950 border-primary shadow-lg shadow-primary/20"
+                      : "bg-slate-950 border-slate-850 text-slate-500 hover:text-slate-300 hover:border-slate-700"
+                  )}
+                >
+                  <span>{sub.label}</span>
+                  <span className={cn(
+                    "px-1.5 py-0.5 rounded-md text-[8px] font-black border",
+                    formatFilter === sub.id ? "bg-slate-950 text-primary border-primary/20" : "bg-slate-900 text-slate-500 border-slate-800"
+                  )}>
+                    {sub.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Content */}
         {loading ? (
