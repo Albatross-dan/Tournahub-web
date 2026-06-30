@@ -116,10 +116,40 @@ export function instrumentSupabaseFetch(
 
   const isFailure = error || (response && !response.ok);
 
+  // Classify failure type to distinguish between environmental, network, and application errors
+  let failureType: 'none' | 'offline_user' | 'aborted_request' | 'timeout_failure' | 'genuine_network_failure' | 'supabase_server_response' = 'none';
+  let isOffline = false;
+  let isAbort = false;
+  let isTimeout = false;
+
+  if (error) {
+    isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    isAbort = error.name === 'AbortError' || error.message?.toLowerCase().includes('aborted') || error.message?.toLowerCase().includes('cancel');
+    isTimeout = error.message?.toLowerCase().includes('timeout') || error.message?.toLowerCase().includes('exceeded') || error.message?.toLowerCase().includes('deadline');
+
+    if (isOffline) {
+      failureType = 'offline_user';
+    } else if (isAbort) {
+      failureType = 'aborted_request';
+    } else if (isTimeout) {
+      failureType = 'timeout_failure';
+    } else {
+      failureType = 'genuine_network_failure';
+    }
+  } else if (response && !response.ok) {
+    failureType = 'supabase_server_response';
+  }
+
+  // Update context for tracing and visualization in Sentry UI
+  context.failureType = failureType;
+  context.isOffline = isOffline;
+  context.isAbort = isAbort;
+  context.isTimeout = isTimeout;
+
   Sentry.addBreadcrumb({
     category: 'supabase',
-    message: `Supabase ${context.service || 'Request'} [${method}] status: ${status}`,
-    level: isFailure ? 'error' : 'info',
+    message: `Supabase ${context.service || 'Request'} [${method}] status: ${status} (Type: ${failureType})`,
+    level: isFailure ? (isOffline || isAbort ? 'info' : 'error') : 'info',
     data: context,
   });
 
@@ -130,10 +160,28 @@ export function instrumentSupabaseFetch(
         scope.setTag('supabase.table', context.tableName);
       }
       scope.setTag('supabase.status_code', String(status));
+      scope.setTag('failure_type', failureType);
+      scope.setTag('is_offline', String(isOffline));
+      scope.setTag('is_abort', String(isAbort));
+      scope.setTag('is_timeout', String(isTimeout));
       scope.setExtra('supabase.context', context);
 
-      const errorMessage = error ? error.message : `Supabase API responded with status ${status}`;
-      Sentry.captureException(new Error(errorMessage));
+      // Distinguish grouping by failure type, HTTP method, and URL so Sentry categorizes them cleanly
+      scope.setFingerprint(['supabase', failureType, method, url]);
+
+      // Set lower severity for user environmental conditions (aborts/offline) to avoid alert fatigue
+      if (isOffline || isAbort) {
+        scope.setLevel('info');
+      } else if (isTimeout) {
+        scope.setLevel('warning');
+      } else {
+        scope.setLevel('error');
+      }
+
+      const rawErrorMessage = error ? error.message : `Supabase API responded with status ${status}`;
+      const decoratedMessage = `[${failureType.toUpperCase()}] ${rawErrorMessage}`;
+      
+      Sentry.captureException(new Error(decoratedMessage));
     });
   }
 }

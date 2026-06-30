@@ -502,6 +502,53 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     return () => clearInterval(interval);
   }, [user]);
 
+  // Realtime Profile Synchronization (Role, Username, Avatar updates)
+  useEffect(() => {
+    if (!user) return;
+
+    console.log('[AuthContext] Setting up realtime subscription for user profile:', user.id);
+    const profileChannel = supabase
+      .channel(`profile-role-sync-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${user.id}`,
+        },
+        (payload: any) => {
+          console.log('[AuthContext] Realtime profile update event received:', payload);
+          if (payload.new && typeof payload.new === 'object') {
+            const updatedProfile = payload.new as Profile;
+            setProfile(prev => {
+              if (!prev) return updatedProfile;
+              if (
+                prev.role !== updatedProfile.role ||
+                prev.username !== updatedProfile.username ||
+                prev.avatar_url !== updatedProfile.avatar_url
+              ) {
+                console.log('[AuthContext] Profile state updated dynamically in real-time:', updatedProfile);
+                return {
+                  ...prev,
+                  ...updatedProfile,
+                };
+              }
+              return prev;
+            });
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log(`[AuthContext] Realtime profile subscription status: ${status}`);
+      });
+
+    return () => {
+      console.log('[AuthContext] Cleaning up realtime profile subscription for user:', user.id);
+      supabase.removeChannel(profileChannel);
+    };
+  }, [user]);
+
   // Realtime Presence — join a global presence channel
   useEffect(() => {
     if (!user) {
@@ -860,6 +907,14 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
 
         if (session) {
           console.log('[Reconnection] User session is valid. Auto-reviving states...');
+          
+          // Force refresh session on foreground/resume to immediately pick up database-level role updates
+          try {
+            console.log('[Reconnection] Refreshing session to sync role/metadata updates...');
+            await withTimeout(supabase.auth.refreshSession(), 4000, null);
+          } catch (refreshErr) {
+            console.warn('[Reconnection] Failed to refresh session on resume (non-fatal):', refreshErr);
+          }
           
           // Revive Supabase WSS stream
           if (supabase.realtime) {

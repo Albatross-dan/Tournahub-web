@@ -55,6 +55,7 @@ const LiveTournament = lazy(() => import('./pages/admin/LiveTournament'));
 const Moderation = lazy(() => import('./pages/admin/Moderation'));
 const ModerationLogs = lazy(() => import('./pages/admin/ModerationLogs'));
 const StaffManagement = lazy(() => import('./pages/admin/StaffManagement'));
+const StaffPanel = lazy(() => import('./pages/StaffPanel'));
 
 function HomeRoute() {
   const { user } = useAuth();
@@ -163,6 +164,7 @@ function AppRoutes() {
                   <Route path="/payment/callback" element={<PaymentCallback />} />
                   <Route path="/profile/wins" element={<WinnerHistory />} />
                   <Route path="/profile" element={<Profile />} />
+                  <Route path="/staff" element={<StaffPanel />} />
                   <Route path="/challenge-lobby" element={<ChallengeLobby />} />
                   <Route path="/challenges/:id" element={<ChallengeDetails />} />
                   <Route path="/challenges/:id/chat" element={<ChallengeChat />} />

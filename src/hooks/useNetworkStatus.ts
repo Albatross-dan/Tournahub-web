@@ -1,31 +1,36 @@
 import { useState, useEffect } from 'react';
+import { networkService } from '../services/networkService';
 
 export function useNetworkStatus() {
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [status, setStatus] = useState(() => networkService.getStatus());
   const [wasOffline, setWasOffline] = useState(false);
 
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      setWasOffline(true);
-      // Reset wasOffline after a short delay so components 
-      // can react to the reconnection then it clears
-      setTimeout(() => setWasOffline(false), 3000);
-    };
-
-    const handleOffline = () => {
-      setIsOnline(false);
-      setWasOffline(false);
-    };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    const unsubscribe = networkService.subscribe((currentStatus) => {
+      setStatus(currentStatus);
+      if (!currentStatus.isOnline) {
+        setWasOffline(true);
+      }
+    });
 
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      unsubscribe();
     };
   }, []);
 
-  return { isOnline, wasOffline };
+  // Automatically reset wasOffline shortly after we are back online
+  useEffect(() => {
+    if (status.isOnline && wasOffline) {
+      const timer = setTimeout(() => {
+        setWasOffline(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [status.isOnline, wasOffline]);
+
+  return { 
+    isOnline: status.isOnline && status.isRealConnection, 
+    wasOffline 
+  };
 }
+

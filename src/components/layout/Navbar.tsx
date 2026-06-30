@@ -28,6 +28,10 @@ export default function Navbar() {
   const balance = walletSummary?.balance_usd ?? null;
   const unreadCount = unreadNotificationsCount;
 
+  const isStaff = React.useMemo(() => {
+    return profile?.role === 'admin' || profile?.role === 'moderator';
+  }, [profile?.role]);
+
   const navItems = React.useMemo(() => {
     const items = [
       { name: 'Home', path: '/dashboard', icon: LayoutDashboard },
@@ -38,11 +42,11 @@ export default function Navbar() {
       { name: 'Rules', path: '/rules', icon: HelpCircle },
       { name: 'Live Streams', path: '/streams', icon: Tv },
     ];
-    if (isAdmin) {
-      items.push({ name: 'Admin', path: '/admin', icon: Shield });
+    if (isStaff) {
+      items.push({ name: 'Staff Hub', path: '/staff', icon: Shield });
     }
     return items;
-  }, [isAdmin]);
+  }, [isStaff]);
 
   useEffect(() => {
     if (walletSummary) {
@@ -68,14 +72,14 @@ export default function Navbar() {
         <div className="flex items-center space-x-2 md:space-x-4">
           {/* Desktop/Global Menu Toggle */}
           <div className="flex items-center space-x-2">
-            {isAdmin && (
+            {isStaff && (
               <NavLink 
-                to="/admin" 
-                className="flex items-center space-x-2 sm:px-3.5 px-2.5 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all font-black uppercase text-[10px] tracking-wider italic shadow-sm active:scale-95 duration-200 cursor-pointer"
-                title="Admin Control Hub"
+                to="/staff" 
+                className="flex items-center space-x-2 sm:px-3.5 px-2.5 py-2.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 transition-all font-black uppercase text-[10px] tracking-wider italic shadow-sm active:scale-95 duration-200 cursor-pointer"
+                title="Staff Operations Panel"
               >
-                <Shield size={12} className="stroke-[2.5px] text-rose-400 animate-pulse" />
-                <span className="hidden sm:inline">Admin Hub</span>
+                <Shield size={12} className="stroke-[2.5px] text-cyan-400 animate-pulse" />
+                <span className="hidden sm:inline">Staff Hub</span>
               </NavLink>
             )}
 

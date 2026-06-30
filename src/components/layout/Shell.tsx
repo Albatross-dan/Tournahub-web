@@ -1,12 +1,15 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from './Navbar';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import UpcomingMaintenanceBanner from './UpcomingMaintenanceBanner';
 import AnnouncementBanner from './AnnouncementBanner';
-import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Trophy, Calendar, Wallet } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, Trophy, Calendar, Wallet, Bell } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
+import { toast } from 'react-hot-toast';
+import { supabase } from '../../lib/supabase';
+import { requestNotificationPermission } from '../../lib/notifications';
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const SUPPORT_EMAIL = 'mailto:support@tournahub.me';
@@ -30,6 +33,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background flex flex-col relative overflow-hidden font-sans">
+      <NotificationPermissionPrompt />
       {/* Background Decorative Gradient */}
       <div className="absolute top-0 left-0 w-full h-[600px] bg-[radial-gradient(circle_at_top,rgba(0,209,255,0.03)_0%,transparent_100%)] pointer-events-none" />
       
@@ -38,6 +42,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <Navbar />
  
         {/* Top-aligned warnings and banners */}
+        <NotificationsOffBanner />
         <UpcomingMaintenanceBanner />
         <AnnouncementBanner />
  
@@ -110,6 +115,197 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             </Link>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function NotificationPermissionPrompt() {
+  const { user } = useAuth();
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'default') return;
+
+    const lastShown = localStorage.getItem('th_notif_prompt_last_shown');
+    const daysSince = lastShown
+      ? (Date.now() - Number(lastShown)) / 86400000
+      : Infinity;
+
+    if (daysSince < 3) return; // Wait at least 3 days between requests
+
+    const timer = setTimeout(() => setShow(true), 4000); // 4 seconds delay
+    return () => clearTimeout(timer);
+  }, [user]);
+
+  const dismiss = () => {
+    setShow(false);
+    localStorage.setItem('th_notif_prompt_last_shown', Date.now().toString());
+  };
+
+  const handleEnable = async () => {
+    dismiss();
+    try {
+      const result = await Notification.requestPermission();
+      if (result === 'granted') {
+        await requestNotificationPermission(user!.id);
+        const { error } = await (supabase as any)
+          .from('user_notification_preferences')
+          .upsert({
+            user_id: user!.id,
+            push_enabled: true,
+            updated_at: new Date().toISOString()
+          });
+        if (error) console.error('Error enabling push in DB:', error);
+        toast.success('Notifications successfully enabled!');
+      }
+    } catch (err) {
+      console.error('Error during soft permission grant:', err);
+    }
+  };
+
+  if (!show) return null;
+
+  return (
+    <AnimatePresence>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        {/* Backdrop */}
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={dismiss}
+          className="absolute inset-0 bg-black/65 backdrop-blur-sm"
+        />
+        {/* Container */}
+        <motion.div 
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-surface border border-border-main p-6 shadow-2xl z-10 space-y-4"
+        >
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+              <Bell className="w-5 h-5 animate-bounce" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-text-main uppercase italic tracking-tighter">Stay In The Action</h3>
+              <p className="text-[10px] font-bold text-primary uppercase tracking-widest leading-none mt-1">Push alerts active</p>
+            </div>
+          </div>
+          <p className="text-xs font-semibold text-text-muted leading-relaxed">
+            Get notified instantly when your match starts, when tournament results are submitted, or when an admin sends you a message.
+          </p>
+          <div className="flex items-center gap-3 pt-2">
+            <button 
+              onClick={dismiss}
+              className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all duration-200 cursor-pointer text-center"
+            >
+              Maybe Later
+            </button>
+            <button 
+              onClick={handleEnable}
+              className="flex-1 py-2.5 bg-primary hover:bg-primary-dark text-slate-950 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all duration-200 cursor-pointer text-center"
+            >
+              Enable Now
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    </AnimatePresence>
+  );
+}
+
+function NotificationsOffBanner() {
+  const { user } = useAuth();
+  const [dismissed, setDismissed] = useState(
+    sessionStorage.getItem('th_notif_banner_dismissed') === 'true'
+  );
+  const [permission, setPermission] = useState(
+    typeof Notification !== 'undefined' ? Notification.permission : 'default'
+  );
+
+  if (permission === 'granted' || dismissed) return null;
+
+  const handleConfigureClick = async () => {
+    if (typeof Notification === 'undefined') return;
+
+    // Check if running inside an iframe
+    if (typeof window !== 'undefined' && window.self !== window.top) {
+      toast.error(
+        "Notification requests are blocked in this preview iframe. Please click the 'Open in New Tab' icon at the top-right of the screen to enable push alerts!",
+        { duration: 6000 }
+      );
+      return;
+    }
+
+    if (Notification.permission === 'granted') {
+      if (user?.id) {
+        const { error } = await (supabase as any)
+          .from('user_notification_preferences')
+          .upsert({
+            user_id: user.id,
+            push_enabled: true,
+            updated_at: new Date().toISOString()
+          });
+        if (error) console.error('Error enabling push in DB:', error);
+        await requestNotificationPermission(user.id);
+      }
+      setDismissed(true);
+      return;
+    }
+
+    try {
+      const result = await Notification.requestPermission();
+      setPermission(result);
+
+      if (result === 'granted') {
+        if (user?.id) {
+          await requestNotificationPermission(user.id);
+          const { error } = await (supabase as any)
+            .from('user_notification_preferences')
+            .upsert({
+              user_id: user.id,
+              push_enabled: true,
+              updated_at: new Date().toISOString()
+            });
+          if (error) console.error('Error enabling push in DB:', error);
+        }
+        toast.success('Notifications successfully enabled!');
+        setDismissed(true);
+      } else if (result === 'denied') {
+        toast.error('Notification permission denied. Please allow notifications in your browser settings to enable push alerts.');
+      }
+    } catch (err: any) {
+      console.error('Error requesting notification permission:', err);
+      toast.error(`Failed to request notification permission: ${err?.message || err || 'Unknown error'}`);
+    }
+  };
+
+  return (
+    <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 flex items-center justify-between text-xs font-semibold text-amber-400 gap-2 shrink-0 animate-fadeIn select-none">
+      <div className="flex items-center gap-2">
+        <span>🔕</span>
+        <span className="font-extrabold uppercase text-[10px] tracking-wider">Push Notifications are disabled</span>
+      </div>
+      <div className="flex items-center gap-3">
+        <button 
+          onClick={handleConfigureClick}
+          className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 bg-amber-500/15 hover:bg-amber-500/25 rounded-lg text-amber-400 border border-amber-500/25 transition-all active:scale-95 cursor-pointer"
+        >
+          Configure
+        </button>
+        <button
+          onClick={() => {
+            sessionStorage.setItem('th_notif_banner_dismissed', 'true');
+            setDismissed(true);
+          }}
+          className="text-amber-400 hover:text-white transition-colors p-1 cursor-pointer font-black text-[11px]"
+        >
+          ✕
+        </button>
       </div>
     </div>
   );
