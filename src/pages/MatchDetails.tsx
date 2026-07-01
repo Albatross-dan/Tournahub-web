@@ -316,17 +316,21 @@ export default function MatchDetails() {
   const scheduledAt = match?.scheduled_at;
   const playWindowMinutes = match?.play_window_minutes ?? 30;
 
-  let isNoShowButtonEnabled = true;
+  let isNoShowButtonEnabled = now.getHours() >= 22;
   let unlockTimeStr = '';
   let timeRemainingStr = '';
+
+  if (now.getHours() < 22) {
+    unlockTimeStr = '10:00 PM';
+  }
 
   if (scheduledAt) {
     const matchStart = new Date(scheduledAt);
     const matchEnd = new Date(matchStart.getTime() + playWindowMinutes * 60000);
     const unlockTime = new Date(matchEnd.getTime() - 15 * 60000);
-    isNoShowButtonEnabled = now >= unlockTime;
+    isNoShowButtonEnabled = now >= unlockTime && now.getHours() >= 22;
 
-    if (!isNoShowButtonEnabled) {
+    if (!isNoShowButtonEnabled && now.getHours() >= 22) {
       const diffMs = unlockTime.getTime() - now.getTime();
       const minutesRemaining = Math.ceil(diffMs / 60000);
       if (minutesRemaining > 60) {
@@ -569,7 +573,7 @@ export default function MatchDetails() {
                       "w-full h-14 flex items-center justify-center gap-2 rounded-2xl font-black uppercase italic tracking-widest transition-all text-xs border cursor-pointer",
                       match.status === 'under_review' || !isNoShowButtonEnabled
                         ? "bg-zinc-950 border-zinc-900 text-zinc-500 cursor-not-allowed"
-                        : "bg-red-500/5 border-red-500/20 text-red-500 hover:bg-red-500/10 hover:border-red-500/40"
+                        : "bg-red-950/30 border-red-900/40 text-red-500 hover:bg-red-900/20 hover:border-red-700 hover:text-red-400"
                     )}
                   >
                     <XCircle className="w-4 h-4" />
