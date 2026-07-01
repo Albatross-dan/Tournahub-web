@@ -601,7 +601,8 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         // This strictly prevents automatic browser popups on load context.
         const currentPermission = typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default';
         if (currentPermission === 'granted') {
-          console.log('[AuthContext] Notification permission already granted. Completing automatic FCM token retrieval and sync...');
+          console.log('[AuthContext] Notification permission already granted. Resetting guards and completing automatic FCM token retrieval and sync...');
+          resetNotificationGuards();
           await registerPushToken();
         } else {
           console.log('[AuthContext] Notification permission is not granted (current state:', currentPermission + '). Skipping automatic prompt to adhere to browser user-gesture restrictions.');
@@ -750,27 +751,12 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
           const userId = session.user.id;
           lastUserIdRef.current = userId;
           
-          // Centrally register push token immediately upon SIGNED_IN
-          registerPushToken();
+          console.log('[Push] ── SIGNED_IN event detected. Explicitly resetting token flags.');
+          resetNotificationGuards();
           
-          const currentPermission = typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default';
-          if (currentPermission === 'granted') {
-            console.log('[AuthContext] SIGNED_IN event detected and notification permission already granted. Syncing FCM token in background:', userId);
-            requestNotificationPermission(userId).then(async (token) => {
-              if (token) {
-                const fcmToken = token;
-                console.log('[AuthContext] Retrieved FCM Token on SIGNED_IN event:', fcmToken);
-                // Call the centralized sync function
-                await syncTokenToSupabase(userId, fcmToken);
-              } else {
-                console.warn('[AuthContext] No FCM token returned during SIGNED_IN event. Verify permissions and configuration.');
-              }
-            }).catch(err => {
-              console.error('[AuthContext] Error in requestNotificationPermission during SIGNED_IN:', err);
-            });
-          } else {
-            console.log('[AuthContext] SIGNED_IN event detected. Notification permission is not granted (current state:', currentPermission + '). Skipping automated permission request.');
-          }
+          // Centrally register/initialize push notifications immediately upon SIGNED_IN
+          console.log('[Push] ── Triggering registerPushToken()...');
+          registerPushToken();
         }
       }
 
