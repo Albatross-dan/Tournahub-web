@@ -3,7 +3,7 @@ import { User } from '@supabase/supabase-js';
 import { ensureAuthenticated, supabase, safeLocalStorage } from '../lib/supabase';
 import { Profile } from '../types/database';
 import { queryClient } from '../lib/queryClient';
-import { requestNotificationPermission, listenForForegroundNotifications, deleteFcmTokenOnLogout, syncTokenToSupabase, registerPushToken } from '../lib/notifications';
+import { requestNotificationPermission, listenForForegroundNotifications, deleteFcmTokenOnLogout, syncTokenToSupabase, registerPushToken, resetNotificationGuards } from '../lib/notifications';
 import { Trophy, Zap, Loader2, Sparkles, AlertCircle } from 'lucide-react';
 
 // Professional fallback timeout engine to prevent hangs and guarantee resolution
@@ -776,22 +776,14 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
 
       if (event === 'SIGNED_OUT') {
         const userId = lastUserIdRef.current;
-        const currentToken = safeLocalStorage.getItem('fcm_token');
-        if (userId && currentToken) {
-          console.log('[AuthContext] SIGNED_OUT event detected. Deleting notification token for user:', userId);
-          try {
-            const { error: deleteError } = await (supabase as any).from('notification_tokens')
-              .delete()
-              .eq('user_id', userId)
-              .eq('token', currentToken);
-            if (deleteError) {
-              console.error('[AuthContext] Failed to delete token on SIGNED_OUT:', deleteError.message);
-            } else {
-              console.log('[AuthContext] Successfully deleted notification token on SIGNED_OUT.');
-            }
-          } catch (deleteErr) {
-            console.error('[AuthContext] Exception while deleting token on SIGNED_OUT:', deleteErr);
-          }
+        console.log('[AuthContext] SIGNED_OUT event detected. Triggering FCM token cleanup and resetting guards...');
+        
+        // Reset notification guards immediately and clean up token before clearing user state
+        resetNotificationGuards();
+        if (userId) {
+          deleteFcmTokenOnLogout(userId).catch(err => {
+            console.warn('[AuthContext] FCM token cleanup on SIGNED_OUT failed safely:', err);
+          });
         }
         safeLocalStorage.removeItem('fcm_token');
 
@@ -1073,6 +1065,14 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     console.log('[Auth] Initiating sign out sequence...');
     const currentUserId = user?.id;
     
+    // Reset notification guards and clean up FCM token BEFORE clearing user session state
+    resetNotificationGuards();
+    if (currentUserId) {
+      deleteFcmTokenOnLogout(currentUserId).catch(err => {
+        console.warn('[AuthContext] FCM token cleanup on logout failed safely:', err);
+      });
+    }
+    
     // 1. Clear state immediately to update UI
     setUser(null);
     setProfile(null);
@@ -1088,12 +1088,6 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       sessionStorage.clear();
     } catch (err) {
       console.warn('[Auth] Failed to clear queryClient or sessionStorage on signOut:', err);
-    }
-    
-    if (currentUserId) {
-      deleteFcmTokenOnLogout(currentUserId).catch(err => {
-        console.warn('[AuthContext] FCM token cleanup on logout failed safely:', err);
-      });
     }
     
     try {

@@ -275,12 +275,21 @@ export async function syncTokenToSupabase(userId: string, token: string, isRetry
 }
 
 /**
+ * Resets the module-level notification registration flags so that they
+ * can re-fire properly on next login or retry.
+ */
+export function resetNotificationGuards(): void {
+  tokenRegistered = false;
+  tokenRegistrationInProgress = false;
+  console.log('[Notifications] Registration guards reset: tokenRegistered = false, tokenRegistrationInProgress = false');
+}
+
+/**
  * Disposes of the FCM token registration on logout to prevent subsequent invalid deliveries.
  */
 export async function deleteFcmTokenOnLogout(userId: string): Promise<void> {
   // Reset guards so next user login registers cleanly
-  tokenRegistered = false;
-  tokenRegistrationInProgress = false;
+  resetNotificationGuards();
   if (visibilityCleanup) {
     visibilityCleanup();
     visibilityCleanup = null;
