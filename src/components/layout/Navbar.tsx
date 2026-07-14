@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { 
   Trophy, Wallet, RefreshCw, LayoutDashboard, 
   Calendar, MessageSquare, Shield, Bell, Menu, X, Tv,
-  HelpCircle, Download, Store
+  HelpCircle, Download, Store, Sparkles, Share, AlertCircle
 } from 'lucide-react';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
 import NotificationBell from '../notifications/NotificationBell';
@@ -17,7 +17,8 @@ const logoUrl = '/android-chrome-512x512.png';
 
 export default function Navbar() {
   const { profile, user, isAdmin, walletSummary, unreadNotificationsCount, unreadChatCount } = useAuth();
-  const { isInstallable, installApp } = usePWAInstall();
+  const { isInstallable, installApp, isInAppBrowser, isIOS, hasNativePrompt } = usePWAInstall();
+  const [showInstallGuide, setShowInstallGuide] = useState(false);
   const location = useLocation();
   const [lastUpdated, setLastUpdated] = useState<string>(new Date().toLocaleTimeString());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -54,6 +55,14 @@ export default function Navbar() {
       setLastUpdated(new Date().toLocaleTimeString());
     }
   }, [walletSummary]);
+
+  const handleInstallClick = () => {
+    if (hasNativePrompt && !isInAppBrowser) {
+      installApp();
+    } else {
+      setShowInstallGuide(true);
+    }
+  };
 
   return (
     <header className="px-6 py-4 border-b border-border-main bg-background/80 backdrop-blur-2xl sticky top-0 z-50">
@@ -201,7 +210,7 @@ export default function Navbar() {
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                onClick={installApp}
+                onClick={handleInstallClick}
                 className="inline-flex items-center gap-2 px-4 py-1.5 bg-[#facc15] text-slate-950 hover:bg-white text-[10px] font-black uppercase tracking-widest rounded-full transition-all duration-200 cursor-pointer shadow-[0_0_20px_rgba(250,204,21,0.35)] active:scale-95"
               >
                 <Download className="w-3 h-3 shrink-0 text-slate-950" />
@@ -211,6 +220,135 @@ export default function Navbar() {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* PWA Install Guidance Dialog */}
+      <AnimatePresence>
+        {showInstallGuide && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ type: 'spring', duration: 0.4 }}
+              className="w-full max-w-md bg-[#0d101d] border border-border-main rounded-2xl overflow-hidden shadow-2xl relative"
+            >
+              <div className="p-6 space-y-6">
+                {/* Header */}
+                <div className="flex items-center justify-between pb-3 border-b border-border-main">
+                  <div className="flex items-center space-x-2">
+                    <Sparkles className="w-5 h-5 text-primary animate-pulse" />
+                    <h3 className="text-xs font-black uppercase tracking-wider text-text-main">
+                      Install Tournahub
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setShowInstallGuide(false)}
+                    className="w-8 h-8 rounded-lg bg-surface border border-border-main flex items-center justify-center text-text-muted hover:text-text-main transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Body Content */}
+                {isInAppBrowser ? (
+                  <div className="space-y-4">
+                    {/* In-App Browser Detected Warning */}
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex gap-3 text-amber-500">
+                      <div className="shrink-0 mt-0.5">
+                        <AlertCircle className="w-4 h-4 text-amber-500" />
+                      </div>
+                      <div className="text-[11px] leading-relaxed font-semibold">
+                        <span className="font-bold">In-App Browser Detected:</span> Android restricts full app installation inside other apps (Telegram, Discord, Gmail, etc.), which creates 1x1 shortcut links instead of real apps.
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-text-muted leading-relaxed">
+                      To install Tournahub as a real Android application, please open the site in your primary Google Chrome browser:
+                    </p>
+
+                    <div className="space-y-3 bg-surface p-4 border border-border-main rounded-xl">
+                      <div className="flex items-start gap-3">
+                        <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">1</span>
+                        <p className="text-[11px] font-bold text-text-main leading-relaxed">
+                          Tap the three dots menu (<span className="font-mono text-xs">⋮</span>) or share icon at the top right of this screen.
+                        </p>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">2</span>
+                        <p className="text-[11px] font-bold text-text-main leading-relaxed">
+                          Select <span className="text-primary">"Open in Chrome"</span> or <span className="text-primary">"Open in browser"</span>.
+                        </p>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">3</span>
+                        <p className="text-[11px] font-bold text-text-main leading-relaxed">
+                          Once in Chrome, tap the yellow <span className="text-primary uppercase">"Install App"</span> button at the top to complete installation!
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : isIOS ? (
+                  <div className="space-y-4">
+                    <p className="text-[11px] text-text-muted leading-relaxed">
+                      iOS Safari does not support automated prompt installations. Follow these simple steps to install Tournahub on your iPhone or iPad:
+                    </p>
+
+                    <div className="space-y-3 bg-surface p-4 border border-border-main rounded-xl">
+                      <div className="flex items-start gap-3">
+                        <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">1</span>
+                        <p className="text-[11px] font-bold text-text-main leading-relaxed">
+                          Tap the <span className="text-primary">Safari Share button</span> (the square box with an arrow pointing up <Share className="w-3.5 h-3.5 inline mx-0.5 text-primary stroke-[2.5px]" />) in Safari's bottom toolbar.
+                        </p>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">2</span>
+                        <p className="text-[11px] font-bold text-text-main leading-relaxed">
+                          Scroll down the share sheet and select <span className="text-primary">"Add to Home Screen"</span>.
+                        </p>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">3</span>
+                        <p className="text-[11px] font-bold text-text-main leading-relaxed">
+                          Tap <span className="text-primary">"Add"</span> in the top right corner to save Tournahub to your device!
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-[11px] text-text-muted leading-relaxed">
+                      To install Tournahub as a standalone application on your device:
+                    </p>
+
+                    <div className="space-y-3 bg-surface p-4 border border-border-main rounded-xl">
+                      <div className="flex items-start gap-3">
+                        <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">1</span>
+                        <p className="text-[11px] font-bold text-text-main leading-relaxed">
+                          Tap your browser's options menu (<span className="font-mono text-xs">⋮</span> in Chrome, or browser settings).
+                        </p>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">2</span>
+                        <p className="text-[11px] font-bold text-text-main leading-relaxed">
+                          Select <span className="text-primary">"Install app"</span> or <span className="text-primary">"Add to Home screen"</span>.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Footer button */}
+                <button
+                  onClick={() => setShowInstallGuide(false)}
+                  className="w-full py-3 bg-primary text-slate-950 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-white transition-colors duration-200 cursor-pointer text-center"
+                >
+                  Got It
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </header>
   );
 }

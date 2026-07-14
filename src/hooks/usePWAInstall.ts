@@ -19,9 +19,54 @@ if (typeof window !== 'undefined') {
   });
 }
 
+/**
+ * Checks if the current browser environment is an in-app browser or Webview.
+ * e.g., opened inside Telegram, Discord, Facebook, Instagram, Twitter, or an Android WebView.
+ */
+function detectInAppBrowser(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  
+  const ua = navigator.userAgent || '';
+  
+  // Common in-app user-agent identifiers
+  const inAppRegex = /FBAN|FBAV|Instagram|Twitter|TwitterAndroid|Line|Snapchat|MicroMessenger|Pinterest|Telegram|Discord|wv|Crosswalk/i;
+  
+  const isAndroid = /Android/i.test(ua);
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+  
+  // Android WebView typically has 'wv' in the user agent
+  const isAndroidWebView = isAndroid && /wv/i.test(ua);
+  
+  // iOS WebView detection: not running standalone and user-agent lacks "Safari" but has "iPhone"/"iPad"
+  const isIOSWebView = isIOS && !/Safari/i.test(ua) && !(navigator as any).standalone;
+  
+  return inAppRegex.test(ua) || isAndroidWebView || isIOSWebView;
+}
+
+/**
+ * Checks if the current device is running iOS (iPhone, iPad, iPod)
+ */
+function detectIsIOS(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+}
+
+/**
+ * Checks if the current device is a mobile or tablet device
+ */
+function detectIsMobile(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+}
+
 export function usePWAInstall() {
   const [isInstallable, setIsInstallable] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
+  const [isInAppBrowser, setIsInAppBrowser] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   // Helper function to check if the app is currently running in standalone (installed) mode
   const checkIsInstalled = (): boolean => {
@@ -41,12 +86,19 @@ export function usePWAInstall() {
 
     const updateState = () => {
       const installed = checkIsInstalled();
+      const inApp = detectInAppBrowser();
+      const ios = detectIsIOS();
+      const mobile = detectIsMobile();
+
       setIsInstalled(installed);
+      setIsInAppBrowser(inApp);
+      setIsIOS(ios);
+      setIsMobile(mobile);
       
-      // We only show the install button if:
+      // We show the install trigger if:
       // 1. It is not already installed.
-      // 2. We have a valid deferredPrompt available.
-      setIsInstallable(!installed && deferredPrompt !== null);
+      // 2. We either have a native deferredPrompt OR the user is on a mobile device where we want to offer custom instructions.
+      setIsInstallable(!installed && (deferredPrompt !== null || mobile));
     };
 
     // Initial run
@@ -86,12 +138,12 @@ export function usePWAInstall() {
 
   const installApp = async () => {
     if (!deferredPrompt) {
-      console.warn('[usePWAInstall] Install prompt was requested but deferredPrompt is not available.');
+      console.warn('[usePWAInstall] Install prompt requested but native deferredPrompt is not available.');
       return false;
     }
 
     try {
-      // Show the install prompt
+      // Show the native install prompt
       await deferredPrompt.prompt();
       
       // Wait for the user to respond to the prompt
@@ -116,6 +168,10 @@ export function usePWAInstall() {
   return {
     isInstallable,
     isInstalled,
+    isInAppBrowser,
+    isIOS,
+    isMobile,
+    hasNativePrompt: deferredPrompt !== null,
     installApp,
   };
 }
