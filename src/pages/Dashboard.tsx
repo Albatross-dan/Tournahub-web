@@ -219,6 +219,23 @@ export default function Dashboard() {
     refetchOnWindowFocus: true,
   });
 
+  // Query weekly highlights
+  const { data: highlights = null, refetch: refetchHighlights } = useQuery<any>({
+    queryKey: ['home_weekly_highlights'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('v_home_weekly_highlights')
+        .select('*')
+        .maybeSingle();
+      if (error) {
+        console.warn('[Dashboard] Error querying weekly highlights:', error);
+        return null;
+      }
+      return data;
+    },
+    staleTime: 1000 * 60 * 30, // 30 minutes
+  });
+
   const scheduledMatches = React.useMemo(() => {
     return userMatches.filter((m: any) => 
       ['pending', 'scheduled', 'waiting_for_players'].includes(m.status)
@@ -234,8 +251,9 @@ export default function Dashboard() {
       refetchSubmittedMatchIds();
       refreshUnreadCommunityCount();
       refreshOpenChallengesCount();
+      refetchHighlights();
     }
-  }, [refetchSignal, refetchMatches, refetchStats, refetchSubmittedMatchIds, refreshUnreadCommunityCount, refreshOpenChallengesCount]);
+  }, [refetchSignal, refetchMatches, refetchStats, refetchSubmittedMatchIds, refreshUnreadCommunityCount, refreshOpenChallengesCount, refetchHighlights]);
 
   // Compatibility callback for refetchOnFocus hook
   async function loadDashboardData() {
@@ -245,6 +263,7 @@ export default function Dashboard() {
       refetchSubmittedMatchIds();
       refreshUnreadCommunityCount();
       refreshOpenChallengesCount();
+      refetchHighlights();
     }
   }
 
@@ -463,77 +482,111 @@ export default function Dashboard() {
               </div>
             </motion.div>
 
-            <div>
-              <SectionHeader title="Next Scheduled Battles" link="/matches" />
-              <div className="space-y-4 mt-4">
-                {scheduledMatches.length > 0 ? (
-                  <div className="space-y-4">
-                     <AnimatePresence mode="popLayout" initial={false}>
-                      {/* Show first 2 matches always */}
-                      {scheduledMatches.slice(0, 2).map((match) => (
-                        <motion.div key={match.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
-                          <MatchCard match={match} userSubmittedMatchIds={userSubmittedMatchIds} />
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
+            {highlights && (highlights.match_of_week_match_id || highlights.player_of_week_user_id) && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-black text-text-main uppercase tracking-widest flex items-center gap-2 italic">
+                    <span className="w-1.5 h-3 bg-primary rounded-full italic inline-block" />
+                    Weekly Highlights
+                  </h2>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Match of the Week Card */}
+                  {highlights.match_of_week_match_id && (
+                    <Link
+                      to={`/matches/${highlights.match_of_week_match_id}`}
+                      className="card p-4 bg-surface hover:bg-surface/80 border border-border-main hover:border-primary/20 rounded-3xl flex flex-col justify-between min-h-[140px] transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl hover:scale-[1.01]"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="bg-primary/10 text-primary px-2.5 py-1 rounded-full text-[9px] font-black tracking-wider uppercase flex items-center gap-1">
+                          <span className="animate-pulse">🔥</span> Match of the Week
+                        </span>
+                        <ArrowUpRight className="w-3.5 h-3.5 text-text-muted group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                      </div>
 
-                    {/* Remaining matches container with AnimatePresence */}
-                    <AnimatePresence initial={false}>
-                      {isSchedulesExpanded && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.3, ease: "easeInOut" }}
-                          className="overflow-hidden space-y-4"
-                        >
-                          {scheduledMatches.slice(2).map((match) => (
-                            <motion.div key={match.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
-                              <MatchCard match={match} userSubmittedMatchIds={userSubmittedMatchIds} />
-                            </motion.div>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {/* Expansion trigger card/button */}
-                    {scheduledMatches.length > 2 && (
-                      <button
-                        onClick={() => setIsSchedulesExpanded(!isSchedulesExpanded)}
-                        className={cn(
-                          "w-full py-3 px-4 bg-surface hover:bg-surface/80 border border-border-main hover:border-primary/20 rounded-2xl flex items-center justify-between transition-all duration-300 group cursor-pointer text-text-muted hover:text-text-main",
-                          isSchedulesExpanded && "border-primary/20 bg-primary/5 hover:bg-primary/5"
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="w-2.5 h-2.5 rounded-full bg-primary/20 flex items-center justify-center">
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                          </span>
-                          <span className="text-[10px] font-black uppercase tracking-wider italic">
-                            {isSchedulesExpanded ? `COLLAPSE MATCH LIST` : `EXPAND UPCOMING SCHEDULES (+${scheduledMatches.length - 2} MORE)`}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[9px] font-black tracking-wider uppercase text-text-muted">
-                            {isSchedulesExpanded ? 'HIDE' : 'SHOW ALL'}
-                          </span>
-                          <div className={cn(
-                            "w-6 h-6 rounded-lg bg-surface border border-border-main flex items-center justify-center transition-transform duration-300",
-                            isSchedulesExpanded && "rotate-180"
-                          )}>
-                            <ChevronDown className="w-3.5 h-3.5" />
+                      <div className="mt-3 space-y-1">
+                        <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest line-clamp-1">
+                          {highlights.match_of_week_tournament_name || 'Tournament'}
+                        </p>
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col items-start min-w-0 flex-1">
+                            <span className="text-sm font-black text-text-main uppercase italic truncate max-w-full">
+                              {highlights.match_of_week_player1_username}
+                            </span>
+                            <span className="text-[9px] text-text-muted font-bold uppercase">Player 1</span>
+                          </div>
+                          <div className="px-3 flex flex-col items-center shrink-0">
+                            <span className="text-lg font-black text-primary tracking-tighter italic">
+                              {highlights.match_of_week_score1} – {highlights.match_of_week_score2}
+                            </span>
+                            <span className="text-[8px] text-text-muted font-bold uppercase tracking-widest">VS</span>
+                          </div>
+                          <div className="flex flex-col items-end min-w-0 flex-1 text-right">
+                            <span className="text-sm font-black text-text-main uppercase italic truncate max-w-full">
+                              {highlights.match_of_week_player2_username}
+                            </span>
+                            <span className="text-[9px] text-text-muted font-bold uppercase">Player 2</span>
                           </div>
                         </div>
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="card p-12 text-center text-text-muted italic rounded-3xl border-dashed border-2 border-border-main">
-                    No matches found. Go join a tournament!
-                  </div>
-                )}
+                      </div>
+
+                      <div className="mt-3 pt-2 border-t border-border-main/50 flex items-center justify-between text-[9px]">
+                        <span className="text-text-muted font-bold uppercase tracking-widest">Combined Goals</span>
+                        <span className="font-black text-text-main bg-surface-hover px-1.5 py-0.5 rounded border border-border-main">{highlights.match_of_week_combined_goals} goals</span>
+                      </div>
+                    </Link>
+                  )}
+
+                  {/* Player of the Week Card */}
+                  {highlights.player_of_week_user_id && (
+                    <Link
+                      to={`/marketplace/profile/${highlights.player_of_week_user_id}`}
+                      className="card p-4 bg-surface hover:bg-surface/80 border border-border-main hover:border-primary/20 rounded-3xl flex flex-col justify-between min-h-[140px] transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl hover:scale-[1.01]"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="bg-amber-500/10 text-amber-500 px-2.5 py-1 rounded-full text-[9px] font-black tracking-wider uppercase flex items-center gap-1">
+                          <span>⭐</span> Player of the Week
+                        </span>
+                        <ArrowUpRight className="w-3.5 h-3.5 text-text-muted group-hover:text-amber-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                      </div>
+
+                      <div className="mt-3 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 overflow-hidden shrink-0 flex items-center justify-center">
+                          {highlights.player_of_week_avatar_url ? (
+                            <img
+                              src={highlights.player_of_week_avatar_url}
+                              alt={highlights.player_of_week_username || 'Player'}
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <span className="text-sm font-black text-amber-500 uppercase italic">
+                              {(highlights.player_of_week_username || 'P')[0]}
+                            </span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-base font-black text-text-main uppercase italic truncate">
+                            {highlights.player_of_week_username}
+                          </p>
+                          <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest leading-none mt-0.5">
+                            Form of the Week
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-2 border-t border-border-main/50 flex items-center justify-between text-[9px]">
+                        <span className="text-text-muted font-bold uppercase tracking-widest">Performance</span>
+                        <span className="font-black text-amber-500 bg-amber-500/5 px-2 py-0.5 rounded border border-amber-500/15">
+                          {highlights.player_of_week_goals} {highlights.player_of_week_goals === 1 ? 'goal' : 'goals'} in {highlights.player_of_week_matches_played} {highlights.player_of_week_matches_played === 1 ? 'match' : 'matches'}
+                        </span>
+                      </div>
+                    </Link>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </motion.div>
 
           {/* Hall of Fame Square Card */}
