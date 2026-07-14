@@ -57,6 +57,15 @@ const ModerationLogs = lazy(() => import('./pages/admin/ModerationLogs'));
 const StaffManagement = lazy(() => import('./pages/admin/StaffManagement'));
 const StaffPanel = lazy(() => import('./pages/StaffPanel'));
 
+// Lazy load marketplace pages
+const MarketplaceBrowse = lazy(() => import('./pages/marketplace/MarketplaceBrowse'));
+const ListingDetail = lazy(() => import('./pages/marketplace/ListingDetail'));
+const CreateEditListing = lazy(() => import('./pages/marketplace/CreateEditListing'));
+const MyOrders = lazy(() => import('./pages/marketplace/MyOrders'));
+const MySales = lazy(() => import('./pages/marketplace/MySales'));
+const SellerProfile = lazy(() => import('./pages/marketplace/SellerProfile'));
+const AdminMarketplace = lazy(() => import('./pages/marketplace/AdminMarketplace'));
+
 function HomeRoute() {
   const { user } = useAuth();
 
@@ -153,6 +162,7 @@ function AppRoutes() {
                   <Route path="/tournaments" element={<Tournaments />} />
                   <Route path="/tournaments/:id" element={<TournamentDetails />} />
                   <Route path="/tournaments/:id/champion" element={<TournamentChampion />} />
+                  <Route path="/champion/:id" element={<TournamentChampion />} />
                   <Route path="/matches/:id" element={<MatchDetails />} />
                   <Route path="/matches" element={<Matches />} />
                   <Route path="/streams" element={<LiveStreams />} />
@@ -168,11 +178,19 @@ function AppRoutes() {
                   <Route path="/challenge-lobby" element={<ChallengeLobby />} />
                   <Route path="/challenges/:id" element={<ChallengeDetails />} />
                   <Route path="/challenges/:id/chat" element={<ChallengeChat />} />
+                  <Route path="/marketplace" element={<MarketplaceBrowse />} />
+                  <Route path="/marketplace/listing/:id" element={<ListingDetail />} />
+                  <Route path="/marketplace/create" element={<CreateEditListing />} />
+                  <Route path="/marketplace/edit/:id" element={<CreateEditListing />} />
+                  <Route path="/marketplace/orders" element={<MyOrders />} />
+                  <Route path="/marketplace/sales" element={<MySales />} />
+                  <Route path="/marketplace/profile/:sellerId" element={<SellerProfile />} />
                 </Route>
 
                 <Route element={<ProtectedRoute allowAdminOnly />}>
                   <Route path="/admin" element={<AdminDashboard />} />
                   <Route path="/admin/platform" element={<AdminPlatform />} />
+                  <Route path="/admin/marketplace" element={<AdminMarketplace />} />
                   <Route path="/admin/tournaments" element={<ManageTournaments />} />
                   <Route path="/admin/tournaments/create" element={<CreateTournament />} />
                   <Route path="/admin/tournaments/:id" element={<EditTournament />} />

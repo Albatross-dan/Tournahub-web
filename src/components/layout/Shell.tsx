@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import UpcomingMaintenanceBanner from './UpcomingMaintenanceBanner';
 import AnnouncementBanner from './AnnouncementBanner';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Trophy, Calendar, Wallet, Bell } from 'lucide-react';
+import { LayoutDashboard, Trophy, Calendar, Wallet, Bell, Store } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -21,6 +21,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     { name: 'Home', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Tournaments', path: '/tournaments', icon: Trophy },
     { name: 'Matches', path: '/matches', icon: Calendar },
+    { name: 'Market', path: '/marketplace', icon: Store },
     { name: 'Wallet', path: '/wallet', icon: Wallet },
   ];
 
@@ -90,7 +91,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               key={item.path}
               to={item.path}
               className={cn(
-                "flex flex-col items-center justify-center space-y-1 py-1 px-4 rounded-xl transition-all duration-300 relative",
+                "flex flex-col items-center justify-center space-y-1 py-1 px-1.5 rounded-xl transition-all duration-300 relative",
                 isActive 
                   ? "text-primary font-black scale-102" 
                   : "text-text-muted hover:text-text-main"

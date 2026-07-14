@@ -21,14 +21,32 @@ Sentry.init({
   ],
 
   // Performance Tracing Configuration
-  tracesSampleRate: ENVIRONMENT === 'production' ? 0.2 : 1.0,
+  tracesSampleRate: ENVIRONMENT === 'production' ? 0.2 : 0,
   
   // Tracing targets for distributed tracing (Supabase and Local API)
   tracePropagationTargets: ['localhost', /^https:\/\/[a-zA-Z0-9-]+\.supabase\.co/],
 
-  // Session Replay Configuration
-  replaysSessionSampleRate: ENVIRONMENT === 'production' ? 0.05 : 1.0, // Low in prod, high in dev
-  replaysOnErrorSampleRate: 1.0, // Capture 100% of sessions with errors
+  // Session Replay Configuration - disable in development/preview to prevent fetch spam
+  replaysSessionSampleRate: ENVIRONMENT === 'production' ? 0.05 : 0,
+  replaysOnErrorSampleRate: ENVIRONMENT === 'production' ? 1.0 : 0,
+
+  beforeSend(event, hint) {
+    const error = hint.originalException;
+    if (error && typeof error === 'object' && 'message' in error) {
+      const msg = String(error.message).toLowerCase();
+      if (
+        msg.includes('failed to fetch') ||
+        msg.includes('network') ||
+        msg.includes('load failed') ||
+        msg.includes('offline') ||
+        msg.includes('aborted') ||
+        msg.includes('cancel')
+      ) {
+        return null; // Do not report transient network or blocked fetch failures to Sentry
+      }
+    }
+    return event;
+  },
 });
 
 /**
@@ -181,7 +199,9 @@ export function instrumentSupabaseFetch(
       const rawErrorMessage = error ? error.message : `Supabase API responded with status ${status}`;
       const decoratedMessage = `[${failureType.toUpperCase()}] ${rawErrorMessage}`;
       
-      Sentry.captureException(new Error(decoratedMessage));
+      if (!isOffline && !isAbort && !isTimeout && failureType !== 'genuine_network_failure' && !rawErrorMessage?.toLowerCase().includes('failed to fetch')) {
+        Sentry.captureException(new Error(decoratedMessage));
+      }
     });
   }
 }

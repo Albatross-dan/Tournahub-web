@@ -9,6 +9,7 @@ import {
 import { format } from 'date-fns';
 import { cn } from '../lib/utils';
 import eFootballBg from '../assets/images/efootball_chat_bg_1781622583145.jpg';
+import { get, set } from 'idb-keyval';
 
 interface CommunityMessage {
   id: string;
@@ -111,43 +112,63 @@ export default function CommunityChat() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [messages, setMessages] = useState<CommunityMessage[]>(() => {
-    try {
-      const cached = localStorage.getItem('tournahub_community_chat_cache');
-      return cached ? JSON.parse(cached) : [];
-    } catch (e) {
-      console.error('[CommunityChat] Failed to read messages cache:', e);
-      return [];
-    }
-  });
+  const [messages, setMessages] = useState<CommunityMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [errorHeader, setErrorHeader] = useState<string | null>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
 
-  // Cache messages to localStorage whenever they are updated/fetched
+  // Load from IndexedDB on mount
+  useEffect(() => {
+    async function loadCached() {
+      try {
+        const cached = await get<string>('tournahub_community_chat_cache');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMessages(parsed);
+          }
+        }
+      } catch (e) {
+        console.error('[CommunityChat] Failed to read messages cache:', e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadCached();
+  }, []);
+
+  // Cache messages to IndexedDB whenever they are updated/fetched
   useEffect(() => {
     try {
       const persistentMessages = messages.filter(m => m && m.id && !m.id.startsWith('temp-') && !m.id.startsWith('optimistic-'));
       // Keep only the last 100 messages to keep cache size very small and clean
       const toCache = persistentMessages.slice(-100);
       if (toCache.length > 0) {
-        localStorage.setItem('tournahub_community_chat_cache', JSON.stringify(toCache));
+        set('tournahub_community_chat_cache', JSON.stringify(toCache)).catch(e => {
+          console.error('[CommunityChat] Failed to save messages to cache:', e);
+        });
       }
     } catch (e) {
       console.error('[CommunityChat] Failed to save messages to cache:', e);
     }
   }, [messages]);
 
-  // Mark all community messages as read by updating the last_read_at timestamp in localStorage
+  // Mark all community messages as read by updating the last_read_at timestamp in IndexedDB
   useEffect(() => {
-    localStorage.setItem('community_chat_last_read_at', new Date().toISOString());
+    set('community_chat_last_read_at', new Date().toISOString()).catch(e => {
+      console.error('[CommunityChat] Failed to save last_read_at:', e);
+    });
   }, [messages]);
 
   useEffect(() => {
-    localStorage.setItem('community_chat_last_read_at', new Date().toISOString());
+    set('community_chat_last_read_at', new Date().toISOString()).catch(e => {
+      console.error('[CommunityChat] Failed to save last_read_at:', e);
+    });
     return () => {
-      localStorage.setItem('community_chat_last_read_at', new Date().toISOString());
+      set('community_chat_last_read_at', new Date().toISOString()).catch(e => {
+        console.error('[CommunityChat] Failed to save last_read_at:', e);
+      });
     };
   }, []);
   

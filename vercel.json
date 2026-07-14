@@ -41,6 +41,10 @@
   ],
   "rewrites": [
     {
+      "source": "/champion/:id",
+      "destination": "/api/champion-og?id=:id"
+    },
+    {
       "source": "/((?!assets/|.*\\..*|api/).*)",
       "destination": "/index.html"
     }

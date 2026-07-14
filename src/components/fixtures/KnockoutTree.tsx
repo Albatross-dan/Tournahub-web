@@ -5,21 +5,63 @@ import { cn, getPublicIdentity } from '../../lib/utils';
 import LoadingState from '../ui/LoadingState';
 import { PlayerBadge } from '../ui/PlayerBadge';
 import { useMatchCompletionSync } from '../../hooks/useMatchCompletionSync';
-import { Trophy, Shield, HelpCircle, CornerDownRight, Compass } from 'lucide-react';
+import { Trophy, Shield, HelpCircle, CornerDownRight, Compass, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { overrideTournamentChampion } from '../../utils/tournamentOverrides';
 import DownloadShareAction, { DownloadHeader, DownloadFooter } from '../common/DownloadShareAction';
+import { useAuth } from '../../contexts/AuthContext';
+import { toast } from 'react-hot-toast';
 
 interface KnockoutTreeProps {
   tournamentId: string;
+  hideIfEmpty?: boolean;
 }
 
-export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
+function groupBracketMatchesIntoTies(matchesList: any[]) {
+  const tieMap = new Map<string, any>();
+  for (const m of matchesList) {
+    if (!m) continue;
+    const key = m.tie_id ? `tie-${m.tie_id}` : `single-${m.match_id || m.id}`;
+    if (!tieMap.has(key)) {
+      tieMap.set(key, {
+        ...m,
+        id: key,
+        tie_id: m.tie_id || null,
+        leg1: m.leg === 1 ? m : (!m.leg ? m : null),
+        leg2: m.leg === 2 ? m : null,
+        matches: [m]
+      });
+    } else {
+      const tie = tieMap.get(key);
+      tie.matches.push(m);
+      if (m.leg === 1) tie.leg1 = m;
+      if (m.leg === 2) tie.leg2 = m;
+      if (m.aggregate_score1 !== null && m.aggregate_score1 !== undefined) tie.aggregate_score1 = m.aggregate_score1;
+      if (m.aggregate_score2 !== null && m.aggregate_score2 !== undefined) tie.aggregate_score2 = m.aggregate_score2;
+      if (m.tie_status) tie.tie_status = m.tie_status;
+      if (m.winner) tie.winner = m.winner;
+      if (m.status === 'completed' && tie.status !== 'completed') tie.status = 'completed';
+      if (m.player1_username && m.player1_username !== 'TBD') tie.player1_username = m.player1_username;
+      if (m.player2_username && m.player2_username !== 'TBD') tie.player2_username = m.player2_username;
+      if (m.player1 || m.player1_id || m.player1_user_id) tie.player1 = m.player1 || m.player1_id || m.player1_user_id;
+      if (m.player2 || m.player2_id || m.player2_user_id) tie.player2 = m.player2 || m.player2_id || m.player2_user_id;
+      if (m.player1_badge_id) tie.player1_badge_id = m.player1_badge_id;
+      if (m.player2_badge_id) tie.player2_badge_id = m.player2_badge_id;
+    }
+  }
+  return Array.from(tieMap.values());
+}
+
+export default function KnockoutTree({ tournamentId, hideIfEmpty }: KnockoutTreeProps) {
+  const { can } = useAuth();
+  const canManage = can('manage_tournaments');
   const [matches, setMatches] = useState<any[]>([]);
   const [tournament, setTournament] = useState<any>(null);
   const [dbChampion, setDbChampion] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [resolveModalTie, setResolveModalTie] = useState<any | null>(null);
+  const [resolvingBusy, setResolvingBusy] = useState(false);
   const { refreshCount } = useMatchCompletionSync(tournamentId);
 
   useEffect(() => {
@@ -60,10 +102,11 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
 
   async function fetchMatches() {
     try {
-      const [matchesData, champRes, tournamentData] = await Promise.all([
-        tournamentService.getFixturesWithBadges(tournamentId),
-        (supabase as any).from('tournament_champions').select('*').eq('tournament_id', tournamentId).maybeSingle(),
-        tournamentService.getById(tournamentId).catch(() => null)
+      const [matchesData, champRes, tournamentData, rawMatchesTable] = await Promise.all([
+        tournamentService.getFixturesWithBadges(tournamentId).catch(() => []),
+        (supabase as any).from('tournament_champions').select('*').eq('tournament_id', tournamentId).maybeSingle().then((res: any) => res, () => ({ data: null })),
+        tournamentService.getById(tournamentId).catch(() => null),
+        (supabase as any).from('matches').select('id, player1, player2, leg, tie_id, aggregate_score1, aggregate_score2, tie_status, winner').eq('tournament_id', tournamentId).then((res: any) => res, () => ({ data: [] }))
       ]);
       
       setTournament(tournamentData);
@@ -80,6 +123,27 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
           }
         } else {
           uniqueData.push(m);
+        }
+      }
+
+      const matchesTableList = rawMatchesTable?.data || [];
+      const matchesMetaMap = new Map();
+      for (const m of matchesTableList) {
+        if (m && m.id) matchesMetaMap.set(m.id, m);
+      }
+
+      for (const m of uniqueData) {
+        const mId = m.match_id || m.id;
+        const meta = matchesMetaMap.get(mId);
+        if (meta) {
+          if (meta.player1 !== undefined) m.player1 = meta.player1;
+          if (meta.player2 !== undefined) m.player2 = meta.player2;
+          if (meta.leg !== undefined) m.leg = meta.leg;
+          if (meta.tie_id !== undefined) m.tie_id = meta.tie_id;
+          if (meta.aggregate_score1 !== undefined) m.aggregate_score1 = meta.aggregate_score1;
+          if (meta.aggregate_score2 !== undefined) m.aggregate_score2 = meta.aggregate_score2;
+          if (meta.tie_status !== undefined) m.tie_status = meta.tie_status;
+          if (meta.winner !== undefined) m.winner = meta.winner;
         }
       }
       
@@ -145,8 +209,10 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
     (m) => m && m.stage && (m.stage === 'third_place' || m.stage === 'third-place' || m.stage.toLowerCase().includes('third'))
   );
 
+  const groupedBracketTies = groupBracketMatchesIntoTies(bracketMatches);
+
   // Group by round
-  const roundMap = bracketMatches.reduce((acc: any, match) => {
+  const roundMap = groupedBracketTies.reduce((acc: any, match) => {
     const r = match.round || 1;
     if (!acc[r]) acc[r] = [];
     acc[r].push(match);
@@ -158,6 +224,7 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
     .sort((a, b) => a - b);
 
   if (roundKeys.length === 0) {
+    if (hideIfEmpty) return null;
     return (
       <div id="bracket-no-rounds" className="py-20 text-center text-text-muted italic border-2 border-dashed border-border-main rounded-3xl">
         No tournament bracket rounds scheduled yet.
@@ -166,7 +233,7 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
   }
 
   // Measurements
-  const cardHeight = 110;
+  const cardHeight = 140;
   const baseGap = 32;
   const colWidth = 220;
   const connWidth = 48;
@@ -365,7 +432,7 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
                       className="absolute"
                       style={{ left: `${xOffset}px`, width: `${colWidth}px`, top: `${topPos}px` }}
                     >
-                      <MatchNode match={match} roundLabel={getRoundLabel(roundKey, isFinalCol)} />
+                      <MatchNode match={match} roundLabel={getRoundLabel(roundKey, isFinalCol)} onResolveTie={(tie) => setResolveModalTie(tie)} canManage={canManage} />
                     </div>
                   );
                 })}
@@ -529,24 +596,129 @@ export default function KnockoutTree({ tournamentId }: KnockoutTreeProps) {
                   3rd Place Track
                 </span>
               </div>
-              <MatchNode match={thirdPlaceMatch} roundLabel="3rd Place Match" />
+              <MatchNode match={thirdPlaceMatch} roundLabel="3rd Place Match" onResolveTie={(tie) => setResolveModalTie(tie)} canManage={canManage} />
             </div>
           )}
 
         </div>
         <DownloadFooter />
       </div>
+
+      {resolveModalTie && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="card bg-slate-900 border border-slate-800 p-6 max-w-md w-full shadow-2xl rounded-3xl animate-in fade-in zoom-in duration-200">
+            <h3 className="text-lg font-black text-white italic uppercase tracking-tighter flex items-center gap-2 mb-2">
+              <Trophy className="w-5 h-5 text-amber-500" />
+              Resolve Level Tie
+            </h3>
+            <p className="text-xs text-slate-400 mb-6">
+              Aggregate tied. Enter extra time / penalty winner or apply tiebreaker rule. Choose the advancing player:
+            </p>
+
+            <div className="space-y-3 mb-6">
+              <button
+                disabled={resolvingBusy}
+                onClick={async () => {
+                  const winnerId = resolveModalTie.player1_id || resolveModalTie.player1 || resolveModalTie.player1_user_id;
+                  if (!resolveModalTie.tie_id || !winnerId) {
+                    toast.error('Missing tie or player ID');
+                    return;
+                  }
+                  setResolvingBusy(true);
+                  try {
+                    const { error } = await (supabase as any).rpc('fn_cl_resolve_level_tie', {
+                      p_tie_id: resolveModalTie.tie_id,
+                      p_winner_id: winnerId
+                    });
+                    if (error) throw error;
+                    toast.success('Tie resolved! Winner advanced to next round.');
+                    setResolveModalTie(null);
+                    await fetchMatches();
+                  } catch (err: any) {
+                    toast.error(`Error resolving tie: ${err.message}`);
+                  } finally {
+                    setResolvingBusy(false);
+                  }
+                }}
+                className="w-full p-4 rounded-2xl bg-slate-800/80 hover:bg-primary/20 border border-slate-700 hover:border-primary transition-all flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <PlayerBadge badgeId={resolveModalTie.player1_badge_id} username={resolveModalTie.player1_username || 'Player 1'} size="sm" />
+                  <span className="font-bold text-white group-hover:text-primary uppercase tracking-tight truncate">{resolveModalTie.player1_username || 'Player 1'}</span>
+                </div>
+                <span className="text-xs font-black uppercase text-primary px-2.5 py-1 rounded bg-primary/10">Advance</span>
+              </button>
+
+              <button
+                disabled={resolvingBusy}
+                onClick={async () => {
+                  const winnerId = resolveModalTie.player2_id || resolveModalTie.player2 || resolveModalTie.player2_user_id;
+                  if (!resolveModalTie.tie_id || !winnerId) {
+                    toast.error('Missing tie or player ID');
+                    return;
+                  }
+                  setResolvingBusy(true);
+                  try {
+                    const { error } = await (supabase as any).rpc('fn_cl_resolve_level_tie', {
+                      p_tie_id: resolveModalTie.tie_id,
+                      p_winner_id: winnerId
+                    });
+                    if (error) throw error;
+                    toast.success('Tie resolved! Winner advanced to next round.');
+                    setResolveModalTie(null);
+                    await fetchMatches();
+                  } catch (err: any) {
+                    toast.error(`Error resolving tie: ${err.message}`);
+                  } finally {
+                    setResolvingBusy(false);
+                  }
+                }}
+                className="w-full p-4 rounded-2xl bg-slate-800/80 hover:bg-primary/20 border border-slate-700 hover:border-primary transition-all flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <PlayerBadge badgeId={resolveModalTie.player2_badge_id} username={resolveModalTie.player2_username || 'Player 2'} size="sm" />
+                  <span className="font-bold text-white group-hover:text-primary uppercase tracking-tight truncate">{resolveModalTie.player2_username || 'Player 2'}</span>
+                </div>
+                <span className="text-xs font-black uppercase text-primary px-2.5 py-1 rounded bg-primary/10">Advance</span>
+              </button>
+            </div>
+
+            <button
+              disabled={resolvingBusy}
+              onClick={() => setResolveModalTie(null)}
+              className="w-full py-3 bg-slate-800 text-slate-400 rounded-xl font-bold uppercase tracking-wider hover:bg-slate-700 hover:text-white transition-all text-xs"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function MatchNode({ match, roundLabel, isFinal }: { match: any; roundLabel?: string; isFinal?: boolean }) {
+function MatchNode({ match, roundLabel, isFinal, onResolveTie, canManage }: { match: any; roundLabel?: string; isFinal?: boolean; onResolveTie?: (tie: any) => void; canManage?: boolean }) {
   const navigate = useNavigate();
-  const isCompleted = match.status === 'completed';
+  const isTie = !!match.tie_id;
+  const isCompleted = match.status === 'completed' || match.tie_status === 'decided';
+  
   const score1 = match.score1;
   const score2 = match.score2;
-  const isWinner1 = isCompleted && score1 !== null && score2 !== null && score1 > score2;
-  const isWinner2 = isCompleted && score1 !== null && score2 !== null && score2 > score1;
+  const agg1 = match.aggregate_score1 !== null && match.aggregate_score1 !== undefined 
+    ? match.aggregate_score1 
+    : ((match.leg1?.score1 || 0) + (match.leg2?.score1 || 0));
+  const agg2 = match.aggregate_score2 !== null && match.aggregate_score2 !== undefined 
+    ? match.aggregate_score2 
+    : ((match.leg1?.score2 || 0) + (match.leg2?.score2 || 0));
+
+  const isWinner1 = isCompleted && (
+    (match.winner && (match.winner === match.player1 || match.winner === match.player1_id || match.winner === match.player1_user_id || match.winner === match.player1_username)) ||
+    (isTie ? agg1 > agg2 : (score1 !== null && score2 !== null && score1 > score2))
+  );
+  const isWinner2 = isCompleted && (
+    (match.winner && (match.winner === match.player2 || match.winner === match.player2_id || match.winner === match.player2_user_id || match.winner === match.player2_username)) ||
+    (isTie ? agg2 > agg1 : (score1 !== null && score2 !== null && score2 > score1))
+  );
 
   const rawCleanLabel = roundLabel 
     ? (roundLabel.endsWith('s') ? roundLabel.slice(0, -1) : roundLabel) 
@@ -564,7 +736,7 @@ function MatchNode({ match, roundLabel, isFinal }: { match: any; roundLabel?: st
   return (
     <div 
       onClick={() => {
-        if (match.is_placeholder || !match.id || String(match.id).startsWith('placeholder')) {
+        if (match.is_placeholder || !match.id || String(match.id).startsWith('placeholder') || String(match.id).startsWith('tie-placeholder')) {
           return;
         }
         navigate(`/matches/${match.match_id || match.id}`);
@@ -588,14 +760,14 @@ function MatchNode({ match, roundLabel, isFinal }: { match: any; roundLabel?: st
 
       {/* Top Status Header */}
       <div className="px-3 py-1 bg-background/50 border-b border-border-main flex justify-between items-center text-[9px] font-black tracking-wider text-text-muted">
-        <span className="uppercase italic">
-          {cleanLabel}
+        <span className="uppercase italic flex items-center gap-1">
+          {cleanLabel} {isTie && <span className="text-[8px] bg-primary/20 text-primary px-1 rounded">2-LEG</span>}
         </span>
         <span className={cn(
           "uppercase tracking-widest px-1 py-0.2 rounded font-black",
-          match.status === 'completed' ? "text-emerald-500" : "text-primary animate-pulse"
+          isCompleted ? "text-emerald-500" : "text-primary animate-pulse"
          )}>
-          {match.status}
+          {match.tie_status || match.status}
         </span>
       </div>
 
@@ -612,13 +784,19 @@ function MatchNode({ match, roundLabel, isFinal }: { match: any; roundLabel?: st
           )}>
             {p1Name}
           </span>
+          {isTie && (
+            <span className="flex items-center gap-1 ml-1 font-mono text-[9px] text-text-muted">
+              {match.leg1 && (<span>L1:{match.leg1.score1 ?? '-'}</span>)}
+              {match.leg2 && (<span>L2:{match.leg2.score1 ?? '-'}</span>)}
+            </span>
+          )}
         </div>
-        {isCompleted && score1 !== null ? (
+        {isCompleted || (isTie && (match.leg1?.status === 'completed' || match.leg2?.status === 'completed')) ? (
           <span className={cn(
-            "font-black text-xs px-1.5 py-0.5 rounded bg-background/60 min-w-[20px] text-center",
-            isWinner1 ? "text-primary border border-primary/20" : "text-text-muted"
+            "font-black text-xs px-1.5 py-0.5 rounded bg-background/60 min-w-[24px] text-center",
+            isWinner1 ? "text-primary border border-primary/20 bg-primary/10" : "text-text-muted"
           )}>
-            {score1}
+            {isTie ? `AGG ${agg1}` : score1}
           </span>
         ) : (
           <span className="text-text-muted opacity-30 text-[10px] font-bold italic">-</span>
@@ -641,18 +819,44 @@ function MatchNode({ match, roundLabel, isFinal }: { match: any; roundLabel?: st
           )}>
             {p2Name}
           </span>
+          {isTie && (
+            <span className="flex items-center gap-1 ml-1 font-mono text-[9px] text-text-muted">
+              {match.leg1 && (<span>L1:{match.leg1.score2 ?? '-'}</span>)}
+              {match.leg2 && (<span>L2:{match.leg2.score2 ?? '-'}</span>)}
+            </span>
+          )}
         </div>
-        {isCompleted && score2 !== null ? (
+        {isCompleted || (isTie && (match.leg1?.status === 'completed' || match.leg2?.status === 'completed')) ? (
           <span className={cn(
-            "font-black text-xs px-1.5 py-0.5 rounded bg-background/60 min-w-[20px] text-center",
-            isWinner2 ? "text-primary border border-primary/20" : "text-text-muted"
+            "font-black text-xs px-1.5 py-0.5 rounded bg-background/60 min-w-[24px] text-center",
+            isWinner2 ? "text-primary border border-primary/20 bg-primary/10" : "text-text-muted"
           )}>
-            {score2}
+            {isTie ? `AGG ${agg2}` : score2}
           </span>
         ) : (
           <span className="text-text-muted opacity-30 text-[10px] font-bold italic">-</span>
         )}
       </div>
+
+      {match.tie_status === 'level_pending_admin' && (
+        <div className="bg-amber-500/20 border-t border-amber-500/40 p-1.5 text-center flex flex-col items-center gap-1">
+          <div className="text-[9px] font-black text-amber-400 uppercase tracking-wider flex items-center justify-center gap-1">
+            <AlertTriangle className="w-3 h-3 text-amber-400" />
+            Tie level — Admin resolution required
+          </div>
+          {canManage && onResolveTie && (
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                onResolveTie(match);
+              }}
+              className="px-2.5 py-0.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded font-black text-[9px] uppercase tracking-wider shadow transition-all"
+            >
+              Resolve Tie
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

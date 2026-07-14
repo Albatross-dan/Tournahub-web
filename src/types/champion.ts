@@ -1,4 +1,4 @@
-export type TournamentType = 'knockout' | 'league' | 'group_stage' | 'hybrid' | 'swiss';
+export type TournamentType = 'knockout' | 'league' | 'group_stage' | 'hybrid' | 'swiss' | 'champions_league';
 export type ChampionTitle = 'Tournament Champion' | 'Pro Champion' | 'Legendary Champion';
 export type PrizeCurrency = 'USD' | 'KES' | 'NGN' | 'GHS' | 'UGX' | 'ZAR';
 
@@ -32,6 +32,9 @@ export interface ChampionCardData {
     prize_1st_pct: number;
     prize_2nd_pct: number;
   };
+  poster_image_url?: string | null;
+  poster_ready?: boolean;
+  poster_theme?: string | null;
 }
 
 export interface UserChampionHistory {

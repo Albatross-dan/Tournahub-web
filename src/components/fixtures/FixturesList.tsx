@@ -65,9 +65,9 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
   async function fetchMatchesAndTournament() {
     try {
       const [matchesData, tournamentData, dbMatchesRes] = await Promise.all([
-        tournamentService.getFixturesWithBadges(tournamentId),
-        tournamentService.getById(tournamentId),
-        supabase.from('matches').select('id, leg').eq('tournament_id', tournamentId)
+        tournamentService.getFixturesWithBadges(tournamentId).catch(() => []),
+        tournamentService.getById(tournamentId).catch(() => null),
+        supabase.from('matches').select('id, leg').eq('tournament_id', tournamentId).then(res => res, () => ({ data: [] }))
       ]);
       const rawMatches = matchesData || [];
       const legMap = new Map<string, number>();

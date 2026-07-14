@@ -36,7 +36,10 @@ export const tournamentService = {
           .select(columns)
           .order('created_at', { ascending: false });
           
-        if (viewError) throw viewError;
+        if (viewError) {
+          console.warn('[tournamentService] Both table and view queries failed:', viewError);
+          return [];
+        }
         return viewData || [];
       }
       
@@ -129,7 +132,7 @@ export const tournamentService = {
     }
   },
 
-  async create(tournament: any, doubleRoundRobin?: boolean) {
+  async create(tournament: any, doubleRoundRobin?: boolean, settings?: any) {
     await ensureAuthenticated();
     const { data, error } = await (supabase as any)
       .from('tournaments')
@@ -146,27 +149,39 @@ export const tournamentService = {
       throw error;
     }
 
-    // Insert or upsert settings
+    // Update settings (already created automatically when a tournament row is inserted — update via UPDATE, don't insert)
     if (data?.id) {
-      const { error: settingsError } = await (supabase as any)
+      const settingsPayload = {
+        format: tournament.type || 'league',
+        double_round_robin: doubleRoundRobin ?? false,
+        points_win: 3,
+        points_draw: 1,
+        points_loss: 0,
+        ...(settings || {})
+      };
+      const { error: updError, data: updData } = await (supabase as any)
         .from('tournament_settings')
-        .upsert({
-          tournament_id: data.id,
-          format: tournament.type || 'league',
-          double_round_robin: doubleRoundRobin ?? false,
-          points_win: 3,
-          points_draw: 1,
-          points_loss: 0
-        }, { onConflict: 'tournament_id' });
-      if (settingsError) {
-        console.error('Error upserting tournament settings on create:', settingsError);
+        .update(settingsPayload)
+        .eq('tournament_id', data.id)
+        .select();
+
+      if (updError || !updData || updData.length === 0) {
+        const { error: settingsError } = await (supabase as any)
+          .from('tournament_settings')
+          .upsert({
+            tournament_id: data.id,
+            ...settingsPayload
+          }, { onConflict: 'tournament_id' });
+        if (settingsError) {
+          console.error('Error upserting tournament settings on create:', settingsError);
+        }
       }
     }
 
     return data;
   },
 
-  async update(id: string, updates: Partial<Tournament>, doubleRoundRobin?: boolean) {
+  async update(id: string, updates: Partial<Tournament>, doubleRoundRobin?: boolean, settings?: any) {
     await ensureAuthenticated();
     const { data, error } = await (supabase as any)
       .from('tournaments')
@@ -182,19 +197,31 @@ export const tournamentService = {
       throw error;
     }
 
-    if (doubleRoundRobin !== undefined) {
-      const { error: settingsError } = await (supabase as any)
+    if (doubleRoundRobin !== undefined || settings) {
+      const settingsPayload = {
+        format: updates.type || 'league',
+        double_round_robin: doubleRoundRobin ?? false,
+        points_win: 3,
+        points_draw: 1,
+        points_loss: 0,
+        ...(settings || {})
+      };
+      const { error: updError, data: updData } = await (supabase as any)
         .from('tournament_settings')
-        .upsert({
-          tournament_id: id,
-          format: updates.type || 'league',
-          double_round_robin: doubleRoundRobin,
-          points_win: 3,
-          points_draw: 1,
-          points_loss: 0
-        }, { onConflict: 'tournament_id' });
-      if (settingsError) {
-        console.error('Error upserting tournament settings on update:', settingsError);
+        .update(settingsPayload)
+        .eq('tournament_id', id)
+        .select();
+
+      if (updError || !updData || updData.length === 0) {
+        const { error: settingsError } = await (supabase as any)
+          .from('tournament_settings')
+          .upsert({
+            tournament_id: id,
+            ...settingsPayload
+          }, { onConflict: 'tournament_id' });
+        if (settingsError) {
+          console.error('Error upserting tournament settings on update:', settingsError);
+        }
       }
     }
 
@@ -694,8 +721,8 @@ export const tournamentService = {
       p_tournament_id: tournamentId
     });
     if (error) {
-      console.error('[tournamentService] getFixturesWithBadges failed:', error);
-      throw error;
+      console.warn('[tournamentService] getFixturesWithBadges failed, returning empty list:', error);
+      return [];
     }
     const fixturesList = Array.isArray(data) ? data : (data?.fixtures || []);
     const seen = new Set();

@@ -49,7 +49,7 @@ export interface DisputedMatch {
   match_id: string
   tournament_id: string
   tournament_name: string
-  tournament_type: 'knockout' | 'league' | 'group_stage' | 'swiss' | 'hybrid'
+  tournament_type: 'knockout' | 'league' | 'group_stage' | 'swiss' | 'hybrid' | 'champions_league'
   round: number
   stage: string
   verification_status: VerificationStatus

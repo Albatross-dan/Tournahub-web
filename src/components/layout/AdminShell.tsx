@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Trophy, Users, 
   Gamepad2, Wallet, BarChart3, 
   ChevronRight, LogOut, Shield,
-  Menu, X, Gavel, Wrench, ShieldCheck
+  Menu, X, Gavel, Wrench, ShieldCheck, Store
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -23,6 +23,7 @@ const PERMISSION_LABELS: Record<string, string> = {
   manage_challenges: 'Challenge Manager',
   view_reports: 'Reports Viewer',
   view_players: 'Player Inspector',
+  manage_marketplace: 'Marketplace Moderator',
 };
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
@@ -38,6 +39,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard, show: true },
     { name: 'Platform Gates', path: '/admin/platform', icon: Wrench, show: isFullAdmin },
     { name: 'Staff Management', path: '/admin/staff', icon: ShieldCheck, show: isFullAdmin },
+    { name: 'Marketplace', path: '/admin/marketplace', icon: Store, show: isFullAdmin || can('manage_marketplace') },
     { name: 'Tournaments', path: '/admin/tournaments', icon: Trophy, show: can('manage_tournaments') },
     { name: 'Fixtures', path: '/admin/fixtures', icon: Gamepad2, show: can('manage_matches') },
     { name: 'Disputes', path: '/admin/moderation', icon: Gavel, show: can('manage_disputes') },

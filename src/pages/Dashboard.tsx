@@ -19,6 +19,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import LoadingState from '../components/ui/LoadingState';
 import StatusBadge from '../components/ui/StatusBadge';
 import { TournamentStatus } from '../constants';
+import { get } from 'idb-keyval';
 
 import { useQuery } from '@tanstack/react-query';
 import { useRealtimeTournaments } from '../hooks/useRealtimeTournaments';
@@ -78,7 +79,7 @@ export default function Dashboard() {
   const refreshUnreadCommunityCount = React.useCallback(async () => {
     if (!user?.id) return;
     try {
-      const lastReadStr = localStorage.getItem('community_chat_last_read_at') || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const lastReadStr = (await get<string>('community_chat_last_read_at')) || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { count, error } = await (supabase as any)
         .from('community_chat_messages')
         .select('*', { count: 'exact', head: true })
@@ -108,9 +109,9 @@ export default function Dashboard() {
           schema: 'public',
           table: 'community_chat_messages'
         },
-        (payload) => {
+        async (payload) => {
           const newMessage = payload.new;
-          const lastReadStr = localStorage.getItem('community_chat_last_read_at') || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          const lastReadStr = (await get<string>('community_chat_last_read_at')) || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
           if (newMessage.sender_id !== user.id && newMessage.created_at > lastReadStr) {
             setUnreadCommunityMessages(prev => prev + 1);
           }

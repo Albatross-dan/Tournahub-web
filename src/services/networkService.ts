@@ -92,21 +92,27 @@ class NetworkService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-      // Use a fast static asset (the favicon or index.html) with a cache buster
-      const response = await fetch(`/favicon.ico?_cb=${now}`, {
-        method: 'HEAD',
+      // Try fetching index page with standard GET
+      const response = await fetch(window.location.origin + '/', {
+        method: 'GET',
         signal: controller.signal,
         cache: 'no-store',
-      });
+      }).catch(() => null);
 
       clearTimeout(timeoutId);
       
-      const isHealthy = response.ok || response.status < 500;
-      this.isRealConnectionState = isHealthy;
-      this.isOnlineState = true;
+      if (response) {
+        const isHealthy = response.ok || response.status < 500;
+        this.isRealConnectionState = isHealthy;
+      } else {
+        // Fallback to navigator.onLine if ping asset fails in sandboxed iframe or reverse proxy
+        this.isRealConnectionState = navigator.onLine;
+      }
+      this.isOnlineState = navigator.onLine;
     } catch (e) {
-      // Fetch failed, meaning we are on a dead network/offline
-      this.isRealConnectionState = false;
+      // If fetch fails due to sandbox restrictions, rely on navigator.onLine
+      this.isRealConnectionState = navigator.onLine;
+      this.isOnlineState = navigator.onLine;
     } finally {
       this.pingInProgress = false;
       this.notify();

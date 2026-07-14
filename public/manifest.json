@@ -16,17 +16,58 @@
     {
       "src": "/android-chrome-192x192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/android-chrome-512x512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ],
   "start_url": "/",
   "background_color": "#060812",
   "theme_color": "#060812",
   "display": "standalone",
-  "orientation": "portrait"
+  "orientation": "portrait",
+  "screenshots": [
+    {
+      "src": "/assets/screenshot-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "TournaHub Desktop Dashboard"
+    },
+    {
+      "src": "/assets/screenshot-mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "TournaHub Mobile Experience"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "My Matches",
+      "short_name": "Matches",
+      "description": "View your active and upcoming tournament matches",
+      "url": "/matches",
+      "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "My Wallet",
+      "short_name": "Wallet",
+      "description": "Check your balance, deposit funds, or request withdrawals",
+      "url": "/wallet",
+      "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Marketplace",
+      "short_name": "Marketplace",
+      "description": "Browse listings and buy/sell game accounts or items",
+      "url": "/marketplace",
+      "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192" }]
+    }
+  ]
 }

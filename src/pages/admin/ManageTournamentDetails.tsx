@@ -19,6 +19,7 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import { TournamentStatus } from '../../constants';
 import { useTournamentBadges } from '../../hooks/useTournamentBadges';
 import { useAuth } from '../../contexts/AuthContext';
+import { toast } from 'react-hot-toast';
 
 import TournamentPrizeConfigComponent from '../../components/admin/TournamentPrizeConfigComponent';
 import TournamentDistributePrizesComponent from '../../components/admin/TournamentDistributePrizesComponent';
@@ -45,6 +46,15 @@ export default function ManageTournamentDetails() {
   const [activeTab, setActiveTab] = useState<'players' | 'matches' | 'leaderboard' | 'settings'>('players');
   const [busy, setBusy] = useState(false);
   const { badges } = useTournamentBadges(id);
+
+  const settings = Array.isArray((tournament as any)?.tournament_settings) 
+    ? (tournament as any)?.tournament_settings[0] 
+    : (tournament as any)?.tournament_settings;
+  const swissRounds = settings?.swiss_rounds || 3;
+  const currentRound = settings?.swiss_current_round || Math.max(0, ...matches.filter(m => !m.stage || m.stage === 'swiss' || m.stage === 'league' || m.stage === 'group_stage').map(m => m.round || 0));
+  const hasPlayoffs = matches.some(m => m.stage === 'playoffs');
+  const playoffsCompleted = hasPlayoffs && matches.filter(m => m.stage === 'playoffs').every(m => m.status === 'completed');
+  const hasKnockouts = matches.some(m => m.stage === 'knockout' || m.stage === 'quarterfinal' || m.stage === 'semifinal' || m.stage === 'final' || m.stage === 'round_of_16');
 
   useEffect(() => {
     if (!id) return;
@@ -169,6 +179,63 @@ export default function ManageTournamentDetails() {
     }
   };
 
+  const handleGenerateNextSwissRound = async () => {
+    if (!tournament) return;
+    setBusy(true);
+    try {
+      const nextRound = currentRound + 1;
+      const { error } = await (supabase as any).rpc('fn_generate_swiss_round', {
+        p_tournament_id: tournament.id,
+        p_round: nextRound
+      });
+      if (error) throw error;
+      toast.success(`Round ${nextRound} generated successfully!`);
+      await loadData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to generate next round');
+      alert(`Error generating round: ${err.message || 'Unknown error'}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleGeneratePlayoffRound = async () => {
+    if (!tournament) return;
+    setBusy(true);
+    try {
+      const { error } = await (supabase as any).rpc('fn_cl_generate_knockout', {
+        p_tournament_id: tournament.id,
+        p_stage: 'playoffs'
+      });
+      if (error) throw error;
+      toast.success('Playoff round generated successfully!');
+      await loadData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to generate playoffs');
+      alert(`Error generating playoffs: ${err.message || 'Unknown error'}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleBuildKnockoutBracket = async () => {
+    if (!tournament) return;
+    setBusy(true);
+    try {
+      const { error } = await (supabase as any).rpc('fn_cl_build_bracket_skeleton', {
+        p_tournament_id: tournament.id
+      });
+      if (error) throw error;
+      toast.success('Knockout bracket built successfully!');
+      await loadData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to build knockout bracket');
+      alert(`Error building bracket: ${err.message || 'Unknown error'}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (tournamentLoading || (loading && !registrations.length && !matches.length)) return (
     <AdminShell>
       <LoadingState message="Connecting to Tournament Hub..." />
@@ -231,6 +298,45 @@ export default function ManageTournamentDetails() {
                 className="px-8 py-4 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-2xl font-black uppercase italic tracking-tighter transition-all hover:bg-emerald-500/20 disabled:opacity-50"
                >
                  Advance Bracket
+               </button>
+             )}
+
+             {matches.length > 0 && (tournament.type === 'champions_league' || tournament.type === 'swiss') && currentRound < swissRounds && (
+               <button 
+                onClick={handleGenerateNextSwissRound}
+                disabled={busy}
+                className="px-6 py-4 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-2xl font-black uppercase italic tracking-tighter transition-all hover:bg-emerald-500/20 disabled:opacity-50 flex items-center shadow-lg"
+               >
+                 <Zap className="w-4 h-4 mr-2" />
+                 Generate Next Round ({currentRound + 1}/{swissRounds})
+               </button>
+             )}
+
+             {matches.length > 0 && tournament.type === 'champions_league' && currentRound >= swissRounds && !hasPlayoffs && (
+               <button 
+                onClick={handleGeneratePlayoffRound}
+                disabled={busy}
+                className="px-6 py-4 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-2xl font-black uppercase italic tracking-tighter transition-all hover:bg-purple-500/20 disabled:opacity-50 flex items-center shadow-lg"
+               >
+                 <Zap className="w-4 h-4 mr-2" />
+                 Generate Playoff Round
+               </button>
+             )}
+
+             {matches.length > 0 && tournament.type === 'champions_league' && currentRound >= swissRounds && !hasKnockouts && (
+               <button 
+                onClick={handleBuildKnockoutBracket}
+                disabled={busy || (hasPlayoffs && !playoffsCompleted)}
+                title={hasPlayoffs && !playoffsCompleted ? "Playoff matches must be completed first" : "Build Round of 16 Bracket"}
+                className={cn(
+                  "px-6 py-4 rounded-2xl font-black uppercase italic tracking-tighter transition-all flex items-center border shadow-lg",
+                  hasPlayoffs && !playoffsCompleted 
+                    ? "bg-slate-800/50 text-slate-500 border-slate-700 cursor-not-allowed" 
+                    : "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+                )}
+               >
+                 <Trophy className="w-4 h-4 mr-2" />
+                 Build Knockout Bracket
                </button>
              )}
 

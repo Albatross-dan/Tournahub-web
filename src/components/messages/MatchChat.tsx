@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
 import LoadingState from '../ui/LoadingState';
 import { useTournamentBadges } from '../../hooks/useTournamentBadges';
+import { get, set } from 'idb-keyval';
 
 const playMessageSound = (type: 'sent' | 'received') => {
   try {
@@ -273,11 +274,9 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
     if (conversationId && messages.length > 0) {
       const messagesToCache = messages.filter(m => !m.isOptimistic);
       if (messagesToCache.length > 0) {
-        try {
-          localStorage.setItem(`tournahub-chat-msgs-${conversationId}`, JSON.stringify(messagesToCache));
-        } catch (e) {
+        set(`tournahub-chat-msgs-${conversationId}`, JSON.stringify(messagesToCache)).catch(e => {
           console.warn('[MatchChat] Proactive message caching failed:', e);
-        }
+        });
       }
     }
   }, [messages, conversationId]);
@@ -288,7 +287,7 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
     
     // Attempt cache read for conversation metadata and messages first
     try {
-      const cached = localStorage.getItem(metaCacheKey);
+      const cached = await get<string>(metaCacheKey);
       if (cached) {
         cachedConv = JSON.parse(cached);
         if (cachedConv && cachedConv.id) {
@@ -298,7 +297,7 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
           }
           // Load cached messages for this conversation
           const msgsCacheKey = `tournahub-chat-msgs-${cachedConv.id}`;
-          const cachedMsgs = localStorage.getItem(msgsCacheKey);
+          const cachedMsgs = await get<string>(msgsCacheKey);
           if (cachedMsgs) {
             const parsedMsgs = JSON.parse(cachedMsgs);
             if (Array.isArray(parsedMsgs)) {
@@ -327,7 +326,7 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
         
         // Cache conversation metadata mapping
         try {
-          localStorage.setItem(metaCacheKey, JSON.stringify(conv));
+          await set(metaCacheKey, JSON.stringify(conv));
         } catch (e) {
           console.warn('[MatchChat] Could not cache metadata:', e);
         }
@@ -362,7 +361,7 @@ export default function MatchChat({ matchId, currentUserId, tournamentId }: Matc
           
           // Save loaded messages back to local cache
           try {
-            localStorage.setItem(`tournahub-chat-msgs-${conv.id}`, JSON.stringify(finalMsgs));
+            await set(`tournahub-chat-msgs-${conv.id}`, JSON.stringify(finalMsgs));
           } catch (e) {
             console.warn('[MatchChat] Message caching failed:', e);
           }

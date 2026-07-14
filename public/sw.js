@@ -21,17 +21,44 @@ const PRECACHE_ASSETS = [
   '/robots.txt'
 ];
 
+// Build-time injected assets placeholder
+// workbox-build will inject the manifest here.
+const INJECTED_ASSETS = self.__WB_MANIFEST || [];
+
 // Helper to check if a URL is an asset we want to cache-first
 const STATIC_ASSETS_REGEX = /\.(js|css|woff2?|ttf|png|jpe?g|gif|svg|ico)$/i;
+
+// Helper to limit cache size by evicting oldest entries first
+function limitCacheSize(cacheName, maxItems) {
+  caches.open(cacheName).then((cache) => {
+    cache.keys().then((keys) => {
+      if (keys.length > maxItems) {
+        const keysToDelete = keys.slice(0, keys.length - maxItems);
+        Promise.all(
+          keysToDelete.map((key) => {
+            console.log(`[SW] Evicting old entry from ${cacheName}:`, key.url);
+            return cache.delete(key);
+          })
+        ).catch((err) => {
+          console.error(`[SW] Failed to evict entries from ${cacheName}:`, err);
+        });
+      }
+    });
+  });
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(SHELL_CACHE).then(async (cache) => {
       console.log('[SW] Pre-caching application shell assets with cache-busting...');
+      const manifestAssets = INJECTED_ASSETS.map(entry => typeof entry === 'string' ? entry : entry.url);
+      const allAssetsToPrecache = [...new Set([...PRECACHE_ASSETS, ...manifestAssets])];
+
       // Fetch each precached asset with a cache-buster but store it under its clean URL path
-      for (const asset of PRECACHE_ASSETS) {
+      for (const asset of allAssetsToPrecache) {
         try {
-          const cacheBustedUrl = `${asset}${asset.includes('?') ? '&' : '?'}cb=${Date.now()}`;
+          const isHashed = asset.includes('assets/');
+          const cacheBustedUrl = isHashed ? asset : `${asset}${asset.includes('?') ? '&' : '?'}cb=${Date.now()}`;
           const response = await fetch(new Request(cacheBustedUrl, { cache: 'reload' }));
           if (response.ok) {
             await cache.put(asset, response);
@@ -152,7 +179,9 @@ self.addEventListener('fetch', (event) => {
         return cache.match(request).then((cachedResponse) => {
           const fetchPromise = fetch(request).then((networkResponse) => {
             if (networkResponse && networkResponse.status === 200) {
-              cache.put(request, networkResponse.clone());
+              cache.put(request, networkResponse.clone()).then(() => {
+                limitCacheSize(EXTERNAL_CACHE, 150);
+              });
             }
             return networkResponse;
           }).catch((err) => {

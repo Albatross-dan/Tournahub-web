@@ -23,6 +23,7 @@ END $$;
 -- Profiles
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Profiles are viewable by everyone" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
 -- Tournaments
@@ -74,6 +75,61 @@ ALTER TABLE public.tournament_badge_selections ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Selections are viewable by everyone" ON public.tournament_badge_selections FOR SELECT USING (true);
 CREATE POLICY "Admins can manage selections" ON public.tournament_badge_selections FOR ALL 
 USING (auth.uid() IN (SELECT id FROM public.profiles WHERE role = 'admin'));
+
+-- Marketplace Tables
+ALTER TABLE IF EXISTS public.marketplace_listings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.marketplace_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.marketplace_order_credentials ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.marketplace_disputes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.marketplace_reviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.marketplace_seller_stats ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public read published listings" ON public.marketplace_listings
+  FOR SELECT USING (status = 'published' OR auth.uid() = seller_id);
+CREATE POLICY "Sellers insert own listings" ON public.marketplace_listings
+  FOR INSERT WITH CHECK (auth.uid() = seller_id);
+CREATE POLICY "Sellers update own listings" ON public.marketplace_listings
+  FOR UPDATE USING (auth.uid() = seller_id) WITH CHECK (auth.uid() = seller_id);
+CREATE POLICY "Sellers delete own listings" ON public.marketplace_listings
+  FOR DELETE USING (auth.uid() = seller_id);
+
+CREATE POLICY "Participants view orders" ON public.marketplace_orders
+  FOR SELECT USING (auth.uid() = buyer_id OR auth.uid() = seller_id);
+CREATE POLICY "Participants update orders" ON public.marketplace_orders
+  FOR UPDATE USING (auth.uid() = buyer_id OR auth.uid() = seller_id);
+
+CREATE POLICY "Participants read credentials" ON public.marketplace_order_credentials
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.marketplace_orders o
+      WHERE o.id = order_id AND (o.buyer_id = auth.uid() OR o.seller_id = auth.uid())
+    )
+  );
+CREATE POLICY "Sellers insert credentials" ON public.marketplace_order_credentials
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.marketplace_orders o
+      WHERE o.id = order_id AND o.seller_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Participants view disputes" ON public.marketplace_disputes
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.marketplace_orders o
+      WHERE o.id = order_id AND (o.buyer_id = auth.uid() OR o.seller_id = auth.uid())
+    )
+  );
+CREATE POLICY "Participants create disputes" ON public.marketplace_disputes
+  FOR INSERT WITH CHECK (auth.uid() = opener_id);
+
+CREATE POLICY "Public read reviews" ON public.marketplace_reviews
+  FOR SELECT USING (true);
+CREATE POLICY "Buyers insert reviews" ON public.marketplace_reviews
+  FOR INSERT WITH CHECK (auth.uid() = buyer_id);
+
+CREATE POLICY "Public read seller stats" ON public.marketplace_seller_stats
+  FOR SELECT USING (true);
 
 -- 4. RE-APPLY THE REGISTRATION RPC
 CREATE OR REPLACE FUNCTION public.register_for_tournament(

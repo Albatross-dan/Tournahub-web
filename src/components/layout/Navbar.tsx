@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { 
   Trophy, Wallet, RefreshCw, LayoutDashboard, 
   Calendar, MessageSquare, Shield, Bell, Menu, X, Tv,
-  HelpCircle, Download
+  HelpCircle, Download, Store
 } from 'lucide-react';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
 import NotificationBell from '../notifications/NotificationBell';
@@ -37,6 +37,7 @@ export default function Navbar() {
       { name: 'Home', path: '/dashboard', icon: LayoutDashboard },
       { name: 'Matches', path: '/matches', icon: Calendar },
       { name: 'Tournaments', path: '/tournaments', icon: Trophy },
+      { name: 'Marketplace', path: '/marketplace', icon: Store },
       { name: 'Chat', path: '/chat', icon: MessageSquare },
       { name: 'Wallet', path: '/wallet', icon: Wallet },
       { name: 'Rules', path: '/rules', icon: HelpCircle },
