@@ -471,7 +471,7 @@ export default function Dashboard() {
                      <AnimatePresence mode="popLayout" initial={false}>
                       {/* Show first 2 matches always */}
                       {scheduledMatches.slice(0, 2).map((match) => (
-                        <motion.div key={match.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
+                        <motion.div key={match.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
                           <MatchCard match={match} userSubmittedMatchIds={userSubmittedMatchIds} />
                         </motion.div>
                       ))}
@@ -488,7 +488,7 @@ export default function Dashboard() {
                           className="overflow-hidden space-y-4"
                         >
                           {scheduledMatches.slice(2).map((match) => (
-                            <motion.div key={match.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
+                            <motion.div key={match.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
                               <MatchCard match={match} userSubmittedMatchIds={userSubmittedMatchIds} />
                             </motion.div>
                           ))}
@@ -901,7 +901,7 @@ function MatchCard({ match, userSubmittedMatchIds = [] }: { match: any; userSubm
         to={`/matches/${match.id}`} 
         className="btn-primary py-2 px-4 text-[10px] shadow-none group-hover:shadow-lg group-hover:shadow-primary/20 rounded-xl text-center inline-block"
       >
-        DEPLOY
+        VIEW DETAILS
       </Link>
     );
   };

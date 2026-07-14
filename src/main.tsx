@@ -16,15 +16,16 @@ try {
         console.warn('[SW] PWA Service Worker registration failed:', err);
       });
 
-    // Clean up other unrecognized legacy service workers
+    // Clean up other unrecognized legacy service workers safely
     navigator.serviceWorker.getRegistrations().then((registrations) => {
       for (const registration of registrations) {
         const scriptURL = registration.active?.scriptURL || registration.installing?.scriptURL || registration.waiting?.scriptURL || '';
         const isFcm = scriptURL.includes('firebase-messaging-sw');
         const isPwaSw = scriptURL.includes('sw.js');
         
-        if (isFcm || isPwaSw) {
-          console.log('[SW Cleanup] Preserving active service worker registration:', registration.scope, scriptURL);
+        // Critically guard against unregistering empty/initializing scripts or our active service workers
+        if (!scriptURL || isFcm || isPwaSw) {
+          console.log('[SW Cleanup] Preserving active/initializing service worker registration:', registration.scope, scriptURL);
           continue;
         }
         
