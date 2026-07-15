@@ -105,6 +105,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Bypass requests with Range headers to prevent media/image decoding corruption in Chrome/Safari
+  if (request.headers.has('range')) {
+    return;
+  }
+
   // 2. Bypass hot-module replacement and specific websocket dev environments
   if (url.search.includes('bypass') || url.pathname.includes('hot-update') || url.port === '5173') {
     return;
@@ -128,7 +133,7 @@ self.addEventListener('fetch', (event) => {
   // 4. SPA Navigation Strategy: Network-First falling back to Cached SPA shell
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(new Request(request, { cache: 'no-cache' }))
+      fetch(request)
         .then((response) => {
           // Keep navigation cache updated
           const responseClone = response.clone();
