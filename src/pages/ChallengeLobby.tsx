@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import Shell from '../components/layout/Shell';
 import { useAuth } from '../contexts/AuthContext';
@@ -771,20 +771,28 @@ export default function ChallengeLobby() {
                     )}
 
                     {/* Winner Badge */}
-                    <div className="w-12 h-12 flex items-center justify-center mt-2 mb-1">
+                    <Link 
+                      to={`/players/${winner.username}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-12 h-12 flex items-center justify-center mt-2 mb-1 group/badge cursor-pointer"
+                    >
                       <PlayerBadge 
                         badgeId={winner.winner_badge_id} 
                         username={winner.username || 'Winner'} 
                         size="md"
-                        className="w-10 h-10"
+                        className="w-10 h-10 group-hover/badge:scale-105 transition-transform"
                       />
-                    </div>
+                    </Link>
 
                     {/* Winner Username */}
                     <div className="w-full">
-                      <span className="block text-xs font-black text-white uppercase italic tracking-tight truncate max-w-full">
+                      <Link
+                        to={`/players/${winner.username}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="block text-xs font-black text-white uppercase italic tracking-tight truncate max-w-full hover:text-primary transition-colors cursor-pointer"
+                      >
                         {winner.username}
-                      </span>
+                      </Link>
                     </div>
 
                     {/* Stats */}
@@ -875,17 +883,25 @@ export default function ChallengeLobby() {
                         {/* VS Separator with both badges facing each other */}
                         <div className="flex items-center gap-4">
                           <div className="flex items-center gap-2">
-                            <PlayerBadge 
-                              badgeId={myBadgeId} 
-                              username={myUsername || 'You'} 
-                              size="md"
-                              className="w-12 h-12 ring-2 ring-blue-500/20"
-                            />
+                            <Link 
+                              to={`/players/${myUsername}`}
+                              className="group cursor-pointer"
+                            >
+                              <PlayerBadge 
+                                badgeId={myBadgeId} 
+                                username={myUsername || 'You'} 
+                                size="md"
+                                className="w-12 h-12 ring-2 ring-blue-500/20 group-hover:scale-105 transition-transform"
+                              />
+                            </Link>
                             <div className="hidden sm:block">
                               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">You</span>
-                              <span className="text-sm font-black text-white italic truncate max-w-[100px] block">
+                              <Link 
+                                to={`/players/${myUsername}`}
+                                className="text-sm font-black text-white italic truncate max-w-[100px] block hover:text-primary transition-colors cursor-pointer"
+                              >
                                 {myUsername || 'You'}
-                              </span>
+                              </Link>
                             </div>
                           </div>
 
@@ -894,18 +910,26 @@ export default function ChallengeLobby() {
                           </span>
 
                           <div className="flex items-center gap-2">
-                            <PlayerBadge 
-                              badgeId={match.opponent_badge_id} 
-                              username={match.opponent_username || 'Opponent'} 
-                              size="md"
-                              className="w-12 h-12 ring-2 ring-red-500/20"
-                            />
+                            <Link 
+                              to={`/players/${match.opponent_username}`}
+                              className="group cursor-pointer"
+                            >
+                              <PlayerBadge 
+                                badgeId={match.opponent_badge_id} 
+                                username={match.opponent_username || 'Opponent'} 
+                                size="md"
+                                className="w-12 h-12 ring-2 ring-red-500/20 group-hover:scale-105 transition-transform"
+                              />
+                            </Link>
                             <div>
                               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Opponent</span>
                               <div className="flex items-center gap-1">
-                                <span className="text-sm font-black text-white italic truncate max-w-[120px] block">
+                                <Link 
+                                  to={`/players/${match.opponent_username}`}
+                                  className="text-sm font-black text-white italic truncate max-w-[120px] block hover:text-primary transition-colors cursor-pointer"
+                                >
                                   {match.opponent_username || 'Opponent'}
-                                </span>
+                                </Link>
                                 {match.opponent_country && (
                                   <span className="text-xs" title={match.opponent_country}>🌐</span>
                                 )}
@@ -1078,15 +1102,25 @@ export default function ChallengeLobby() {
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-center gap-3">
-                          <PlayerBadge 
-                            badgeId={item.creator_badge_id} 
-                            username={item.creator_username || 'Creator'} 
-                            size="md"
-                            className="w-12 h-12"
-                          />
+                          <Link 
+                            to={`/players/${item.creator_username}`}
+                            className="cursor-pointer hover:scale-105 transition-transform"
+                          >
+                            <PlayerBadge 
+                              badgeId={item.creator_badge_id} 
+                              username={item.creator_username || 'Creator'} 
+                              size="md"
+                              className="w-12 h-12"
+                            />
+                          </Link>
                           <div className="space-y-1">
                             <div className="flex items-center gap-1.5">
-                              <span className="text-sm font-black text-white italic">{item.creator_username || 'Anonymous'}</span>
+                              <Link 
+                                to={`/players/${item.creator_username}`}
+                                className="text-sm font-black text-white italic hover:text-primary transition-colors cursor-pointer"
+                              >
+                                {item.creator_username || 'Anonymous'}
+                              </Link>
                               {item.creator_country && (
                                 <span className="text-xs" title={item.creator_country}>🌐</span>
                               )}
@@ -1177,16 +1211,28 @@ export default function ChallengeLobby() {
                       className="bg-zinc-950 hover:bg-zinc-900/60 transition-all border border-zinc-800/80 p-4 rounded-2xl flex items-center justify-between gap-4 cursor-pointer"
                     >
                       <div className="flex items-center gap-3">
-                        <PlayerBadge 
-                          badgeId={oppBadge} 
-                          username={oppUsername || 'Opponent'} 
-                          size="sm"
-                          className="w-10 h-10"
-                        />
+                        <Link 
+                          to={`/players/${oppUsername}`} 
+                          onClick={(e) => e.stopPropagation()} 
+                          className="cursor-pointer hover:scale-105 transition-transform"
+                        >
+                          <PlayerBadge 
+                            badgeId={oppBadge} 
+                            username={oppUsername || 'Opponent'} 
+                            size="sm"
+                            className="w-10 h-10"
+                          />
+                        </Link>
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-black text-zinc-400 uppercase tracking-widest">vs</span>
-                            <span className="text-sm font-bold text-white">{oppUsername || 'Opponent'}</span>
+                            <Link 
+                              to={`/players/${oppUsername}`} 
+                              onClick={(e) => e.stopPropagation()} 
+                              className="text-sm font-bold text-white hover:text-primary transition-colors cursor-pointer"
+                            >
+                              {oppUsername || 'Opponent'}
+                            </Link>
                           </div>
                           <p className="text-[10px] text-zinc-500">
                             {new Date(hist.played_at).toLocaleDateString()} at {new Date(hist.played_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

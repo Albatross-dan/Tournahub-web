@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Star, ShieldCheck, Tag, Zap, Coins, Trophy, User } from 'lucide-react';
 import { MarketplaceListing } from '../../types/marketplace';
 import { marketplaceService } from '../../services/marketplaceService';
@@ -10,15 +10,16 @@ interface ListingCardProps {
 }
 
 export const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
+  const navigate = useNavigate();
   const thumbnailPath = listing.screenshots && listing.screenshots.length > 0 ? listing.screenshots[0] : '';
   const imageUrl = marketplaceService.getListingImageUrl(thumbnailPath);
 
   const formatUSD = (amount: number) => `$${Number(amount || 0).toFixed(2)}`;
 
   return (
-    <Link
-      to={`/marketplace/listing/${listing.id}`}
-      className="card bg-surface border-border-main hover:border-primary/50 transition-all duration-300 group overflow-hidden rounded-3xl shadow-lg flex flex-col h-full relative"
+    <div
+      onClick={() => navigate(`/marketplace/listing/${listing.id}`)}
+      className="card bg-surface border-border-main hover:border-primary/50 transition-all duration-300 group overflow-hidden rounded-3xl shadow-lg flex flex-col h-full relative cursor-pointer"
     >
       {/* Thumbnail Section */}
       <div className="relative aspect-[16/10] w-full bg-slate-900/80 overflow-hidden">
@@ -85,8 +86,12 @@ export const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
 
         {/* Seller Reputation Footer */}
         <div className="pt-3 border-t border-white/5 flex items-center justify-between text-xs">
-          <div className="flex items-center space-x-2 min-w-0">
-            <div className="w-6 h-6 rounded-full bg-slate-800 border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+          <Link
+            to={`/players/${listing.seller_username}`}
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center space-x-2 min-w-0 group/seller z-10 hover:text-primary transition-colors cursor-pointer"
+          >
+            <div className="w-6 h-6 rounded-full bg-slate-800 border border-white/10 overflow-hidden flex items-center justify-center shrink-0 group-hover/seller:scale-105 transition-transform">
               {listing.seller_avatar_url ? (
                 <img src={listing.seller_avatar_url} alt="" className="w-full h-full object-cover" />
               ) : (
@@ -94,14 +99,14 @@ export const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
               )}
             </div>
             <div className="truncate">
-              <span className="text-[11px] font-bold text-slate-300 truncate flex items-center gap-1">
+              <span className="text-[11px] font-bold text-slate-300 group-hover/seller:text-primary transition-colors truncate flex items-center gap-1">
                 {listing.seller_username || 'Seller'}
                 {listing.seller_verified && (
                   <ShieldCheck className="w-3 h-3 text-primary shrink-0" title="Verified Seller" />
                 )}
               </span>
             </div>
-          </div>
+          </Link>
 
           <div className="flex items-center gap-2 shrink-0">
             {listing.seller_average_rating !== undefined && listing.seller_average_rating > 0 ? (
@@ -118,6 +123,6 @@ export const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
           </div>
         </div>
       </div>
-    </Link>
+    </div>
   );
 };

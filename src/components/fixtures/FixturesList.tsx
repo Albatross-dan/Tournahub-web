@@ -7,7 +7,7 @@ import { PlayerBadge } from '../ui/PlayerBadge';
 import { useMatchCompletionSync } from '../../hooks/useMatchCompletionSync';
 import { Calendar, Trophy, Share2, Grid, List, Download, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { DownloadHeader, DownloadFooter } from '../common/DownloadShareAction';
 import { toPng } from 'html-to-image';
 import { toast } from 'react-hot-toast';
@@ -753,6 +753,44 @@ function PlayerCard({
 }) {
   const isLeft = align === 'left';
   
+  if (username && username.toLowerCase() !== 'tbd' && username !== 'Anonymous') {
+    return (
+      <Link 
+        to={`/players/${username}`}
+        className={cn(
+          "flex items-center gap-2 md:gap-3 min-w-0 group cursor-pointer", 
+          !isLeft && "flex-row-reverse text-right"
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <PlayerBadge 
+          badgeId={badgeId} 
+          username={username || 'TBD'} 
+          size="md"
+          className={cn(
+            "w-10 h-10 md:w-14 md:h-14 rounded-xl border-2 transition-all group-hover:scale-105",
+            isWinner ? "border-primary shadow-lg shadow-primary/20" : "border-border-main"
+          )}
+        />
+        <div className="min-w-0 flex-1">
+          <p className={cn(
+            "font-black text-[9px] md:text-xs uppercase italic tracking-tighter truncate leading-tight group-hover:text-primary transition-colors",
+            isWinner ? "text-primary" : "text-text-muted"
+          )}>
+            {getPublicIdentity(username) || 'TBD'}
+          </p>
+          {(score !== null && score !== undefined) ? (
+            <p className="text-xl md:text-3xl font-black text-text-main italic tracking-tighter leading-none mt-1">
+              {score}
+          </p>
+          ) : (
+            <div className="h-4 md:h-6" />
+          )}
+        </div>
+      </Link>
+    );
+  }
+
   return (
     <div className={cn(
       "flex items-center gap-2 md:gap-3 min-w-0", 

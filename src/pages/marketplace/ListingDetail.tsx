@@ -366,8 +366,11 @@ export default function ListingDetail() {
                 Seller Information
               </h4>
 
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 rounded-2xl bg-slate-800 border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+              <Link
+                to={`/players/${listing.seller_username}`}
+                className="flex items-center space-x-3 group cursor-pointer"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-slate-800 border border-white/10 overflow-hidden flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                   {listing.seller_avatar_url ? (
                     <img src={listing.seller_avatar_url} alt="" className="w-full h-full object-cover" />
                   ) : (
@@ -376,14 +379,14 @@ export default function ListingDetail() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <h5 className="text-sm font-black text-white uppercase italic truncate">
+                    <h5 className="text-sm font-black text-white uppercase italic truncate group-hover:text-primary transition-colors">
                       {listing.seller_username || 'Unknown Seller'}
                     </h5>
                     {listing.seller_verified && (
                       <ShieldCheck className="w-4 h-4 text-primary shrink-0" title="Verified Seller" />
                     )}
                   </div>
-                  <div className="flex items-center gap-2 mt-1 text-xs font-bold">
+                  <div className="flex items-center gap-2 mt-1 text-xs font-bold text-slate-400 group-hover:text-slate-300">
                     {listing.seller_average_rating !== undefined && listing.seller_average_rating > 0 ? (
                       <span className="flex items-center gap-1 text-amber-400">
                         <Star className="w-3.5 h-3.5 fill-amber-400" />
@@ -397,7 +400,7 @@ export default function ListingDetail() {
                     <span className="text-emerald-400 font-mono">{listing.seller_completed_sales || 0} Sold</span>
                   </div>
                 </div>
-              </div>
+              </Link>
 
               {listing.seller_suspended && (
                 <div className="p-3 bg-red-950/50 border border-red-500/50 rounded-xl text-xs font-black text-red-400 uppercase tracking-wider text-center">
@@ -406,8 +409,8 @@ export default function ListingDetail() {
               )}
 
               <Link
-                to={`/marketplace/profile/${listing.seller_id}`}
-                className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-black text-xs uppercase italic tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 block text-center"
+                to={`/players/${listing.seller_username}`}
+                className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-black text-xs uppercase italic tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 block text-center cursor-pointer"
               >
                 <User className="w-3.5 h-3.5" />
                 <span>View Seller Public Profile</span>

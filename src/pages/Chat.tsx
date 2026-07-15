@@ -7,7 +7,7 @@ import { MessageSquare, ChevronRight, User } from 'lucide-react';
 import { matchService } from '../services/matchService';
 import LoadingState from '../components/ui/LoadingState';
 import { formatDistanceToNow } from 'date-fns';
-import { getPublicIdentity } from '../lib/utils';
+import { getPublicIdentity, cn } from '../lib/utils';
 
 export default function Chat() {
   const { user, refetchSignal } = useAuth();
@@ -109,7 +109,18 @@ export default function Chat() {
                 >
                   <div className="flex items-center space-x-6 min-w-0 flex-1">
                     <div className="relative">
-                      <div className="w-14 h-14 rounded-2xl bg-slate-900 flex items-center justify-center border border-slate-800 shadow-lg group-hover:border-primary/30 transition-colors overflow-hidden">
+                      <Link 
+                        to={opponent?.username ? `/players/${opponent.username}` : '#'}
+                        onClick={(e) => {
+                          if (opponent?.username) {
+                            e.stopPropagation();
+                          }
+                        }}
+                        className={cn(
+                          "w-14 h-14 rounded-2xl bg-slate-900 flex items-center justify-center border border-slate-800 shadow-lg group-hover:border-primary/30 transition-all overflow-hidden block",
+                          opponent?.username ? "cursor-pointer hover:scale-105 z-10" : "pointer-events-none"
+                        )}
+                      >
                         {opponent?.avatar_url ? (
                           <img 
                             src={opponent.avatar_url} 
@@ -120,9 +131,9 @@ export default function Chat() {
                         ) : (
                           <User className="w-6 h-6 text-slate-700" />
                         )}
-                      </div>
+                      </Link>
                       {unreadCount > 0 && (
-                        <div className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-slate-950 animate-pulse">
+                        <div className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-slate-950 animate-pulse z-20">
                           {unreadCount}
                         </div>
                       )}
@@ -138,9 +149,20 @@ export default function Chat() {
                       </div>
                       
                       <div className="flex items-baseline justify-between gap-4">
-                        <h3 className="text-xl font-black text-white italic uppercase tracking-tighter truncate">
+                        <Link
+                          to={opponent?.username ? `/players/${opponent.username}` : '#'}
+                          onClick={(e) => {
+                            if (opponent?.username) {
+                              e.stopPropagation();
+                            }
+                          }}
+                          className={cn(
+                            "hover:text-primary transition-colors block text-xl font-black text-white italic uppercase tracking-tighter truncate",
+                            opponent?.username ? "cursor-pointer z-10" : "pointer-events-none"
+                          )}
+                        >
                           {opponentName}
-                        </h3>
+                        </Link>
                         {lastMessage && (
                           <span className="text-[10px] font-medium text-slate-500 uppercase shrink-0">
                             {formatDistanceToNow(new Date(lastMessage.created_at))} ago

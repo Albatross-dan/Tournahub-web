@@ -702,7 +702,10 @@ function MessageBubble({ msg, isMe, isConsecutive, isLastInGroup, onDelete }: Bu
       {!isMe && (
         <div className="w-9 shrink-0 flex justify-center mr-2 mb-1">
           {isLastInGroup ? (
-            <div className="w-9 h-9 rounded-full bg-slate-850 border border-slate-700/80 overflow-hidden flex items-center justify-center font-black text-[10px] text-emerald-400 shrink-0 shadow-md">
+            <Link 
+              to={`/players/${msg.profiles?.username}`}
+              className="w-9 h-9 rounded-full bg-slate-850 border border-slate-700/80 overflow-hidden flex items-center justify-center font-black text-[10px] text-emerald-400 shrink-0 shadow-md hover:scale-105 transition-transform cursor-pointer"
+            >
               {msg.profiles?.avatar_url ? (
                 <img 
                   src={msg.profiles.avatar_url} 
@@ -713,7 +716,7 @@ function MessageBubble({ msg, isMe, isConsecutive, isLastInGroup, onDelete }: Bu
               ) : (
                 (msg.profiles?.username || 'U').slice(0, 2).toUpperCase()
               )}
-            </div>
+            </Link>
           ) : (
             // Empty placeholder box to align consecutive bubbles perfectly
             <div className="w-9 h-9" />
@@ -736,9 +739,12 @@ function MessageBubble({ msg, isMe, isConsecutive, isLastInGroup, onDelete }: Bu
         {/* Username in light green header */}
         {!isMe && !isConsecutive && (
           <div className="flex items-center space-x-1.5 mb-1 pl-1 select-none">
-            <span className="text-[11.5px] font-black text-[#10b981] uppercase tracking-wide">
+            <Link 
+              to={`/players/${msg.profiles?.username}`}
+              className="text-[11.5px] font-black text-[#10b981] hover:text-[#10b981]/80 uppercase tracking-wide cursor-pointer transition-colors"
+            >
               {msg.profiles?.username || 'Contender'}
-            </span>
+            </Link>
             {hasBadge && (
               <span className={cn(
                 "inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest leading-none border",

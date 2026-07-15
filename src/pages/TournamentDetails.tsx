@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { Tournament } from '../types/database';
 import { tournamentService } from '../services/tournamentService';
@@ -1104,14 +1104,34 @@ export default function TournamentDetails() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                    {registrations.length > 0 ? registrations.map((player, idx) => (
                      <div key={`player-${player.user_id || player.id || idx}`} className="card p-4 flex items-center space-x-3 bg-surface hover:border-primary-light transition-all shadow-sm">
-                       <PlayerBadge 
-                         badgeId={player.badge_id} 
-                         username={player.username || player.profiles?.username || 'Anonymous'} 
-                         size="md" 
-                       />
+                       {player.username || player.profiles?.username ? (
+                         <Link to={`/players/${player.username || player.profiles?.username}`}>
+                           <PlayerBadge 
+                             badgeId={player.badge_id} 
+                             username={player.username || player.profiles?.username || 'Anonymous'} 
+                             size="md" 
+                             className="hover:scale-105 transition-transform"
+                           />
+                         </Link>
+                       ) : (
+                         <PlayerBadge 
+                           badgeId={player.badge_id} 
+                           username="Anonymous" 
+                           size="md" 
+                         />
+                       )}
                        <div className="flex-1 min-w-0">
                          <div className="flex items-center gap-2">
-                            <p className="font-bold text-text-main uppercase italic tracking-tight truncate">{player.username || player.profiles?.username || 'Anonymous'}</p>
+                            {player.username || player.profiles?.username ? (
+                              <Link 
+                                to={`/players/${player.username || player.profiles?.username}`}
+                                className="font-bold text-text-main uppercase italic tracking-tight truncate hover:text-primary transition-colors"
+                              >
+                                {player.username || player.profiles?.username}
+                              </Link>
+                            ) : (
+                              <p className="font-bold text-text-main uppercase italic tracking-tight truncate">Anonymous</p>
+                            )}
                          </div>
                          <div className="flex items-center gap-2">
                            <p className="text-[10px] text-primary font-bold uppercase tracking-widest">{player.registration_status || player.status || 'Registered'}</p>

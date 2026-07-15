@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { motion } from 'motion/react';
+import { Link } from 'react-router-dom';
 import { cn } from '../../lib/utils';
 import LoadingState from '../ui/LoadingState';
 import { tournamentService } from '../../services/tournamentService';
@@ -213,16 +214,33 @@ export default function StandingsTable({ tournamentId, groupName, registrations,
                     </td>
                     <td className="px-3 md:px-6 py-4">
                       <div className="flex items-center space-x-3">
-                        <div className="flex items-center space-x-3 min-w-0">
-                          <PlayerBadge 
-                            badgeId={row.badge_id} 
-                            username={row.username} 
-                            size="sm" 
-                          />
-                          <span className="font-bold text-text-main uppercase italic tracking-tight truncate max-w-[120px] sm:max-w-none">
-                            {row.username}
-                          </span>
-                        </div>
+                        {row.username ? (
+                          <Link 
+                            to={`/players/${row.username}`}
+                            className="flex items-center space-x-3 min-w-0 group cursor-pointer"
+                          >
+                            <PlayerBadge 
+                              badgeId={row.badge_id} 
+                              username={row.username} 
+                              size="sm" 
+                              className="group-hover:scale-105 transition-transform"
+                            />
+                            <span className="font-bold text-text-main uppercase italic tracking-tight truncate max-w-[120px] sm:max-w-none group-hover:text-primary transition-colors">
+                              {row.username}
+                            </span>
+                          </Link>
+                        ) : (
+                          <div className="flex items-center space-x-3 min-w-0">
+                            <PlayerBadge 
+                              badgeId={row.badge_id} 
+                              username="Anonymous" 
+                              size="sm" 
+                            />
+                            <span className="font-bold text-text-muted uppercase italic tracking-tight truncate max-w-[120px] sm:max-w-none">
+                              Anonymous
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-3 md:px-6 py-4 text-center text-text-muted">{row.played}</td>

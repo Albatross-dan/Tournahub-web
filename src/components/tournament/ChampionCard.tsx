@@ -4,6 +4,7 @@ import confetti from 'canvas-confetti';
 import { Trophy, Award, Star, ShieldCheck, TrendingUp, Crown } from 'lucide-react';
 import { ChampionCardData, PrizeCurrency } from '../../types/champion';
 import { cn } from '../../lib/utils';
+import { Link } from 'react-router-dom';
 
 interface ChampionCardProps {
   data: ChampionCardData;
@@ -183,22 +184,27 @@ export default function ChampionCard({ data }: ChampionCardProps) {
                 )} />
               </div>
 
-              <div className={cn(
-                "p-1 rounded-full bg-gradient-to-tr",
-                data.champion_title === 'Legendary Champion' ? "from-[#FFD700] to-yellow-600" :
-                data.champion_title === 'Pro Champion' ? "from-[#00E5FF] to-blue-600" :
-                "from-[#A8FF78] to-emerald-600"
-              )}>
-                <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-black bg-slate-900">
-                  {data.winner.avatar_url ? (
-                    <img src={data.winner.avatar_url} alt={data.winner.username || 'Winner'} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-3xl font-display text-slate-400">
-                      {(data.winner.username || 'W').slice(0, 2).toUpperCase()}
-                    </div>
-                  )}
+              <Link 
+                to={`/players/${data.winner.username}`}
+                className="block hover:scale-105 transition-transform"
+              >
+                <div className={cn(
+                  "p-1 rounded-full bg-gradient-to-tr",
+                  data.champion_title === 'Legendary Champion' ? "from-[#FFD700] to-yellow-600" :
+                  data.champion_title === 'Pro Champion' ? "from-[#00E5FF] to-blue-600" :
+                  "from-[#A8FF78] to-emerald-600"
+                )}>
+                  <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-black bg-slate-900">
+                    {data.winner.avatar_url ? (
+                      <img src={data.winner.avatar_url} alt={data.winner.username || 'Winner'} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-3xl font-display text-slate-400">
+                        {(data.winner.username || 'W').slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              </Link>
               {/* Badge */}
               <div className="absolute -bottom-2 -right-2 bg-black border border-slate-800 p-2 rounded-xl shadow-lg flex items-center justify-center text-2xl">
                 {badgeEmojis[data.winner.badge_id || ''] || '🏆'}
@@ -216,9 +222,14 @@ export default function ChampionCard({ data }: ChampionCardProps) {
             transition={{ delay: 0.8 }}
             className="mt-6 text-center"
           >
-            <h3 className="text-3xl font-display tracking-wide uppercase mb-1">
-              {data.winner?.username || 'Undisclosed Winner'}
-            </h3>
+            <Link 
+              to={`/players/${data.winner?.username}`}
+              className="hover:text-primary transition-colors inline-block"
+            >
+              <h3 className="text-3xl font-display tracking-wide uppercase mb-1">
+                {data.winner?.username || 'Undisclosed Winner'}
+              </h3>
+            </Link>
             <div className="flex items-center justify-center gap-3">
               {data.is_paid && data.winner && data.winner.prize_amount > 0 && (
                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 font-mono text-xs font-black uppercase tracking-wider">
@@ -249,8 +260,11 @@ export default function ChampionCard({ data }: ChampionCardProps) {
             className="w-full border-t border-slate-800/50 mt-4 pt-6 pb-2"
           >
             <div className="flex items-center justify-between px-2">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-900 border border-slate-800">
+              <Link 
+                to={`/players/${data.runner_up.username}`}
+                className="flex items-center gap-3 group cursor-pointer"
+              >
+                <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-900 border border-slate-800 group-hover:scale-105 transition-transform">
                   {data.runner_up.avatar_url ? (
                     <img src={data.runner_up.avatar_url} alt={data.runner_up.username || 'Runner Up'} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   ) : (
@@ -261,9 +275,9 @@ export default function ChampionCard({ data }: ChampionCardProps) {
                 </div>
                 <div>
                   <div className="font-mono text-[10px] text-slate-500 uppercase tracking-tighter">Runner Up</div>
-                  <div className="font-display text-lg uppercase tracking-tight">{data.runner_up.username}</div>
+                  <div className="font-display text-lg uppercase tracking-tight group-hover:text-primary transition-colors">{data.runner_up.username}</div>
                 </div>
-              </div>
+              </Link>
               <div className="text-right">
                 {data.winner.score !== null && data.runner_up.score !== null && (
                    <div className="font-mono text-sm text-slate-500 mb-1">

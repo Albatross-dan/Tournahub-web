@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import Shell from '../components/layout/Shell';
 import { useAuth } from '../contexts/AuthContext';
@@ -282,18 +282,24 @@ export default function ChallengeChat() {
               <ArrowLeft className="w-5 h-5" />
             </button>
             
-            <div className="flex items-center gap-2">
+            <Link 
+              to={oppUsername ? `/players/${oppUsername}` : '#'}
+              className={cn(
+                "flex items-center gap-2 group",
+                oppUsername ? "cursor-pointer" : "pointer-events-none"
+              )}
+            >
               <PlayerBadge 
                 badgeId={oppBadge} 
                 username={oppUsername || 'Opponent'} 
                 size="sm"
-                className="w-8 h-8"
+                className="w-8 h-8 group-hover:scale-105 transition-transform"
               />
               <div>
                 <p className="text-xs font-black uppercase text-zinc-500 leading-none">MATCH CHAT</p>
-                <p className="text-sm font-black text-white italic leading-none mt-1">{oppUsername || 'Opponent'}</p>
+                <p className="text-sm font-black text-white italic leading-none mt-1 group-hover:text-primary transition-colors">{oppUsername || 'Opponent'}</p>
               </div>
-            </div>
+            </Link>
           </div>
 
           <div className="text-[10px] font-black uppercase bg-blue-500/10 text-blue-400 px-2 py-1 rounded border border-blue-500/20">
@@ -394,15 +400,31 @@ export default function ChallengeChat() {
                     isMe ? "self-end flex-row-reverse" : "self-start"
                   )}
                 >
-                  <PlayerBadge 
-                    badgeId={senderBadge} 
-                    username={senderUsername || 'Sender'} 
-                    size="xs"
-                    className="w-6 h-6 mb-1"
-                  />
+                  <Link
+                    to={senderUsername ? `/players/${senderUsername}` : '#'}
+                    className={cn(
+                      "group hover:scale-105 transition-transform block",
+                      senderUsername ? "cursor-pointer" : "pointer-events-none"
+                    )}
+                  >
+                    <PlayerBadge 
+                      badgeId={senderBadge} 
+                      username={senderUsername || 'Sender'} 
+                      size="xs"
+                      className="w-6 h-6 mb-1"
+                    />
+                  </Link>
                   <div className="space-y-1">
                     {!isMe && (
-                      <p className="text-[9px] font-black uppercase text-zinc-500 pl-1">{senderUsername}</p>
+                      <Link
+                        to={senderUsername ? `/players/${senderUsername}` : '#'}
+                        className={cn(
+                          "text-[9px] font-black uppercase text-zinc-500 pl-1 hover:text-primary transition-colors block",
+                          senderUsername ? "cursor-pointer" : "pointer-events-none"
+                        )}
+                      >
+                        {senderUsername}
+                      </Link>
                     )}
                     <div 
                       className={cn(

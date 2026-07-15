@@ -7,7 +7,7 @@ import { PlayerBadge } from '../ui/PlayerBadge';
 import { useMatchCompletionSync } from '../../hooks/useMatchCompletionSync';
 import { Trophy, Shield, HelpCircle, CornerDownRight, Compass, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { overrideTournamentChampion } from '../../utils/tournamentOverrides';
 import DownloadShareAction, { DownloadHeader, DownloadFooter } from '../common/DownloadShareAction';
 import { useAuth } from '../../contexts/AuthContext';
@@ -776,16 +776,34 @@ function MatchNode({ match, roundLabel, isFinal, onResolveTie, canManage }: { ma
         "flex items-center justify-between px-3 py-2 transition-all duration-300",
         isWinner1 ? "bg-emerald-500/5" : isWinner2 ? "opacity-30 blur-[1px] filter grayscale saturate-50" : ""
       )}>
-        <div className="flex items-center gap-2 min-w-0">
-          <PlayerBadge badgeId={match.player1_badge_id} username={match.player1_username || 'TBD'} size="xs" className="w-5 h-5 rounded" />
-          <span className={cn(
-            "font-black text-[11px] truncate uppercase tracking-tight",
-            isWinner1 ? "text-primary" : "text-text-main"
-          )}>
-            {p1Name}
-          </span>
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {match.player1_username && match.player1_username.toLowerCase() !== 'tbd' && match.player1_username !== 'Anonymous' ? (
+            <Link 
+              to={`/players/${match.player1_username}`}
+              className="flex items-center gap-2 min-w-0 group cursor-pointer flex-1"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <PlayerBadge badgeId={match.player1_badge_id} username={match.player1_username || 'TBD'} size="xs" className="w-5 h-5 rounded group-hover:scale-105 transition-transform" />
+              <span className={cn(
+                "font-black text-[11px] truncate uppercase tracking-tight group-hover:text-primary transition-colors flex-1",
+                isWinner1 ? "text-primary" : "text-text-main"
+              )}>
+                {p1Name}
+              </span>
+            </Link>
+          ) : (
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <PlayerBadge badgeId={match.player1_badge_id} username={match.player1_username || 'TBD'} size="xs" className="w-5 h-5 rounded" />
+              <span className={cn(
+                "font-black text-[11px] truncate uppercase tracking-tight flex-1",
+                isWinner1 ? "text-primary" : "text-text-main"
+              )}>
+                {p1Name}
+              </span>
+            </div>
+          )}
           {isTie && (
-            <span className="flex items-center gap-1 ml-1 font-mono text-[9px] text-text-muted">
+            <span className="flex items-center gap-1 ml-1 font-mono text-[9px] text-text-muted shrink-0">
               {match.leg1 && (<span>L1:{match.leg1.score1 ?? '-'}</span>)}
               {match.leg2 && (<span>L2:{match.leg2.score1 ?? '-'}</span>)}
             </span>
@@ -793,13 +811,13 @@ function MatchNode({ match, roundLabel, isFinal, onResolveTie, canManage }: { ma
         </div>
         {isCompleted || (isTie && (match.leg1?.status === 'completed' || match.leg2?.status === 'completed')) ? (
           <span className={cn(
-            "font-black text-xs px-1.5 py-0.5 rounded bg-background/60 min-w-[24px] text-center",
+            "font-black text-xs px-1.5 py-0.5 rounded bg-background/60 min-w-[24px] text-center shrink-0 ml-2",
             isWinner1 ? "text-primary border border-primary/20 bg-primary/10" : "text-text-muted"
           )}>
             {isTie ? `AGG ${agg1}` : score1}
           </span>
         ) : (
-          <span className="text-text-muted opacity-30 text-[10px] font-bold italic">-</span>
+          <span className="text-text-muted opacity-30 text-[10px] font-bold italic shrink-0 ml-2">-</span>
         )}
       </div>
 
@@ -811,16 +829,34 @@ function MatchNode({ match, roundLabel, isFinal, onResolveTie, canManage }: { ma
         "flex items-center justify-between px-3 py-2 transition-all duration-300",
         isWinner2 ? "bg-emerald-500/5" : isWinner1 ? "opacity-30 blur-[1px] filter grayscale saturate-50" : ""
       )}>
-        <div className="flex items-center gap-2 min-w-0">
-          <PlayerBadge badgeId={match.player2_badge_id} username={match.player2_username || 'TBD'} size="xs" className="w-5 h-5 rounded" />
-          <span className={cn(
-            "font-black text-[11px] truncate uppercase tracking-tight",
-            isWinner2 ? "text-primary" : "text-text-main"
-          )}>
-            {p2Name}
-          </span>
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {match.player2_username && match.player2_username.toLowerCase() !== 'tbd' && match.player2_username !== 'Anonymous' ? (
+            <Link 
+              to={`/players/${match.player2_username}`}
+              className="flex items-center gap-2 min-w-0 group cursor-pointer flex-1"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <PlayerBadge badgeId={match.player2_badge_id} username={match.player2_username || 'TBD'} size="xs" className="w-5 h-5 rounded group-hover:scale-105 transition-transform" />
+              <span className={cn(
+                "font-black text-[11px] truncate uppercase tracking-tight group-hover:text-primary transition-colors flex-1",
+                isWinner2 ? "text-primary" : "text-text-main"
+              )}>
+                {p2Name}
+              </span>
+            </Link>
+          ) : (
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <PlayerBadge badgeId={match.player2_badge_id} username={match.player2_username || 'TBD'} size="xs" className="w-5 h-5 rounded" />
+              <span className={cn(
+                "font-black text-[11px] truncate uppercase tracking-tight flex-1",
+                isWinner2 ? "text-primary" : "text-text-main"
+              )}>
+                {p2Name}
+              </span>
+            </div>
+          )}
           {isTie && (
-            <span className="flex items-center gap-1 ml-1 font-mono text-[9px] text-text-muted">
+            <span className="flex items-center gap-1 ml-1 font-mono text-[9px] text-text-muted shrink-0">
               {match.leg1 && (<span>L1:{match.leg1.score2 ?? '-'}</span>)}
               {match.leg2 && (<span>L2:{match.leg2.score2 ?? '-'}</span>)}
             </span>
@@ -828,13 +864,13 @@ function MatchNode({ match, roundLabel, isFinal, onResolveTie, canManage }: { ma
         </div>
         {isCompleted || (isTie && (match.leg1?.status === 'completed' || match.leg2?.status === 'completed')) ? (
           <span className={cn(
-            "font-black text-xs px-1.5 py-0.5 rounded bg-background/60 min-w-[24px] text-center",
+            "font-black text-xs px-1.5 py-0.5 rounded bg-background/60 min-w-[24px] text-center shrink-0 ml-2",
             isWinner2 ? "text-primary border border-primary/20 bg-primary/10" : "text-text-muted"
           )}>
             {isTie ? `AGG ${agg2}` : score2}
           </span>
         ) : (
-          <span className="text-text-muted opacity-30 text-[10px] font-bold italic">-</span>
+          <span className="text-text-muted opacity-30 text-[10px] font-bold italic shrink-0 ml-2">-</span>
         )}
       </div>
 

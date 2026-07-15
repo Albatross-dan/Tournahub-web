@@ -137,14 +137,22 @@ export const moderationService = {
   async getUser(userId: string) {
     await ensureAuthenticated();
     try {
-      const { data, error } = await supabase
-        .from('v_admin_profiles')
-        .select('*')
-        .eq('id', userId)
+      const { data, error } = await (supabase as any)
+        .rpc('admin_get_user_profile', { p_user_id: userId })
         .single();
 
       if (error) {
-        console.warn('[moderationService] v_admin_profiles select failed, using fallback:', error);
+        const isPermissionError = 
+          error.code === '42501' || 
+          error.message?.includes('PERMISSION_DENIED') || 
+          error.message?.includes('admin/moderator only') ||
+          error.message?.toLowerCase().includes('permission');
+
+        if (isPermissionError) {
+          throw new Error('PERMISSION_DENIED: admin/moderator only');
+        }
+
+        console.warn('[moderationService] admin_get_user_profile RPC failed, using fallback:', error);
         return await this.fallbackGetUser(userId);
       }
 
@@ -178,8 +186,11 @@ export const moderationService = {
         notes: notes,
         logs: logs
       };
-    } catch (err) {
-      console.warn('[moderationService] v_admin_profiles select exception, using fallback:', err);
+    } catch (err: any) {
+      if (err?.message?.includes('PERMISSION_DENIED')) {
+        throw err;
+      }
+      console.warn('[moderationService] admin_get_user_profile RPC exception, using fallback:', err);
       return await this.fallbackGetUser(userId);
     }
   },

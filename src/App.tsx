@@ -34,6 +34,7 @@ import Landing from './pages/Landing';
 import Rules from './pages/Rules';
 import Help from './pages/Help';
 import CompleteProfile from './pages/CompleteProfile';
+import PlayerProfile from './pages/PlayerProfile';
 
 import ChallengeLobby from './pages/ChallengeLobby';
 import ChallengeDetails from './pages/ChallengeDetails';
@@ -118,7 +119,7 @@ function RootPlatformGate({ children }: { children: React.ReactNode }) {
     return <LoadingState fullPage />;
   }
 
-  const isPublicRoute = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/terms', '/privacy-policy', '/privacy', '/legal', '/rules', '/help', '/verify-email', '/verify-callback'].includes(location.pathname);
+  const isPublicRoute = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/terms', '/privacy-policy', '/privacy', '/legal', '/rules', '/help', '/verify-email', '/verify-callback'].includes(location.pathname) || location.pathname.startsWith('/players/');
 
   if (status?.is_blocked && !isPublicRoute && !isAdmin) {
     return <MaintenanceScreen />;
@@ -155,6 +156,7 @@ function AppRoutes() {
                 <Route path="/help" element={<Help />} />
                 <Route path="/verify-email" element={<VerifyEmail />} />
                 <Route path="/verify-callback" element={<VerifyCallback />} />
+                <Route path="/players/:username" element={<PlayerProfile />} />
                 
                 <Route element={<ProtectedRoute />}>
                   <Route path="/complete-profile" element={<CompleteProfile />} />

@@ -494,8 +494,8 @@ export default function Dashboard() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Match of the Week Card */}
                   {highlights.match_of_week_match_id && (
-                    <Link
-                      to={`/matches/${highlights.match_of_week_match_id}`}
+                    <div
+                      onClick={() => navigate(`/matches/${highlights.match_of_week_match_id}`)}
                       className="card p-4 bg-surface hover:bg-surface/80 border border-border-main hover:border-primary/20 rounded-3xl flex flex-col justify-between min-h-[140px] transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl hover:scale-[1.01]"
                     >
                       <div className="flex items-center justify-between">
@@ -511,7 +511,13 @@ export default function Dashboard() {
                         </p>
                         <div className="flex items-center justify-between">
                           <div className="flex flex-col items-start min-w-0 flex-1">
-                            <span className="text-sm font-black text-text-main uppercase italic truncate max-w-full">
+                            <span 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/players/${highlights.match_of_week_player1_username}`);
+                              }}
+                              className="text-sm font-black text-text-main uppercase italic truncate max-w-full hover:text-primary transition-colors cursor-pointer"
+                            >
                               {highlights.match_of_week_player1_username}
                             </span>
                             <span className="text-[9px] text-text-muted font-bold uppercase">Player 1</span>
@@ -523,7 +529,13 @@ export default function Dashboard() {
                             <span className="text-[8px] text-text-muted font-bold uppercase tracking-widest">VS</span>
                           </div>
                           <div className="flex flex-col items-end min-w-0 flex-1 text-right">
-                            <span className="text-sm font-black text-text-main uppercase italic truncate max-w-full">
+                            <span 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/players/${highlights.match_of_week_player2_username}`);
+                              }}
+                              className="text-sm font-black text-text-main uppercase italic truncate max-w-full hover:text-primary transition-colors cursor-pointer"
+                            >
                               {highlights.match_of_week_player2_username}
                             </span>
                             <span className="text-[9px] text-text-muted font-bold uppercase">Player 2</span>
@@ -535,13 +547,13 @@ export default function Dashboard() {
                         <span className="text-text-muted font-bold uppercase tracking-widest">Combined Goals</span>
                         <span className="font-black text-text-main bg-surface-hover px-1.5 py-0.5 rounded border border-border-main">{highlights.match_of_week_combined_goals} goals</span>
                       </div>
-                    </Link>
+                    </div>
                   )}
 
                   {/* Player of the Week Card */}
                   {highlights.player_of_week_user_id && (
                     <Link
-                      to={`/marketplace/profile/${highlights.player_of_week_user_id}`}
+                      to={`/players/${highlights.player_of_week_username}`}
                       className="card p-4 bg-surface hover:bg-surface/80 border border-border-main hover:border-primary/20 rounded-3xl flex flex-col justify-between min-h-[140px] transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl hover:scale-[1.01]"
                     >
                       <div className="flex items-center justify-between">

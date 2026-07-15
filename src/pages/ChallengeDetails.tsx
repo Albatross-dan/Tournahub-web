@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import Shell from '../components/layout/Shell';
 import { useAuth } from '../contexts/AuthContext';
@@ -400,7 +400,10 @@ export default function ChallengeDetails() {
 
           {detail.challenge_status === 'waiting' ? (
             <div className="flex flex-col items-center justify-center py-12 text-center space-y-6 relative z-10">
-              <div className="relative">
+              <Link 
+                to={`/players/${detail.player1_username}`}
+                className="relative group cursor-pointer hover:scale-105 transition-transform"
+              >
                 <div className="absolute inset-0 bg-blue-500/10 blur-xl rounded-full" />
                 <PlayerBadge 
                   badgeId={detail.player1_badge_id} 
@@ -408,10 +411,15 @@ export default function ChallengeDetails() {
                   size="xl"
                   className="w-24 h-24 relative z-10"
                 />
-              </div>
+              </Link>
 
               <div className="space-y-1">
-                <h2 className="text-xl font-black text-white uppercase italic">{detail.player1_username}</h2>
+                <Link 
+                  to={`/players/${detail.player1_username}`}
+                  className="hover:text-primary transition-colors cursor-pointer"
+                >
+                  <h2 className="text-xl font-black text-white uppercase italic">{detail.player1_username}</h2>
+                </Link>
                 <p className="text-xs text-zinc-500 uppercase tracking-widest">Waiting for an opponent...</p>
               </div>
 
@@ -441,25 +449,30 @@ export default function ChallengeDetails() {
               <div className="grid grid-cols-3 items-center text-center">
                 {/* Player 1 */}
                 <div className="flex flex-col items-center space-y-3">
-                  <div className="relative">
-                    <PlayerBadge 
-                      badgeId={detail.player1_badge_id} 
-                      username={detail.player1_username || 'P1'} 
-                      size="lg"
-                      className="w-16 h-16 sm:w-20 sm:h-20"
-                    />
-                    {detail.winner_id === detail.player1_id && detail.challenge_status === 'completed' && (
-                      <span className="absolute -top-2 -right-2 text-2xl drop-shadow animate-bounce">👑</span>
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="text-sm sm:text-base font-black text-white italic truncate max-w-[120px]">{detail.player1_username}</h3>
-                    {detail.player1_legacy_score !== null && detail.player1_legacy_score > 0 && (
-                      <span className="inline-block mt-1 text-[10px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
-                        🏆 {detail.player1_legacy_score}
-                      </span>
-                    )}
-                  </div>
+                  <Link 
+                    to={`/players/${detail.player1_username}`}
+                    className="flex flex-col items-center space-y-3 group cursor-pointer"
+                  >
+                    <div className="relative group-hover:scale-105 transition-transform">
+                      <PlayerBadge 
+                        badgeId={detail.player1_badge_id} 
+                        username={detail.player1_username || 'P1'} 
+                        size="lg"
+                        className="w-16 h-16 sm:w-20 sm:h-20"
+                      />
+                      {detail.winner_id === detail.player1_id && detail.challenge_status === 'completed' && (
+                        <span className="absolute -top-2 -right-2 text-2xl drop-shadow animate-bounce">👑</span>
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="text-sm sm:text-base font-black text-white italic truncate max-w-[120px] group-hover:text-primary transition-colors">{detail.player1_username}</h3>
+                    </div>
+                  </Link>
+                  {detail.player1_legacy_score !== null && detail.player1_legacy_score > 0 && (
+                    <span className="inline-block mt-1 text-[10px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                      🏆 {detail.player1_legacy_score}
+                    </span>
+                  )}
                 </div>
 
                 {/* VS Divider / Scores */}
@@ -487,25 +500,30 @@ export default function ChallengeDetails() {
 
                 {/* Player 2 */}
                 <div className="flex flex-col items-center space-y-3">
-                  <div className="relative">
-                    <PlayerBadge 
-                      badgeId={detail.player2_badge_id} 
-                      username={detail.player2_username || 'P2'} 
-                      size="lg"
-                      className="w-16 h-16 sm:w-20 sm:h-20"
-                    />
-                    {detail.winner_id === detail.player2_id && detail.challenge_status === 'completed' && (
-                      <span className="absolute -top-2 -right-2 text-2xl drop-shadow animate-bounce">👑</span>
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="text-sm sm:text-base font-black text-white italic truncate max-w-[120px]">{detail.player2_username}</h3>
-                    {detail.player2_legacy_score !== null && detail.player2_legacy_score > 0 && (
-                      <span className="inline-block mt-1 text-[10px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
-                        🏆 {detail.player2_legacy_score}
-                      </span>
-                    )}
-                  </div>
+                  <Link 
+                    to={`/players/${detail.player2_username}`}
+                    className="flex flex-col items-center space-y-3 group cursor-pointer"
+                  >
+                    <div className="relative group-hover:scale-105 transition-transform">
+                      <PlayerBadge 
+                        badgeId={detail.player2_badge_id} 
+                        username={detail.player2_username || 'P2'} 
+                        size="lg"
+                        className="w-16 h-16 sm:w-20 sm:h-20"
+                      />
+                      {detail.winner_id === detail.player2_id && detail.challenge_status === 'completed' && (
+                        <span className="absolute -top-2 -right-2 text-2xl drop-shadow animate-bounce">👑</span>
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="text-sm sm:text-base font-black text-white italic truncate max-w-[120px] group-hover:text-primary transition-colors">{detail.player2_username}</h3>
+                    </div>
+                  </Link>
+                  {detail.player2_legacy_score !== null && detail.player2_legacy_score > 0 && (
+                    <span className="inline-block mt-1 text-[10px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                      🏆 {detail.player2_legacy_score}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
