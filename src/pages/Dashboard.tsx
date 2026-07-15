@@ -365,6 +365,12 @@ export default function Dashboard() {
                     ease: "linear" 
                   } : {}}
                   className="flex gap-6 w-max"
+                  style={{ 
+                    willChange: 'transform',
+                    transform: 'translate3d(0, 0, 0)',
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden'
+                  } as any}
                 >
                   {sliderItems.map((tournament, idx) => (
                     <div key={`${tournament.id}-${idx}`} className="w-[300px] sm:w-[500px] shrink-0">
@@ -783,8 +789,25 @@ function TournamentHeroCard({ tournament }: { tournament: Tournament }) {
     : (tournament as any).registrations_count ?? 0;
 
   return (
-    <Link to={`/tournaments/${tournament.id}`} className="block group relative aspect-[1.4/1] rounded-[2.5rem] overflow-hidden border border-border-main hover:border-primary/50 transition-all duration-500 shadow-2xl">
-      <img src={tournament.banner_url || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=800'} alt="" className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+    <Link 
+      to={`/tournaments/${tournament.id}`} 
+      className="block group relative aspect-[1.4/1] rounded-[2.5rem] overflow-hidden border border-border-main hover:border-primary/50 transition-all duration-500 shadow-2xl"
+      style={{
+        transform: 'translate3d(0, 0, 0)',
+        backfaceVisibility: 'hidden',
+        WebkitBackfaceVisibility: 'hidden'
+      }}
+    >
+      <img 
+        src={tournament.banner_url || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=800'} 
+        alt="" 
+        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+        style={{
+          transform: 'translate3d(0, 0, 0)',
+          backfaceVisibility: 'hidden',
+          WebkitBackfaceVisibility: 'hidden'
+        }}
+      />
       <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-black/40 to-transparent" />
       
       {/* Glow Effect */}
@@ -798,7 +821,7 @@ function TournamentHeroCard({ tournament }: { tournament: Tournament }) {
             </span>
             <StatusBadge status={tournament.status} />
           </div>
-          <div className="w-14 h-14 bg-amber-500/80 backdrop-blur-md rounded-full flex items-center justify-center border border-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.3)]">
+          <div className="w-14 h-14 bg-amber-500/90 rounded-full flex items-center justify-center border border-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.3)]">
             <span className="text-white font-black text-sm italic">${tournament.entry_fee || '0'}</span>
           </div>
         </div>
@@ -811,7 +834,7 @@ function TournamentHeroCard({ tournament }: { tournament: Tournament }) {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-black/60 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/10 flex flex-col justify-center relative overflow-hidden">
+          <div className="bg-black/85 px-5 py-3 rounded-2xl border border-white/10 flex flex-col justify-center relative overflow-hidden">
             <div className="flex items-center justify-between relative z-10">
               <div>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Contenders</p>
@@ -825,7 +848,7 @@ function TournamentHeroCard({ tournament }: { tournament: Tournament }) {
               style={{ width: `${Math.min(100, (Number(regCount) / (tournament.max_players || 1)) * 100)}%` }} 
             />
           </div>
-          <div className="bg-black/60 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/10 flex flex-col justify-center">
+          <div className="bg-black/85 px-5 py-3 rounded-2xl border border-white/10 flex flex-col justify-center">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Start time</p>

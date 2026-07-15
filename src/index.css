@@ -72,7 +72,7 @@
   }
   
   .card {
-    @apply bg-surface/50 backdrop-blur-sm border border-border-main rounded-[2rem] overflow-hidden shadow-xl;
+    @apply bg-surface border border-border-main rounded-[2rem] overflow-hidden shadow-xl;
   }
 
   .scrollbar-hide {
