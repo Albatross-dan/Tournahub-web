@@ -43,7 +43,6 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <Navbar />
  
         {/* Top-aligned warnings and banners */}
-        <NotificationsOffBanner />
         <UpcomingMaintenanceBanner />
         <AnnouncementBanner />
  
