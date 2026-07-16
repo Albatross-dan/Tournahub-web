@@ -365,12 +365,6 @@ export default function Dashboard() {
                     ease: "linear" 
                   } : {}}
                   className="flex gap-6 w-max"
-                  style={{ 
-                    willChange: 'transform',
-                    transform: 'translate3d(0, 0, 0)',
-                    backfaceVisibility: 'hidden',
-                    WebkitBackfaceVisibility: 'hidden'
-                  } as any}
                 >
                   {sliderItems.map((tournament, idx) => (
                     <div key={`${tournament.id}-${idx}`} className="w-[300px] sm:w-[500px] shrink-0">
@@ -410,7 +404,7 @@ export default function Dashboard() {
           {/* Main Feed: Scheduled Matches */}
           <motion.div variants={item} className="lg:col-span-2 space-y-8">
             {/* Community Chat + 1v1 Challenge Side-by-Side Row */}
-            <motion.div variants={item} className="flex flex-row items-stretch gap-2 w-full duration-300">
+            <div className="flex flex-row items-stretch gap-2 w-full duration-300">
               {/* Left Card: Community Chat */}
               <div 
                 role="button"
@@ -486,7 +480,7 @@ export default function Dashboard() {
                   <ArrowUpRight className="w-3.5 h-3.5 text-[#818cf8] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </div>
               </div>
-            </motion.div>
+            </div>
 
             {highlights && (highlights.match_of_week_match_id || highlights.player_of_week_user_id) && (
               <div className="space-y-4">
@@ -792,21 +786,11 @@ function TournamentHeroCard({ tournament }: { tournament: Tournament }) {
     <Link 
       to={`/tournaments/${tournament.id}`} 
       className="block group relative aspect-[1.4/1] rounded-[2.5rem] overflow-hidden border border-border-main hover:border-primary/50 transition-all duration-500 shadow-2xl"
-      style={{
-        transform: 'translate3d(0, 0, 0)',
-        backfaceVisibility: 'hidden',
-        WebkitBackfaceVisibility: 'hidden'
-      }}
     >
       <img 
         src={tournament.banner_url || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=800'} 
         alt="" 
         className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
-        style={{
-          transform: 'translate3d(0, 0, 0)',
-          backfaceVisibility: 'hidden',
-          WebkitBackfaceVisibility: 'hidden'
-        }}
       />
       <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-black/40 to-transparent" />
       
