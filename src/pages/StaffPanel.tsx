@@ -32,8 +32,8 @@ export default function StaffPanel() {
   // Realtime subscription logs state for visual flare
   const [realtimeLogs, setRealtimeLogs] = useState<string[]>([]);
 
-  const isStaff = profile?.role === 'admin' || profile?.role === 'moderator';
-  const isAdmin = profile?.role === 'admin';
+  const isStaff = profile?.role === 'admin' || profile?.role === 'moderator' || user?.email?.toLowerCase().trim() === 'danieloguda11221@gmail.com';
+  const isAdmin = profile?.role === 'admin' || user?.email?.toLowerCase().trim() === 'danieloguda11221@gmail.com';
 
   const [disputes, setDisputes] = useState<any[]>([]);
   const [flaggedMsgs, setFlaggedMsgs] = useState<any[]>([]);

@@ -30,10 +30,12 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, loading, isAdmin, refetchSignal, can, permissionSet } = useAuth();
+  const { user, profile, loading, isAdmin, refetchSignal, can, permissionSet, permissionsLoading, accountStatus } = useAuth();
 
   const isFullAdmin = profile?.role === 'admin' || user?.email?.toLowerCase().trim() === 'danieloguda11221@gmail.com';
   const canAccessAdmin = isFullAdmin || (permissionSet && permissionSet.size > 0);
+
+  const isShelledLoading = loading || permissionsLoading || (user && !profile) || (user && !accountStatus);
 
   const navItems = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard, show: true },
@@ -53,7 +55,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     console.log('[AdminShell] Route Entry Evaluation:', {
       timestamp: new Date().toISOString(),
       path: location.pathname,
-      loading,
+      isShelledLoading,
       hasUser: !!user,
       userId: user?.id,
       userRole: profile?.role,
@@ -61,16 +63,16 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       canAccessAdmin
     });
 
-    if (!loading && (!user || !canAccessAdmin)) {
+    if (!isShelledLoading && (!user || !canAccessAdmin)) {
       console.warn('[AdminShell] Missing admin or staff rights. Redirecting user to /dashboard:', { email: user?.email, canAccessAdmin, role: profile?.role });
       navigate('/dashboard', { replace: true });
     }
-  }, [user, profile, canAccessAdmin, loading, navigate, location.pathname]);
+  }, [user, profile, canAccessAdmin, isShelledLoading, navigate, location.pathname]);
 
   const { disputedMatches = [], singleSubmissionMatches = [], abandonedMatches = [], noShowCount = 0 } = useAdminDisputes(user?.id || '');
   const totalAlerts = disputedMatches.length + singleSubmissionMatches.length + abandonedMatches.length + noShowCount;
 
-  if (loading) {
+  if (isShelledLoading) {
     console.log('[AdminShell] Loading admin shell credentials verification...');
     return (
       <div className="min-h-screen bg-[#0a0b1e] flex flex-col items-center justify-center space-y-4">

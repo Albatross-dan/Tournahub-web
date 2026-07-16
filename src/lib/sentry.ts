@@ -2,7 +2,39 @@ import * as Sentry from '@sentry/react';
 
 // Use environment variables for Sentry configuration with fallback defaults
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN || 'https://2b8baddd618a1cd34a57348a4e071a7b@o4511415237935104.ingest.de.sentry.io/4511642745110608';
-const ENVIRONMENT = import.meta.env.MODE || 'development';
+
+// Determine the environment dynamically at runtime in the browser.
+// Because both AI Studio previews and real production deployments compile using `npm run build` (where import.meta.env.MODE is 'production'),
+// we rely on window.location.hostname to distinguish the actual host at runtime.
+const getEnvironment = (): string => {
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    
+    // Explicit production domains
+    if (hostname === 'tournahub.me' || hostname === 'www.tournahub.me') {
+      return 'production';
+    }
+    
+    // Google AI Studio previews, Vercel previews, local development, etc.
+    if (
+      hostname.includes('run.app') ||
+      hostname.includes('vercel.app') ||
+      hostname.includes('localhost') ||
+      hostname.includes('127.0.0.1')
+    ) {
+      return 'development';
+    }
+  }
+  
+  // Build-time fallbacks (e.g. custom environment variable or Vite mode)
+  if (import.meta.env.VITE_APP_ENV) {
+    return import.meta.env.VITE_APP_ENV;
+  }
+  
+  return import.meta.env.MODE === 'production' ? 'production' : 'development';
+};
+
+const ENVIRONMENT = getEnvironment();
 const RELEASE = import.meta.env.VITE_SENTRY_RELEASE || 'tournahub-web@latest';
 
 // Initialize Sentry

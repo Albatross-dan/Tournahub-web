@@ -10,6 +10,37 @@ if (typeof window !== 'undefined') {
     deferredPrompt = e;
     // Dispatch a custom event to notify any mounted hook instances
     window.dispatchEvent(new CustomEvent('pwa-deferred-prompt-changed'));
+
+    // Automatically trigger on first user gesture (click or touch) if not prompted in this session
+    const handleFirstGesture = () => {
+      try {
+        const isInstalled = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
+        if (deferredPrompt && !isInstalled && !sessionStorage.getItem('pwa_prompt_fired_automatically')) {
+          sessionStorage.setItem('pwa_prompt_fired_automatically', 'true');
+          console.log('[PWA] Automatically triggering installation prompt on first user gesture.');
+          deferredPrompt.prompt()
+            .then(() => deferredPrompt.userChoice)
+            .then(({ outcome }: any) => {
+              console.log(`[PWA] Auto prompt user choice outcome: ${outcome}`);
+              if (outcome === 'accepted') {
+                deferredPrompt = null;
+                window.dispatchEvent(new CustomEvent('pwa-deferred-prompt-changed'));
+              }
+            })
+            .catch((err: any) => {
+              console.warn('[PWA] Auto prompt failed or was cancelled:', err);
+            });
+        }
+      } catch (err) {
+        console.warn('[PWA] Auto prompt gesture error:', err);
+      } finally {
+        document.removeEventListener('click', handleFirstGesture);
+        document.removeEventListener('touchstart', handleFirstGesture);
+      }
+    };
+
+    document.addEventListener('click', handleFirstGesture);
+    document.addEventListener('touchstart', handleFirstGesture);
   });
 
   window.addEventListener('appinstalled', () => {
