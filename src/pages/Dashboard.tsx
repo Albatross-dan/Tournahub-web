@@ -346,7 +346,7 @@ export default function Dashboard() {
             <p className="text-xs text-text-muted font-bold uppercase tracking-widest leading-none mt-1">Tap a card to open the details view.</p>
           </div>
           
-          <div className="relative overflow-hidden py-4 -mx-4 sm:mx-0">
+          <div className="relative overflow-hidden py-4 -mx-4 sm:mx-0" style={{ isolation: 'isolate', transform: 'translate3d(0,0,0)' }}>
             <div className="flex px-4 sm:px-0">
               {activeLoading ? (
                 <div className="w-full flex gap-6 overflow-hidden">
@@ -365,6 +365,13 @@ export default function Dashboard() {
                     ease: "linear" 
                   } : {}}
                   className="flex gap-6 w-max"
+                  style={{
+                    willChange: 'transform',
+                    transform: 'translate3d(0, 0, 0)',
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden',
+                    isolation: 'isolate'
+                  } as any}
                 >
                   {sliderItems.map((tournament, idx) => (
                     <div key={`${tournament.id}-${idx}`} className="w-[300px] sm:w-[500px] shrink-0">
@@ -404,7 +411,7 @@ export default function Dashboard() {
           {/* Main Feed: Scheduled Matches */}
           <motion.div variants={item} className="lg:col-span-2 space-y-8">
             {/* Community Chat + 1v1 Challenge Side-by-Side Row */}
-            <div className="flex flex-row items-stretch gap-2 w-full duration-300">
+            <div className="flex flex-row items-stretch gap-2 w-full duration-300" style={{ isolation: 'isolate', transform: 'translate3d(0,0,0)' }}>
               {/* Left Card: Community Chat */}
               <div 
                 role="button"
@@ -483,7 +490,7 @@ export default function Dashboard() {
             </div>
 
             {highlights && (highlights.match_of_week_match_id || highlights.player_of_week_user_id) && (
-              <div className="space-y-4">
+              <div className="space-y-4" style={{ isolation: 'isolate', transform: 'translate3d(0,0,0)' }}>
                 <div className="flex items-center justify-between">
                   <h2 className="text-sm font-black text-text-main uppercase tracking-widest flex items-center gap-2 italic">
                     <span className="w-1.5 h-3 bg-primary rounded-full italic inline-block" />

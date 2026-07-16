@@ -123,7 +123,7 @@ export default function RecentChampions() {
       </div>
 
       {/* Square Frame Card with custom sliding animation */}
-      <div className="relative w-full aspect-square rounded-[2rem] overflow-hidden bg-gradient-to-br from-surface to-background border border-border-main hover:border-amber-500/30 transition-all duration-300 shadow-xl group flex flex-col">
+      <div className="relative w-full aspect-square rounded-[2rem] overflow-hidden bg-gradient-to-br from-surface to-background border border-border-main hover:border-amber-500/30 transition-all duration-300 shadow-xl group flex flex-col" style={{ isolation: 'isolate', transform: 'translate3d(0,0,0)' }}>
         <AnimatePresence initial={false} custom={direction} mode="wait">
           <motion.div
             key={currentIndex}
@@ -133,6 +133,7 @@ export default function RecentChampions() {
             animate="center"
             exit="exit"
             className="absolute inset-0 z-10"
+            style={{ willChange: 'transform', transform: 'translate3d(0,0,0)', backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
           >
             <Link
               to={`/tournaments/${currentChampion.tournament_id}/champion`}
