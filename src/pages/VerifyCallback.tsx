@@ -254,7 +254,7 @@ export default function VerifyCallback() {
                   AUTHORIZING CREDENTIALS...
                 </h3>
                 <p className="text-[11px] text-slate-400 font-semibold leading-relaxed uppercase tracking-wider">
-                  Establishing secure tunnel with Supabase authenticators. Hold on, fighter.
+                  Establishing secure connection. Hold on, fighter.
                 </p>
               </div>
             </div>
