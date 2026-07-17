@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Trophy, Phone, Loader2, CheckCircle, XCircle, LogOut, Globe } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import SEO from '../components/common/SEO';
@@ -74,6 +74,7 @@ function getFlagEmoji(countryCode: string) {
 export default function CompleteProfile() {
   const { user, profile, refreshAuth, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [username, setUsername] = useState('');
   const [selectedCountry, setSelectedCountry] = useState<CountryCode>('KE');
@@ -256,8 +257,10 @@ export default function CompleteProfile() {
       // Re-fetch updated profile inside contexts
       await refreshAuth();
       
-      // Navigate to main application landing
-      navigate('/dashboard', { replace: true });
+      // Navigate to main application landing or requested page
+      const queryParams = new URLSearchParams(location.search);
+      const redirectTo = location.state?.redirectTo || queryParams.get('redirectTo') || '/dashboard';
+      navigate(redirectTo, { replace: true, state: location.state?.forwardedState });
     } catch (err: any) {
       console.error('[CompleteProfile] Error saving profile:', err);
       // Backend already enforces E.164 — if the save still fails with a constraint error, catch it and show

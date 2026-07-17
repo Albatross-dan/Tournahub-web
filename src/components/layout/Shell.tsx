@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import UpcomingMaintenanceBanner from './UpcomingMaintenanceBanner';
 import AnnouncementBanner from './AnnouncementBanner';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Trophy, Calendar, Wallet, Bell, Store } from 'lucide-react';
+import { LayoutDashboard, Trophy, Calendar, Wallet, Bell, Store, ShieldAlert, ArrowRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -15,7 +15,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const SUPPORT_EMAIL = 'mailto:support@tournahub.me';
   const COMMUNITY_WHATSAPP = 'https://whatsapp.com/channel/0029Vb7nKTkK5cDClzvMYT1Z';
   const location = useLocation();
-  const { refetchSignal } = useAuth();
+  const { refetchSignal, user, profile } = useAuth();
+
+  const hasIncompleteProfile = 
+    !profile?.username || 
+    profile.username.trim() === '' || 
+    !profile?.whatsapp_number || 
+    profile.whatsapp_number.trim() === '';
 
   const bottomNavItems = [
     { name: 'Home', path: '/dashboard', icon: LayoutDashboard },
@@ -45,6 +51,36 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         {/* Top-aligned warnings and banners */}
         <UpcomingMaintenanceBanner />
         <AnnouncementBanner />
+
+        {/* Profile Incomplete Warning Banner (Non-blocking) */}
+        {user && hasIncompleteProfile && (
+          <div className="w-full bg-[#facc15]/10 border-b border-[#facc15]/20 px-4 py-3 text-amber-200 relative z-30">
+            <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-[#facc15]/15 text-[#facc15] rounded-xl border border-[#facc15]/20">
+                  <ShieldAlert className="w-4.5 h-4.5 animate-pulse" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black italic uppercase tracking-wider text-[#facc15]">
+                    Profile Dossier Incomplete
+                  </h4>
+                  <p className="text-[10px] text-amber-300 font-bold uppercase tracking-wider mt-0.5">
+                    Your profile isn't complete — finish it to join active tournaments.
+                  </p>
+                </div>
+              </div>
+              
+              <Link
+                to="/complete-profile"
+                state={{ redirectTo: location.pathname + location.search }}
+                className="self-start sm:self-center flex items-center justify-center px-4 py-2 bg-[#facc15] hover:bg-white text-slate-950 text-[10px] font-black uppercase italic tracking-wider rounded-xl cursor-pointer transition-all active:scale-95 duration-250 shadow-lg shadow-amber-950/20"
+              >
+                Complete Profile
+                <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+              </Link>
+            </div>
+          </div>
+        )}
  
         {/* Main Content */}
         <main className="flex-1 px-4 overflow-y-auto w-full custom-scrollbar">

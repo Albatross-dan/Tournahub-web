@@ -109,18 +109,8 @@ export default function VerifyCallback() {
 
               const profileData = profileRaw as any;
 
-              const hasIncompleteProfile = 
-                !profileData?.username || 
-                profileData.username.trim() === '' || 
-                profileData.username.startsWith('temp_user_') ||
-                !profileData?.whatsapp_number || 
-                profileData.whatsapp_number.trim() === '';
-
-              if (hasIncompleteProfile) {
-                navigate('/complete-profile', { replace: true });
-              } else {
-                navigate('/dashboard', { replace: true });
-              }
+              // Route to dashboard directly so they can browse freely without blockade
+              navigate('/dashboard', { replace: true });
             } catch (err) {
               console.error('[VerifyCallback] Error checking profile status silently:', err);
               navigate('/dashboard', { replace: true });
@@ -154,18 +144,8 @@ export default function VerifyCallback() {
 
                 const profileData = profileRaw as any;
 
-                const hasIncompleteProfile = 
-                  !profileData?.username || 
-                  profileData.username.trim() === '' || 
-                  profileData.username.startsWith('temp_user_') ||
-                  !profileData?.whatsapp_number || 
-                  profileData.whatsapp_number.trim() === '';
-
-                if (hasIncompleteProfile) {
-                  navigate('/complete-profile', { replace: true });
-                } else {
-                  navigate('/dashboard', { replace: true });
-                }
+                // Route to dashboard directly so they can browse freely without blockade
+                navigate('/dashboard', { replace: true });
               } catch (err) {
                 console.error('[VerifyCallback] Error checking profile status silently:', err);
                 navigate('/dashboard', { replace: true });

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth, useRefetchOnFocus } from '../contexts/AuthContext';
 import { Tournament } from '../types/database';
 import { tournamentService } from '../services/tournamentService';
@@ -42,6 +42,7 @@ export default function TournamentDetails() {
   useRefetchOnFocus(fetchTournamentData);
 
   const navigate = useNavigate();
+  const location = useLocation();
   const { summary, limits, refreshWallet } = useWallet('USD');
   
   const { tournament, loading: tournamentLoading } = useRealtimeTournament(id);
@@ -292,6 +293,15 @@ export default function TournamentDetails() {
     setShowRegFlow(true);
     setRegStep('picker');
   };
+
+  // Auto-trigger join tournament flow if redirected back after completing profile
+  useEffect(() => {
+    if (location.state?.autoJoin && !tournamentLoading && regStatus && !regStatus.registered && !isProfileIncomplete) {
+      // Clear state so it doesn't run on reload/re-render
+      navigate(location.pathname, { replace: true, state: null });
+      handleRegisterClick();
+    }
+  }, [location.state, tournamentLoading, regStatus, isProfileIncomplete, id]);
 
   const handleCancel = async () => {
     if (!user || !id) return;
@@ -628,7 +638,7 @@ export default function TournamentDetails() {
                   <button
                     onClick={() => {
                       setShowProfileCompleteModal(false);
-                      navigate('/profile', { state: { returnTo: `/tournaments/${id}` } });
+                      navigate('/complete-profile', { state: { redirectTo: `/tournaments/${id}`, forwardedState: { autoJoin: true } } });
                     }}
                     className="w-full relative group overflow-hidden rounded-xl h-12 flex items-center justify-center cursor-pointer transition-all duration-200"
                   >

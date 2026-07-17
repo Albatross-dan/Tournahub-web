@@ -33,6 +33,13 @@ export default function Navbar() {
     return profile?.role === 'admin' || profile?.role === 'moderator';
   }, [profile?.role]);
 
+  const hasIncompleteProfile = React.useMemo(() => {
+    return !profile?.username || 
+      profile.username.trim() === '' || 
+      !profile?.whatsapp_number || 
+      profile.whatsapp_number.trim() === '';
+  }, [profile]);
+
   const navItems = React.useMemo(() => {
     const items = [
       { name: 'Home', path: '/dashboard', icon: LayoutDashboard },
@@ -106,13 +113,19 @@ export default function Navbar() {
               </div>
             )}
             
-            <NavLink to="/profile" className="flex flex-col items-center group cursor-pointer">
-              <div className="w-11 h-11 rounded-full bg-surface border border-border-main flex items-center justify-center text-primary font-black text-sm shadow-sm relative overflow-hidden group-hover:border-primary/50 transition-colors">
-                <div className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <NavLink to="/profile" className="flex flex-col items-center group cursor-pointer relative">
+              <div className="w-11 h-11 rounded-full bg-surface border border-border-main flex items-center justify-center text-primary font-black text-sm shadow-sm relative overflow-visible group-hover:border-primary/50 transition-colors">
+                <div className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity rounded-full" />
                 <span className="relative z-10 text-sm">{initial}</span>
+                {hasIncompleteProfile && (
+                  <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-[#facc15] border-2 border-[#090a0f] rounded-full animate-pulse z-20" />
+                )}
               </div>
-              <span className="text-[8px] font-black uppercase tracking-widest text-[#a3a3c2] group-hover:text-primary mt-1 transition-colors">
+              <span className="text-[8px] font-black uppercase tracking-widest text-[#a3a3c2] group-hover:text-primary mt-1 transition-colors relative">
                 Profile
+                {hasIncompleteProfile && (
+                  <span className="absolute -top-1 -right-2 text-[8px] text-[#facc15] font-black animate-pulse">*</span>
+                )}
               </span>
             </NavLink>
           </div>

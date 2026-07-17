@@ -56,18 +56,14 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowAdminOnly =
     return <Navigate to="/login" replace />;
   }
 
-  // Enforce profile completion checks
+  // Enforce profile completion checks (NON-blocking, redirect to dashboard only if complete trying to access complete-profile)
   const hasIncompleteProfile = 
     !profile?.username || 
     profile.username.trim() === '' || 
     !profile?.whatsapp_number || 
     profile.whatsapp_number.trim() === '';
 
-  if (hasIncompleteProfile) {
-    if (location.pathname !== '/complete-profile') {
-      return <Navigate to="/complete-profile" replace />;
-    }
-  } else if (location.pathname === '/complete-profile') {
+  if (!hasIncompleteProfile && location.pathname === '/complete-profile') {
     return <Navigate to="/dashboard" replace />;
   }
 
