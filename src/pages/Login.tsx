@@ -4,6 +4,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Mail, Lock, Loader2, Eye, EyeOff } from 'lucide-react';
 import SEO from '../components/common/SEO';
 import { useAuth } from '../contexts/AuthContext';
+import { motion, AnimatePresence } from 'motion/react';
 
 const logoUrl = '/android-chrome-512x512.png';
 
@@ -31,6 +32,8 @@ export default function Login() {
   const [success, setSuccess] = useState<string | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
+  const [shakeCheckboxes, setShakeCheckboxes] = useState(false);
+  const checkboxesRef = React.useRef<HTMLDivElement>(null);
 
   // Setup Listener for successful Google OAuth Completion via Popup
   useEffect(() => {
@@ -66,6 +69,9 @@ export default function Login() {
     try {
       if (isSignUp) {
         if (!agreedToTerms || !agreedToPrivacy) {
+          setShakeCheckboxes(true);
+          setTimeout(() => setShakeCheckboxes(false), 500);
+          checkboxesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
           throw new Error('Please agree to both the Terms & Conditions and the Privacy Policy by ticking the boxes.');
         }
 
@@ -201,6 +207,9 @@ export default function Login() {
               try {
                 if (isSignUp) {
                   if (!agreedToTerms || !agreedToPrivacy) {
+                    setShakeCheckboxes(true);
+                    setTimeout(() => setShakeCheckboxes(false), 500);
+                    checkboxesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     throw new Error('Please agree to both the Terms & Conditions and the Privacy Policy by ticking the boxes.');
                   }
                 }
@@ -313,13 +322,21 @@ export default function Login() {
             </div>
 
             {isSignUp && (
-              <div className="space-y-3 px-1">
+              <motion.div
+                ref={checkboxesRef}
+                animate={shakeCheckboxes ? { x: [-10, 10, -10, 10, -5, 5, 0] } : {}}
+                transition={{ duration: 0.4, ease: "easeInOut" }}
+                className="space-y-3 px-1 scroll-mt-6"
+              >
                 <div className="flex items-center space-x-3">
                   <input
                     type="checkbox"
                     id="agree-terms"
                     checked={agreedToTerms}
-                    onChange={(e) => setAgreedToTerms(e.target.checked)}
+                    onChange={(e) => {
+                      setAgreedToTerms(e.target.checked);
+                      if (e.target.checked && agreedToPrivacy) setError(null);
+                    }}
                     className="h-4 w-4 bg-background/40 border border-border-main rounded text-primary focus:ring-1 focus:ring-primary/50 accent-primary cursor-pointer relative z-20 animate-fade-in"
                   />
                   <label htmlFor="agree-terms" className="text-[10px] font-black text-text-muted hover:text-text-main uppercase tracking-wider leading-none cursor-pointer select-none relative z-20">
@@ -338,7 +355,10 @@ export default function Login() {
                     type="checkbox"
                     id="agree-privacy"
                     checked={agreedToPrivacy}
-                    onChange={(e) => setAgreedToPrivacy(e.target.checked)}
+                    onChange={(e) => {
+                      setAgreedToPrivacy(e.target.checked);
+                      if (e.target.checked && agreedToTerms) setError(null);
+                    }}
                     className="h-4 w-4 bg-background/40 border border-border-main rounded text-primary focus:ring-1 focus:ring-primary/50 accent-primary cursor-pointer relative z-20 animate-fade-in"
                   />
                   <label htmlFor="agree-privacy" className="text-[10px] font-black text-text-muted hover:text-text-main uppercase tracking-wider leading-none cursor-pointer select-none relative z-20">
@@ -351,7 +371,7 @@ export default function Login() {
                     </Link>
                   </label>
                 </div>
-              </div>
+              </motion.div>
             )}
 
             {/* Verification Success Box */}
@@ -367,12 +387,20 @@ export default function Login() {
               </div>
             )}
 
-            {error && (
-              <div className="bg-red-500/5 border border-red-500/10 text-red-500 text-[11px] font-bold p-4 rounded-xl flex items-center space-x-3 animate-fade-in">
-                <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
+            <AnimatePresence mode="popLayout">
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, x: -30, y: -5 }}
+                  animate={{ opacity: 1, x: 0, y: 0 }}
+                  exit={{ opacity: 0, x: 30, y: 5 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                  className="bg-red-500/5 border border-red-500/10 text-red-500 text-[11px] font-bold p-4 rounded-xl flex items-center space-x-3"
+                >
+                  <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse shrink-0" />
+                  <span className="flex-1 leading-normal">{error}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <button
               type="submit"
