@@ -15,15 +15,9 @@ const getEnvironment = (): string => {
       return 'production';
     }
     
-    // Google AI Studio previews, Vercel previews, local development, etc.
-    if (
-      hostname.includes('run.app') ||
-      hostname.includes('vercel.app') ||
-      hostname.includes('localhost') ||
-      hostname.includes('127.0.0.1')
-    ) {
-      return 'development';
-    }
+    // All other domains (including Google AI Studio previews *.run.app, vercel.app, and localhost)
+    // are treated as development/preview to separate dev noise from real production traffic.
+    return 'development';
   }
   
   // Build-time fallbacks (e.g. custom environment variable or Vite mode)
@@ -36,6 +30,8 @@ const getEnvironment = (): string => {
 
 const ENVIRONMENT = getEnvironment();
 const RELEASE = import.meta.env.VITE_SENTRY_RELEASE || 'tournahub-web@latest';
+
+console.log('[Sentry] Dynamic environment resolved to:', ENVIRONMENT, '(Host:', typeof window !== 'undefined' ? window.location.hostname : 'unknown', ')');
 
 // Initialize Sentry
 Sentry.init({
