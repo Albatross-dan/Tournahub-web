@@ -7,6 +7,57 @@
  * - Safely bypasses mutating API calls (POST/PUT/DELETE) and active third-party integrations (Supabase, Firebase, FCM).
  */
 
+// Dynamically import and configure Firebase Cloud Messaging if configuration query parameters are present
+try {
+  const params = new URLSearchParams(self.location.search);
+  const firebaseConfig = {
+    apiKey: params.get('apiKey') || '',
+    authDomain: params.get('authDomain') || '',
+    projectId: params.get('projectId') || '',
+    storageBucket: params.get('storageBucket') || '',
+    messagingSenderId: params.get('messagingSenderId') || '',
+    appId: params.get('appId') || ''
+  };
+
+  const isValidConfig = firebaseConfig.apiKey && firebaseConfig.apiKey !== "";
+
+  if (isValidConfig) {
+    importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
+    importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
+
+    // Initialize Firebase inside the main PWA Service Worker
+    firebase.initializeApp(firebaseConfig);
+    const messaging = firebase.messaging();
+
+    // Handle background message notifications
+    messaging.onBackgroundMessage((payload) => {
+      console.log('[Push SW] Background message received:', payload);
+      
+      const title = payload.notification?.title || payload.data?.title || 'Tournahub Alert';
+      const body = payload.notification?.body || payload.data?.body || '';
+      const icon = payload.notification?.image || payload.data?.image || '/favicon.ico';
+      
+      const notificationOptions = {
+        body,
+        icon,
+        badge: '/favicon.ico',
+        data: {
+          click_action: payload.data?.click_action || payload.data?.url || '/notifications',
+          notification_id: payload.data?.notification_id
+        },
+        tag: payload.data?.notification_id || 'tournahub-alert',
+        renotify: true
+      };
+
+      return self.registration.showNotification(title, notificationOptions);
+    });
+    
+    console.log('[SW] Firebase Cloud Messaging integrated successfully.');
+  }
+} catch (fcmErr) {
+  console.warn('[SW] Firebase Cloud Messaging integration skipped or failed:', fcmErr);
+}
+
 const CACHE_VERSION = 'v5';
 const STATIC_CACHE = `tournahub-static-${CACHE_VERSION}`;
 const SHELL_CACHE = `tournahub-public-${CACHE_VERSION}`;
@@ -208,5 +259,50 @@ self.addEventListener('message', (event) => {
     console.log('[SW] Received SKIP_WAITING message, activating immediately...');
     self.skipWaiting();
   }
+});
+
+// CLICK ACTION HANDLER for background notifications
+self.addEventListener('notificationclick', (event) => {
+  console.log('[Push SW] Notification click:', event);
+  event.notification.close();
+
+  const clickAction = event.notification.data?.click_action || '/';
+  
+  // Construct absolute URL
+  const targetUrl = new URL(clickAction, self.location.origin).toString();
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((windowClients) => {
+        // Check if tab is already open and navigate it, or focus it,
+        // OR open a brand new tab and broadcast the click event to it
+        for (let i = 0; i < windowClients.length; i++) {
+          const client = windowClients[i];
+          if (client.url === targetUrl && 'focus' in client) {
+            // Send message to the active client so it can reload or update state
+            client.postMessage({
+              type: 'NOTIFICATION_CLICKED',
+              notification_id: event.notification.data?.notification_id
+            });
+            return client.focus();
+          }
+        }
+        
+        if (clients.openWindow) {
+          return clients.openWindow(targetUrl).then((windowClient) => {
+            if (windowClient) {
+              // Wait for the new tab to load, then postMessage
+              // This is captured by the useNotifications hook
+              setTimeout(() => {
+                windowClient.postMessage({
+                  type: 'NOTIFICATION_CLICKED',
+                  notification_id: event.notification.data?.notification_id
+                });
+              }, 2000);
+            }
+          });
+        }
+      })
+  );
 });
 

@@ -22,13 +22,14 @@ if (typeof window !== 'undefined') {
             .then(() => deferredPrompt.userChoice)
             .then(({ outcome }: any) => {
               console.log(`[PWA] Auto prompt user choice outcome: ${outcome}`);
-              if (outcome === 'accepted') {
-                deferredPrompt = null;
-                window.dispatchEvent(new CustomEvent('pwa-deferred-prompt-changed'));
-              }
+              // Always clear the prompt as it can only be called once
+              deferredPrompt = null;
+              window.dispatchEvent(new CustomEvent('pwa-deferred-prompt-changed'));
             })
             .catch((err: any) => {
               console.warn('[PWA] Auto prompt failed or was cancelled:', err);
+              deferredPrompt = null;
+              window.dispatchEvent(new CustomEvent('pwa-deferred-prompt-changed'));
             });
         }
       } catch (err) {
@@ -181,9 +182,12 @@ export function usePWAInstall() {
       const { outcome } = await deferredPrompt.userChoice;
       console.log(`[usePWAInstall] User choice outcome: ${outcome}`);
       
+      // Always clear the prompt after any usage attempt
+      deferredPrompt = null;
+      window.dispatchEvent(new CustomEvent('pwa-deferred-prompt-changed'));
+
       if (outcome === 'accepted') {
         console.log('[usePWAInstall] User accepted the install prompt.');
-        deferredPrompt = null;
         setIsInstallable(false);
         return true;
       } else {
@@ -192,6 +196,8 @@ export function usePWAInstall() {
       }
     } catch (err) {
       console.error('[usePWAInstall] Error executing install prompt:', err);
+      deferredPrompt = null;
+      window.dispatchEvent(new CustomEvent('pwa-deferred-prompt-changed'));
       return false;
     }
   };

@@ -7,8 +7,21 @@ import './index.css';
 // Register PWA service worker and clean up legacy non-PWA workbox registrations safely
 try {
   if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+    const config = {
+      apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
+      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+      appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+    };
+    const hasConfig = config.apiKey && !config.apiKey.startsWith('PLACEHOLDER_') && config.apiKey !== '';
+    const swUrl = hasConfig 
+      ? `/sw.js?apiKey=${encodeURIComponent(config.apiKey)}&authDomain=${encodeURIComponent(config.authDomain)}&projectId=${encodeURIComponent(config.projectId)}&storageBucket=${encodeURIComponent(config.storageBucket)}&messagingSenderId=${encodeURIComponent(config.messagingSenderId)}&appId=${encodeURIComponent(config.appId)}`
+      : '/sw.js';
+
     // Register the PWA service worker with updateViaCache: 'none' to bypass browser caching of sw.js itself
-    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
+    navigator.serviceWorker.register(swUrl, { updateViaCache: 'none' })
       .then((reg) => {
         console.log('[SW] PWA Service Worker registered successfully with scope:', reg.scope);
       })
@@ -23,8 +36,15 @@ try {
         const isFcm = scriptURL.includes('firebase-messaging-sw');
         const isPwaSw = scriptURL.includes('sw.js');
         
+        // If it is a legacy separate FCM service worker, unregister it to prevent scope conflicts
+        if (isFcm) {
+          console.log('[SW Cleanup] Unregistering legacy separate FCM service worker to avoid conflicts:', registration.scope, scriptURL);
+          registration.unregister().catch(() => {});
+          continue;
+        }
+
         // Critically guard against unregistering empty/initializing scripts or our active service workers
-        if (!scriptURL || isFcm || isPwaSw) {
+        if (!scriptURL || isPwaSw) {
           console.log('[SW Cleanup] Preserving active/initializing service worker registration:', registration.scope, scriptURL);
           continue;
         }
