@@ -108,7 +108,10 @@ export async function requestNotificationPermission(userId: string, isRetry = fa
         appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
       };
 
-      const swUrl = `/sw.js?apiKey=${encodeURIComponent(config.apiKey)}&authDomain=${encodeURIComponent(config.authDomain)}&projectId=${encodeURIComponent(config.projectId)}&storageBucket=${encodeURIComponent(config.storageBucket)}&messagingSenderId=${encodeURIComponent(config.messagingSenderId)}&appId=${encodeURIComponent(config.appId)}`;
+      const hasConfig = config.apiKey && !config.apiKey.startsWith('PLACEHOLDER_') && config.apiKey !== '';
+      const swUrl = hasConfig 
+        ? `/sw.js?apiKey=${encodeURIComponent(config.apiKey)}&authDomain=${encodeURIComponent(config.authDomain)}&projectId=${encodeURIComponent(config.projectId)}&storageBucket=${encodeURIComponent(config.storageBucket)}&messagingSenderId=${encodeURIComponent(config.messagingSenderId)}&appId=${encodeURIComponent(config.appId)}`
+        : '/sw.js';
       console.log('[Push] ── Registering dynamic service worker path:', swUrl);
 
       swRegistration = await navigator.serviceWorker.register(swUrl);
