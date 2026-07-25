@@ -71,8 +71,10 @@ export interface SubmitResultPayload {
 export interface ResolveDisputePayload {
   adminId: string
   matchId: string
+  action?: string
   winningSubId?: string
   overrideScore1?: number
   overrideScore2?: number
+  winnerId?: string
   adminNotes?: string
 }

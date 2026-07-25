@@ -50,15 +50,18 @@ export const matchResultService = {
     const rpcParams: any = {
       p_admin_id: payload.adminId,
       p_match_id: payload.matchId,
+      p_action: payload.action || (payload.winningSubId ? 'approve_submission' : 'score_override'),
       p_admin_notes: payload.adminNotes || null,
     };
 
-    if (payload.winningSubId) {
-      rpcParams.p_winning_sub_id = payload.winningSubId;
-    } else {
+    if (payload.winningSubId) rpcParams.p_winning_sub_id = payload.winningSubId;
+    if (payload.overrideScore1 !== undefined && payload.overrideScore1 !== null) {
       rpcParams.p_override_score1 = payload.overrideScore1;
+    }
+    if (payload.overrideScore2 !== undefined && payload.overrideScore2 !== null) {
       rpcParams.p_override_score2 = payload.overrideScore2;
     }
+    if (payload.winnerId) rpcParams.p_winner_id = payload.winnerId;
 
     const { data, error } = await (supabase.rpc as any)('admin_resolve_dispute', rpcParams);
 
