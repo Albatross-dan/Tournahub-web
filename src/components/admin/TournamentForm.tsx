@@ -11,6 +11,11 @@ import { useNavigate } from 'react-router-dom';
 import { cn, getStorageUrl } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 
+const getNumberOrDefault = (val: unknown, defaultVal: number): number => {
+  if (typeof val === 'number' && !Number.isNaN(val)) return val;
+  return defaultVal;
+};
+
 const tournamentSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters"),
   type: z.enum(['league', 'knockout', 'swiss', 'group_stage', 'hybrid', 'champions_league']),
@@ -36,12 +41,12 @@ const tournamentSchema = z.object({
   path: ["end_date"],
 }).superRefine((data, ctx) => {
   if (data.type === 'champions_league') {
-    const direct = data.cl_direct_qualify_count || 8;
-    const playoff = data.cl_playoff_zone_count || 16;
+    const direct = getNumberOrDefault(data.cl_direct_qualify_count, 8);
+    const playoff = getNumberOrDefault(data.cl_playoff_zone_count, 16);
     
-    // Check power of two
+    // Check power of two: total_slots = directQualifiers + Math.floor(playoffZone / 2)
     const knockoutTeams = direct + Math.floor(playoff / 2);
-    const isPowerOfTwo = knockoutTeams > 0 && (knockoutTeams & (knockoutTeams - 1)) === 0;
+    const isPowerOfTwo = knockoutTeams >= 2 && (knockoutTeams & (knockoutTeams - 1)) === 0;
     if (!isPowerOfTwo) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -77,7 +82,8 @@ export default function TournamentForm({ initialData, mode }: TournamentFormProp
     initialData?.banner_url ? (getStorageUrl('tournament-banners', initialData.banner_url) || '') : ''
   );
 
-  const { register, handleSubmit, formState: { errors }, watch, setValue } = useForm<TournamentFormData>({
+  const { register, handleSubmit, formState: { errors }, watch, setValue, trigger } = useForm<TournamentFormData>({
+    mode: 'onChange',
     resolver: zodResolver(tournamentSchema),
     defaultValues: initialData ? {
       name: initialData.name,
@@ -181,9 +187,9 @@ export default function TournamentForm({ initialData, mode }: TournamentFormProp
 
       try {
         const clSettings = data.type === 'champions_league' ? {
-          swiss_rounds: data.swiss_rounds || 3,
-          cl_direct_qualify_count: data.cl_direct_qualify_count || 8,
-          cl_playoff_zone_count: data.cl_playoff_zone_count || 16,
+          swiss_rounds: getNumberOrDefault(data.swiss_rounds, 3),
+          cl_direct_qualify_count: getNumberOrDefault(data.cl_direct_qualify_count, 8),
+          cl_playoff_zone_count: getNumberOrDefault(data.cl_playoff_zone_count, 16),
           cl_two_legged_rounds: data.cl_two_legged_rounds ?? true
         } : {};
 
@@ -282,68 +288,86 @@ export default function TournamentForm({ initialData, mode }: TournamentFormProp
               </div>
             )}
 
-            {watch('type') === 'champions_league' && (
-              <div className="col-span-2 space-y-4 p-5 bg-emerald-950/20 rounded-2xl border border-emerald-500/30 animate-in fade-in slide-in-from-top-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-black text-emerald-400 uppercase tracking-wider italic">Champions League Protocol Settings</h4>
-                    <p className="text-xs text-slate-400 mt-0.5">Configure single-table league phase and knockout playoff structures.</p>
-                  </div>
-                </div>
+            {watch('type') === 'champions_league' && (() => {
+              const liveDirect = getNumberOrDefault(watch('cl_direct_qualify_count'), 8);
+              const livePlayoff = getNumberOrDefault(watch('cl_playoff_zone_count'), 16);
+              const liveKnockoutTeams = liveDirect + Math.floor(livePlayoff / 2);
+              const liveIsPowerOfTwo = liveKnockoutTeams >= 2 && (liveKnockoutTeams & (liveKnockoutTeams - 1)) === 0;
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">Opponents / Player (League Phase)</label>
-                    <input
-                      type="number"
-                      {...register('swiss_rounds', { valueAsNumber: true })}
-                      className="input-field block w-full text-sm"
-                      defaultValue={3}
-                    />
-                    <p className="text-[10px] text-slate-500">Number of rounds in the single-table league.</p>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">Direct Qualifiers (Top N)</label>
-                    <input
-                      type="number"
-                      {...register('cl_direct_qualify_count', { valueAsNumber: true })}
-                      className="input-field block w-full text-sm"
-                      defaultValue={8}
-                    />
-                    <p className="text-[10px] text-slate-500">Advance directly to Round of 16.</p>
-                    {errors.cl_direct_qualify_count && (
-                      <p className="text-xs text-red-400 font-bold mt-1">{errors.cl_direct_qualify_count.message}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">Playoff Zone (Next M)</label>
-                    <input
-                      type="number"
-                      {...register('cl_playoff_zone_count', { valueAsNumber: true })}
-                      className="input-field block w-full text-sm"
-                      defaultValue={16}
-                    />
-                    <p className="text-[10px] text-slate-500">Play two-legged knockout playoff.</p>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-emerald-500/20">
-                  <label className="flex items-center space-x-3 text-sm text-slate-300 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      {...register('cl_two_legged_rounds')}
-                      className="w-4 h-4 text-emerald-500 focus:ring-emerald-500 rounded bg-slate-950 border-slate-700"
-                    />
+              return (
+                <div className="col-span-2 space-y-4 p-5 bg-emerald-950/20 rounded-2xl border border-emerald-500/30 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center justify-between">
                     <div>
-                      <span className="font-bold text-white block text-xs">Two-Legged Knockouts</span>
-                      <span className="text-[11px] text-slate-400">Playoff round and knockout ties up to final are home-and-away (2 legs).</span>
+                      <h4 className="text-sm font-black text-emerald-400 uppercase tracking-wider italic">Champions League Protocol Settings</h4>
+                      <p className="text-xs text-slate-400 mt-0.5">Configure single-table league phase and knockout playoff structures.</p>
                     </div>
-                  </label>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">Opponents / Player (League Phase)</label>
+                      <input
+                        type="number"
+                        {...register('swiss_rounds', { valueAsNumber: true })}
+                        className="input-field block w-full text-sm"
+                      />
+                      <p className="text-[10px] text-slate-500">Number of rounds in the single-table league.</p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">Direct Qualifiers (Top N)</label>
+                      <input
+                        type="number"
+                        {...register('cl_direct_qualify_count', {
+                          valueAsNumber: true,
+                          onChange: () => {
+                            trigger(['cl_direct_qualify_count', 'cl_playoff_zone_count', 'max_players']);
+                          }
+                        })}
+                        className={cn("input-field block w-full text-sm", errors.cl_direct_qualify_count && "border-red-500/50")}
+                      />
+                      <p className="text-[10px] text-slate-500">Advance directly to Round of 16.</p>
+                      {errors.cl_direct_qualify_count ? (
+                        <p className="text-xs text-red-400 font-bold mt-1">{errors.cl_direct_qualify_count.message}</p>
+                      ) : (
+                        liveIsPowerOfTwo && (
+                          <p className="text-[11px] text-emerald-400 font-bold mt-1">✓ {liveKnockoutTeams} total knockout slots — valid bracket size</p>
+                        )
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">Playoff Zone (Next M)</label>
+                      <input
+                        type="number"
+                        {...register('cl_playoff_zone_count', {
+                          valueAsNumber: true,
+                          onChange: () => {
+                            trigger(['cl_direct_qualify_count', 'cl_playoff_zone_count', 'max_players']);
+                          }
+                        })}
+                        className="input-field block w-full text-sm"
+                      />
+                      <p className="text-[10px] text-slate-500">Play two-legged knockout playoff.</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-emerald-500/20">
+                    <label className="flex items-center space-x-3 text-sm text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        {...register('cl_two_legged_rounds')}
+                        className="w-4 h-4 text-emerald-500 focus:ring-emerald-500 rounded bg-slate-950 border-slate-700"
+                      />
+                      <div>
+                        <span className="font-bold text-white block text-xs">Two-Legged Knockouts</span>
+                        <span className="text-[11px] text-slate-400">Playoff round and knockout ties up to final are home-and-away (2 legs).</span>
+                      </div>
+                    </label>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           <div className="grid grid-cols-2 gap-6">
