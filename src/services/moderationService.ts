@@ -110,6 +110,7 @@ export const moderationService = {
       }
 
       const formattedUsers = (data as any[] || []).map((u: any) => ({
+        ...u,
         id: u.id,
         username: u.username || 'Anonymous',
         avatar_url: u.avatar_url || null,
@@ -118,7 +119,11 @@ export const moderationService = {
         status: (u as any).status || 'active',
         last_login_at: u.created_at || null,
         email: (u as any).email || null,
-        last_seen_at: u.last_seen_at || null
+        last_seen_at: u.last_seen_at || null,
+        whatsapp_number: u.whatsapp_number || null,
+        whatsapp_number_verified: u.whatsapp_number_verified ?? false,
+        country_code: u.country_code || null,
+        timezone: u.timezone || null
       }));
 
       return {
@@ -154,6 +159,28 @@ export const moderationService = {
 
         console.warn('[moderationService] admin_get_user_profile RPC failed, using fallback:', error);
         return await this.fallbackGetUser(userId);
+      }
+
+      // Ensure data has whatsapp_number & whatsapp_number_verified
+      if (data) {
+        if (data.whatsapp_number === undefined || data.whatsapp_number_verified === undefined) {
+          try {
+            const { data: profileRow } = await supabase
+              .from('profiles')
+              .select('whatsapp_number, whatsapp_number_verified, timezone, country_code')
+              .eq('id', userId)
+              .maybeSingle();
+            if (profileRow) {
+              const pRow = profileRow as any;
+              data.whatsapp_number = pRow.whatsapp_number;
+              data.whatsapp_number_verified = pRow.whatsapp_number_verified;
+              if (data.timezone === undefined) data.timezone = pRow.timezone;
+              if (data.country_code === undefined) data.country_code = pRow.country_code;
+            }
+          } catch (e) {
+            console.warn('[moderationService] Could not fetch extra profile fields for RPC data:', e);
+          }
+        }
       }
 
       // Fetch logs and notes for this user
@@ -236,6 +263,7 @@ export const moderationService = {
 
       return {
         profile: {
+          ...profile,
           id: profile.id,
           username: profile.username || 'Anonymous',
           avatar_url: profile.avatar_url || null,
@@ -244,7 +272,11 @@ export const moderationService = {
           status: (profile as any).status || 'active',
           email: (profile as any).email || null,
           country_code: profile.country_code || null,
-          last_seen_at: profile.last_seen_at || null
+          last_seen_at: profile.last_seen_at || null,
+          whatsapp_number: profile.whatsapp_number || null,
+          whatsapp_number_verified: profile.whatsapp_number_verified ?? false,
+          timezone: profile.timezone || null,
+          last_login_at: profile.last_login_at || profile.created_at || null
         },
         notes: notes,
         logs: logs

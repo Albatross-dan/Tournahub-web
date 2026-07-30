@@ -220,14 +220,14 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <Router>
-        <ErrorBoundary>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <Router>
           <PwaUpdateProvider>
             <AppRoutes />
           </PwaUpdateProvider>
-        </ErrorBoundary>
-      </Router>
-    </QueryClientProvider>
+        </Router>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

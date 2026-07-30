@@ -38,6 +38,7 @@ Sentry.init({
   dsn: SENTRY_DSN,
   environment: ENVIRONMENT,
   release: RELEASE,
+  sampleRate: 1.0, // Ensure 100% of uncaught errors are reported across all environments
 
   integrations: [
     Sentry.browserTracingIntegration(),
@@ -76,6 +77,35 @@ Sentry.init({
     return event;
   },
 });
+
+console.log('[Sentry] Initialized successfully. Environment:', ENVIRONMENT, '| DSN:', SENTRY_DSN ? 'Present' : 'Missing', '| Release:', RELEASE);
+
+// Register app lifecycle breadcrumbs (visibility & focus tracking to capture silent app freezes)
+if (typeof window !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    Sentry.addBreadcrumb({
+      category: 'app.lifecycle',
+      message: `App visibility changed to: ${document.visibilityState}`,
+      level: 'info',
+    });
+  });
+
+  window.addEventListener('focus', () => {
+    Sentry.addBreadcrumb({
+      category: 'app.lifecycle',
+      message: 'App window focused',
+      level: 'info',
+    });
+  });
+
+  window.addEventListener('blur', () => {
+    Sentry.addBreadcrumb({
+      category: 'app.lifecycle',
+      message: 'App window blurred / backgrounded',
+      level: 'info',
+    });
+  });
+}
 
 /**
  * Set user identity context in Sentry
@@ -234,10 +264,17 @@ export function instrumentSupabaseFetch(
   }
 }
 
-// Safely expose a manual test function to the window for Sentry verification
+// Safely expose manual test functions to the window for Sentry verification
 if (typeof window !== 'undefined') {
   (window as any).sentryTest = () => {
-    console.log('[Sentry Test] Triggering a manual verification error...');
-    throw new Error('Tournahub Sentry Verification: Manual Test Success!');
+    console.log('[Sentry Test] Triggering a manual verification exception...');
+    throw new Error('Tournahub Sentry Verification: Manual Test Exception!');
+  };
+
+  (window as any).sentryCaptureTest = () => {
+    console.log('[Sentry Test] Calling Sentry.captureException directly...');
+    const eventId = Sentry.captureException(new Error('Sentry production test - safe to ignore'));
+    console.log('[Sentry Test] Event captured successfully. Event ID:', eventId);
+    return eventId;
   };
 }
