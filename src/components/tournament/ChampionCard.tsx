@@ -95,16 +95,16 @@ export default function ChampionCard({ data }: ChampionCardProps) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
         className={cn(
-          "relative w-full max-w-lg mx-auto overflow-hidden rounded-none border backdrop-blur-xl bg-black/80",
+          "relative w-full max-w-lg mx-auto overflow-hidden rounded-[2.5rem] border backdrop-blur-xl bg-black/80",
           theme.border
         )}
         style={{ boxShadow: `0 0 40px ${theme.glow}` }}
       >
-        <div className="relative w-full aspect-[9/16] flex items-center justify-center bg-black overflow-hidden rounded-none">
+        <div className="relative w-full aspect-[9/16] flex items-center justify-center bg-black overflow-hidden rounded-[2.5rem]">
           <img
             src={data.poster_image_url}
             alt={`${data.winner?.username || 'Champion'} Tournament Poster`}
-            className="w-full h-full object-contain rounded-none"
+            className="w-full h-full object-contain rounded-[2.5rem]"
             referrerPolicy="no-referrer"
           />
         </div>

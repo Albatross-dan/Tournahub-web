@@ -14,7 +14,6 @@ import { MarketplaceOrder, MarketplaceListing } from '../../types/marketplace';
 import { marketplaceService } from '../../services/marketplaceService';
 import { supabase } from '../../lib/supabase';
 import { cn } from '../../lib/utils';
-import LoadingState from '../../components/ui/LoadingState';
 
 export default function MySales() {
   const navigate = useNavigate();
@@ -168,7 +167,12 @@ export default function MySales() {
         </div>
 
         {loading ? (
-          <LoadingState message="eFootball Tournaments" />
+          <div className="py-24 flex flex-col items-center justify-center space-y-4 text-slate-400">
+            <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+            <span className="text-xs font-black uppercase tracking-widest text-slate-400">
+              Loading Seller Ledger...
+            </span>
+          </div>
         ) : error ? (
           <div className="py-16 text-center bg-red-950/20 border border-red-900/40 rounded-3xl p-8 max-w-md mx-auto space-y-4">
             <AlertTriangle className="w-12 h-12 text-red-400 mx-auto" />

@@ -1172,10 +1172,82 @@ export default function TournamentDetails() {
                 <PrizeRow pos="3rd" percent={tournament.prize_3rd_percent || 15} pool={currentPrizePool} />
               </div>
             </div>
-            
-            <div className="p-6 grid grid-cols-2 gap-6">
-              <InfoItem icon={<Users className="w-5 h-5 text-primary" />} label="Total Contenders" value={tournament.max_players.toString()} />
-              <InfoItem icon={<Calendar className="w-5 h-5 text-blue-500" />} label="Entry Fee" value={tournament.entry_fee ? formatCurrency(tournament.entry_fee) : 'Free'} />
+
+            <div className="min-h-[400px]">
+              {activeTab === 'info' && (
+                <motion.div 
+                   initial={{ opacity: 0 }}
+                   animate={{ opacity: 1 }}
+                   className="space-y-12"
+                >
+                   <div className="max-w-none">
+                    <h2 className="text-2xl sm:text-3xl font-black text-text-main italic uppercase tracking-tighter mb-6">Mission Briefing</h2>
+                    <p className="text-text-muted leading-relaxed text-lg sm:text-xl font-medium">
+                      {tournament.description || 'Secure your spot in the bracket and fight for glory and a share of the massive prize pool.'}
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+ 
+              {activeTab === 'fixtures' && (
+                <FixturesList tournamentId={tournament.id} />
+              )}
+ 
+              {activeTab === 'standings' && (
+                tournament.type === 'group_stage' ? (
+                  <GroupStageTournamentView tournamentId={tournament.id} />
+                ) : (
+                  <StandingsTable tournamentId={tournament.id} registrations={registrations} tournamentType={tournament.type} />
+                )
+              )}
+              {activeTab === 'players' && (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                   {registrations.length > 0 ? registrations.map((player, idx) => (
+                     <div key={`player-${player.user_id || player.id || idx}`} className="card p-4 flex items-center space-x-3 bg-surface hover:border-primary-light transition-all shadow-sm">
+                       {player.username || player.profiles?.username ? (
+                         <Link to={`/players/${player.username || player.profiles?.username}`}>
+                           <PlayerBadge 
+                             badgeId={player.badge_id} 
+                             username={player.username || player.profiles?.username || 'Anonymous'} 
+                             size="md" 
+                             className="hover:scale-105 transition-transform"
+                           />
+                         </Link>
+                       ) : (
+                         <PlayerBadge 
+                           badgeId={player.badge_id} 
+                           username="Anonymous" 
+                           size="md" 
+                         />
+                       )}
+                       <div className="flex-1 min-w-0">
+                         <div className="flex items-center gap-2">
+                            {player.username || player.profiles?.username ? (
+                              <Link 
+                                to={`/players/${player.username || player.profiles?.username}`}
+                                className="font-bold text-text-main uppercase italic tracking-tight truncate hover:text-primary transition-colors"
+                              >
+                                {player.username || player.profiles?.username}
+                              </Link>
+                            ) : (
+                              <p className="font-bold text-text-main uppercase italic tracking-tight truncate">Anonymous</p>
+                            )}
+                         </div>
+                         <div className="flex items-center gap-2">
+                           <p className="text-[10px] text-primary font-bold uppercase tracking-widest">{player.registration_status || player.status || 'Registered'}</p>
+                           {player.badge_id && (
+                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="Badge Selected" />
+                           )}
+                         </div>
+                       </div>
+                     </div>
+                   )) : (
+                     <div className="col-span-full py-12 text-center text-text-muted italic">
+                       No contenders have registered for this tournament yet.
+                     </div>
+                   )}
+                </div>
+              )}
             </div>
           </div>
         </div>

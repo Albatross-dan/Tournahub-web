@@ -132,10 +132,9 @@ export default function AdminFixtures() {
     const tournamentType = match.tournaments?.type || '';
     const drawForbiddenStages = ['knockout', 'quarterfinal', 'semifinal', 'final', 'third_place', 'round_of_16', 'round_of_32', 'playoffs'];
     const drawForbidden = drawForbiddenStages.includes(stage) || tournamentType === 'knockout';
-    const isTwoLeggedMatch = !!match.tie_id || match.leg === 1 || match.leg === 2;
 
-    if (drawForbidden && !winnerId && s1 === s2 && !isTwoLeggedMatch) {
-      alert('Draws are not supported for verification yet in single-leg matches. Please set a winner.');
+    if (drawForbidden && !winnerId && s1 === s2) {
+      alert('Draws are not supported for verification yet. Please set a winner.');
       return;
     }
 

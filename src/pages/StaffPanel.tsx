@@ -10,7 +10,6 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'react-hot-toast';
 import { formatCurrency } from '../lib/utils';
-import LoadingState from '../components/ui/LoadingState';
 
 export default function StaffPanel() {
   const { user, profile, loading } = useAuth();
@@ -249,7 +248,12 @@ export default function StaffPanel() {
   }, [loading, isStaff, user?.id]);
 
   if (loading) {
-    return <LoadingState fullPage message="eFootball Tournaments" />;
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center space-y-4">
+        <div className="w-10 h-10 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+        <span className="text-[10px] uppercase font-black tracking-widest text-slate-500">Unlocking Staff Authorization...</span>
+      </div>
+    );
   }
 
   // Strictly gate the render. If they do not have the required role, redirect them safely.

@@ -11,7 +11,6 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import Shell from '../components/layout/Shell';
 import { cn } from '../lib/utils';
-import LoadingState from '../components/ui/LoadingState';
 
 // Position helper
 const getPositionInfo = (position: number) => {
@@ -130,7 +129,12 @@ export default function PlayerProfile() {
   if (loading) {
     return (
       <Shell>
-        <LoadingState message="eFootball Tournaments" />
+        <div className="py-32 flex flex-col items-center justify-center space-y-4 text-slate-400">
+          <Loader2 className="w-10 h-10 text-primary animate-spin" />
+          <span className="text-xs font-black uppercase tracking-widest text-slate-400">
+            Fetching Player Records...
+          </span>
+        </div>
       </Shell>
     );
   }

@@ -12,11 +12,7 @@ import { cn, getStorageUrl } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 
 const getNumberOrDefault = (val: unknown, defaultVal: number): number => {
-  if (val === 0 || val === '0') return 0;
-  if (val !== null && val !== undefined && val !== '') {
-    const num = Number(val);
-    if (!Number.isNaN(num)) return num;
-  }
+  if (typeof val === 'number' && !Number.isNaN(val)) return val;
   return defaultVal;
 };
 
@@ -46,7 +42,7 @@ const tournamentSchema = z.object({
 }).superRefine((data, ctx) => {
   if (data.type === 'champions_league') {
     const direct = getNumberOrDefault(data.cl_direct_qualify_count, 8);
-    const playoff = getNumberOrDefault(data.cl_playoff_zone_count, 0);
+    const playoff = getNumberOrDefault(data.cl_playoff_zone_count, 16);
     
     // Check power of two: total_slots = directQualifiers + Math.floor(playoffZone / 2)
     const knockoutTeams = direct + Math.floor(playoff / 2);
@@ -86,7 +82,7 @@ export default function TournamentForm({ initialData, mode }: TournamentFormProp
     initialData?.banner_url ? (getStorageUrl('tournament-banners', initialData.banner_url) || '') : ''
   );
 
-  const { register, handleSubmit, formState: { errors }, watch, setValue, trigger, clearErrors } = useForm<TournamentFormData>({
+  const { register, handleSubmit, formState: { errors }, watch, setValue, trigger } = useForm<TournamentFormData>({
     mode: 'onChange',
     resolver: zodResolver(tournamentSchema),
     defaultValues: initialData ? {
@@ -220,7 +216,7 @@ export default function TournamentForm({ initialData, mode }: TournamentFormProp
         const clSettings = data.type === 'champions_league' ? {
           swiss_rounds: getNumberOrDefault(data.swiss_rounds, 3),
           cl_direct_qualify_count: getNumberOrDefault(data.cl_direct_qualify_count, 8),
-          cl_playoff_zone_count: getNumberOrDefault(data.cl_playoff_zone_count, 0),
+          cl_playoff_zone_count: getNumberOrDefault(data.cl_playoff_zone_count, 16),
           cl_two_legged_rounds: data.cl_two_legged_rounds ?? true
         } : {};
 
@@ -319,14 +315,11 @@ export default function TournamentForm({ initialData, mode }: TournamentFormProp
               </div>
             )}
 
-            {watchType === 'champions_league' && (() => {
-              const liveDirect = getNumberOrDefault(watchDirect, 8);
-              const livePlayoff = getNumberOrDefault(watchPlayoff, 0);
+            {watch('type') === 'champions_league' && (() => {
+              const liveDirect = getNumberOrDefault(watch('cl_direct_qualify_count'), 8);
+              const livePlayoff = getNumberOrDefault(watch('cl_playoff_zone_count'), 16);
               const liveKnockoutTeams = liveDirect + Math.floor(livePlayoff / 2);
               const liveIsPowerOfTwo = liveKnockoutTeams >= 2 && (liveKnockoutTeams & (liveKnockoutTeams - 1)) === 0;
-              const bracketMathError = !liveIsPowerOfTwo
-                ? `Direct qualifiers (${liveDirect}) + Playoff winners (${livePlayoff}/2 = ${Math.floor(livePlayoff / 2)}) must equal a power of two (2, 4, 8, 16, 32...). Currently ${liveKnockoutTeams}.`
-                : null;
 
               return (
                 <div className="col-span-2 space-y-4 p-5 bg-emerald-950/20 rounded-2xl border border-emerald-500/30 animate-in fade-in slide-in-from-top-2">
@@ -354,13 +347,14 @@ export default function TournamentForm({ initialData, mode }: TournamentFormProp
                         type="number"
                         {...register('cl_direct_qualify_count', {
                           valueAsNumber: true,
+                          onChange: () => {
+                            trigger(['cl_direct_qualify_count', 'cl_playoff_zone_count', 'max_players']);
+                          }
                         })}
-                        className={cn("input-field block w-full text-sm", (bracketMathError || errors.cl_direct_qualify_count) && "border-red-500/50")}
+                        className={cn("input-field block w-full text-sm", errors.cl_direct_qualify_count && "border-red-500/50")}
                       />
                       <p className="text-[10px] text-slate-500">Advance directly to Round of 16.</p>
-                      {bracketMathError ? (
-                        <p className="text-xs text-red-400 font-bold mt-1">{bracketMathError}</p>
-                      ) : errors.cl_direct_qualify_count ? (
+                      {errors.cl_direct_qualify_count ? (
                         <p className="text-xs text-red-400 font-bold mt-1">{errors.cl_direct_qualify_count.message}</p>
                       ) : (
                         liveIsPowerOfTwo && (
@@ -375,6 +369,9 @@ export default function TournamentForm({ initialData, mode }: TournamentFormProp
                         type="number"
                         {...register('cl_playoff_zone_count', {
                           valueAsNumber: true,
+                          onChange: () => {
+                            trigger(['cl_direct_qualify_count', 'cl_playoff_zone_count', 'max_players']);
+                          }
                         })}
                         className="input-field block w-full text-sm"
                       />

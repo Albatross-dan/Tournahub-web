@@ -861,13 +861,7 @@ export default function ChallengeLobby() {
                     {/* Winner Badge */}
                     <Link 
                       to={`/players/${winner.username}`}
-                      onClick={(e) => {
-                        if (hasDraggedRef.current) {
-                          e.preventDefault();
-                          return;
-                        }
-                        e.stopPropagation();
-                      }}
+                      onClick={(e) => e.stopPropagation()}
                       className="w-12 h-12 flex items-center justify-center mt-2 mb-1 group/badge cursor-pointer"
                     >
                       <PlayerBadge 
@@ -882,13 +876,7 @@ export default function ChallengeLobby() {
                     <div className="w-full">
                       <Link
                         to={`/players/${winner.username}`}
-                        onClick={(e) => {
-                          if (hasDraggedRef.current) {
-                            e.preventDefault();
-                            return;
-                          }
-                          e.stopPropagation();
-                        }}
+                        onClick={(e) => e.stopPropagation()}
                         className="block text-xs font-black text-white uppercase italic tracking-tight truncate max-w-full hover:text-primary transition-colors cursor-pointer"
                       >
                         {winner.username}

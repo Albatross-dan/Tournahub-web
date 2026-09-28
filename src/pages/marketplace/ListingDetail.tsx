@@ -11,7 +11,6 @@ import { marketplaceService } from '../../services/marketplaceService';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { cn } from '../../lib/utils';
-import LoadingState from '../../components/ui/LoadingState';
 
 export default function ListingDetail() {
   const { id } = useParams<{ id: string }>();
@@ -61,7 +60,12 @@ export default function ListingDetail() {
   if (loading) {
     return (
       <Shell>
-        <LoadingState message="eFootball Tournaments" />
+        <div className="py-32 flex flex-col items-center justify-center space-y-4 text-slate-400">
+          <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-black uppercase tracking-widest text-slate-400">
+            Loading Account Dossier...
+          </span>
+        </div>
       </Shell>
     );
   }
