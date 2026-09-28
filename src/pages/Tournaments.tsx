@@ -159,7 +159,7 @@ export default function Tournaments() {
            </div>
 
            {loading ? (
-             <LoadingState message="Scanning Circuits..." />
+             <LoadingState message="eFootball Tournaments" />
            ) : filteredTournaments.length === 0 ? (
              <div className="flex flex-col items-center justify-center py-16 text-center space-y-4 bg-surface/30 border border-border-main/50 rounded-[2rem] p-8">
                <div className="w-16 h-16 bg-zinc-900/50 border border-white/5 rounded-full flex items-center justify-center text-zinc-600">
@@ -221,7 +221,7 @@ function TournamentCard({ tournament, isJoined }: { tournament: Tournament; isJo
         <div className="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent" />
         
         <div className="absolute top-6 left-6 flex items-center space-x-2">
-          <span className="px-4 py-1.5 bg-[#d4e157] text-slate-900 text-[10px] font-black rounded-full uppercase tracking-widest shadow-md">
+          <span className="px-4 py-1.5 bg-[#d4e157] text-slate-900 text-[10px] font-black rounded-none uppercase tracking-widest shadow-md">
             {(tournament.type || '').toUpperCase()}
           </span>
           <StatusBadge status={tournament.status} />
@@ -267,7 +267,7 @@ function TournamentCard({ tournament, isJoined }: { tournament: Tournament; isJo
               {tournament.name}
            </h3>
            {isJoined && (
-             <div className="bg-[#d4e157]/20 border border-[#d4e157]/30 px-5 py-2 rounded-xl text-text-main text-xs font-black uppercase tracking-widest italic animate-in fade-in zoom-in duration-300">
+             <div className="bg-[#d4e157]/20 border border-[#d4e157]/30 px-5 py-2 rounded-none text-text-main text-xs font-black uppercase tracking-widest italic animate-in fade-in zoom-in duration-300">
                 Joined
              </div>
            )}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { Loader2, AlertTriangle, ShieldCheck, UserCheck, Trash2, FileText, User } from 'lucide-react';
 import { moderationService } from '../../services/moderationService';
+import { supabase } from '../../lib/supabase';
 
 // Helper to handle and format errors correctly
 export function handleModerationError(error: any) {
@@ -562,6 +563,13 @@ export const AssignRoleModal: React.FC<ModalProps> = ({ isOpen, onClose, user: t
     try {
       await moderationService.assignRole(target.id, role);
       toast.success(`✓ Role updated to ${role}`);
+      
+      try {
+        await supabase.auth.refreshSession();
+      } catch (refreshErr) {
+        console.warn('[AssignRoleModal] Failed to refresh session on role update (non-fatal):', refreshErr);
+      }
+
       onSuccess();
       onClose();
     } catch (err) {

@@ -112,15 +112,19 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
           return <SidebarItem key={item.path} item={item} collapsed={!isOpen} />;
         })}
 
-        {isAdmin && (
+        {profile?.role === 'admin' || profile?.role === 'moderator' ? (
           <div className="pt-6 space-y-2">
             {isOpen && <p className="px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Management</p>}
-            {adminItems.map((item) => {
-              const Icon = item.icon;
-              return <SidebarItem key={item.path} item={item} collapsed={!isOpen} color="hover:bg-primary/10 hover:text-primary" />;
-            })}
+            {profile?.role === 'admin' ? (
+              adminItems.map((item) => {
+                const Icon = item.icon;
+                return <SidebarItem key={item.path} item={item} collapsed={!isOpen} color="hover:bg-primary/10 hover:text-primary" />;
+              })
+            ) : (
+              <SidebarItem item={{ name: 'Staff Hub', path: '/staff', icon: ShieldCheck }} collapsed={!isOpen} color="hover:bg-primary/10 hover:text-primary" />
+            )}
           </div>
-        )}
+        ) : null}
       </nav>
 
       {/* Profile Summary in Sidebar */}
@@ -141,13 +145,18 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
                   {profile?.username || 'Gamer'}
                 </p>
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">
-                  {isAdmin ? 'Admin Access' : 'Pro Member'}
+                  {profile?.role === 'admin' ? 'Admin Access' : profile?.role === 'moderator' ? 'Moderator Access' : 'Pro Member'}
                 </p>
               </div>
             </div>
-            {!isAdmin && (
+            {profile?.role !== 'admin' && profile?.role !== 'moderator' && (
                <div className="bg-primary/10 rounded-lg p-2 border border-primary/20">
                   <p className="text-[8px] font-black text-primary uppercase tracking-[0.2em] text-center">Standard Account</p>
+               </div>
+            )}
+            {profile?.role === 'moderator' && (
+               <div className="bg-cyan-500/10 rounded-lg p-2 border border-cyan-500/20">
+                  <p className="text-[8px] font-black text-cyan-400 uppercase tracking-[0.2em] text-center">Moderator Account</p>
                </div>
             )}
           </motion.div>

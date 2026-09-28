@@ -21,6 +21,7 @@ import { cn, getPublicIdentity, getSignedUrl } from '../../lib/utils';
 import { matchService } from '../../services/matchService';
 import { supabase } from '../../lib/supabase';
 import { formatDistanceToNow } from 'date-fns';
+import { toast } from 'react-hot-toast';
 import StorageImage from '../common/StorageImage';
 
 interface MatchDisputeCardProps {
@@ -434,10 +435,15 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
     fetchSubmissions();
   }, [match.match_id, match.id, match.submissions, match.verification_status]);
 
-  const handleAction = async (action: string, resultId?: string) => {
-    setLoadingAction(action);
+  const [cardError, setCardError] = useState<string | null>(null);
+  const [overrideWinner, setOverrideWinner] = useState<string | null>(null);
+  const [showWinnerPickerInOverride, setShowWinnerPickerInOverride] = useState(false);
+
+  const handleAction = async (actionType: string, resultId?: string) => {
+    setLoadingAction(actionType);
+    setCardError(null);
     const targetMatchId = match.match_id || match.id;
-    console.log(`[MatchDisputeCard] Action Request: ${action}`, { 
+    console.log(`[MatchDisputeCard] Action Request: ${actionType}`, { 
       resultId, 
       matchId: targetMatchId, 
       requiredAction: match.required_action,
@@ -446,80 +452,52 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
     
     if (!targetMatchId) {
       console.error('[MatchDisputeCard] Critical Error: Match object is missing match_id and id', match);
-      alert('Internal Reference Error: This match data is malformed and missing its unique identifier. Please refresh the page.');
+      setCardError('Internal Reference Error: This match data is malformed and missing its unique identifier.');
       setLoadingAction(null);
       return;
     }
 
     if (isMyMatch) {
-      alert("Unauthorized: Admins cannot resolve disputes for their own matches.");
+      setCardError("Unauthorized: Admins cannot resolve disputes for their own matches.");
       setLoadingAction(null);
       return;
     }
 
     if (isAlreadyFinalised) {
-      alert("This match is already finalised.");
+      setCardError("This match is already finalised.");
       setLoadingAction(null);
       return;
     }
 
     try {
-      if (action === 'approve') {
-        const isSingleSubFlow = requiredAction === 'approve_or_reject_single_submission' || (submissions.length === 1 && match.verification_status !== 'disputed');
-        
-        if (isSingleSubFlow) {
-          console.log('[MatchDisputeCard] Executing adminVerifyResult Flow');
-          const targetId = resultId || (submissions[0]?.id);
-          if (!targetId) throw new Error('Internal Error: No valid submission footprint detected for approval.');
-          await matchService.adminVerifyResult(targetId, adminId, 'approve', adminNotes);
-        } else {
-          console.log('[MatchDisputeCard] Executing resolveDispute Flow');
-          // Resolve dispute requires a winning submission if possible, but can also work with overrides
-          await matchService.resolveDispute({
-            adminId,
-            matchId: targetMatchId,
-            winningSubId: resultId,
-            adminNotes: adminNotes || 'Administrative consensus resolution',
-          });
-        }
-      } else if (action === 'no_show_p1' || action === 'no_show_p2') {
-        // Resolve as forfeit
-        const score1 = action === 'no_show_p2' ? 3 : 0;
-        const score2 = action === 'no_show_p1' ? 3 : 0;
-        console.log(`[MatchDisputeCard] Resolving as no-show for ${action === 'no_show_p1' ? 'P1' : 'P2'}`);
-        await matchService.resolveDispute({
-          adminId,
-          matchId: targetMatchId,
-          overrideScore1: score1,
-          overrideScore2: score2,
-          adminNotes: adminNotes || `System Resolution: No-show forfeit awarded to ${action === 'no_show_p2' ? 'P1' : 'P2'}`,
-        });
-      } else if (action === 'cancel') {
-        console.log('[MatchDisputeCard] Resolving as match cancellation');
-        await matchService.resolveDispute({
-          adminId,
-          matchId: targetMatchId,
-          overrideScore1: 0,
-          overrideScore2: 0,
-          adminNotes: adminNotes || 'Protocol: Match nullified by administrative authority',
-        });
-      } else if (action === 'reschedule') {
-        // Pre-fill rescheduleTime with current scheduled date or current system time
+      if (actionType === 'reschedule_modal') {
         const initialDate = match.scheduled_at 
           ? new Date(new Date(match.scheduled_at).getTime() - new Date(match.scheduled_at).getTimezoneOffset() * 60000)
           : new Date();
-        const initialTime = initialDate.toISOString().slice(0, 16);
-        setRescheduleTime(initialTime);
+        setRescheduleTime(initialDate.toISOString().slice(0, 16));
         setShowRescheduleModal(true);
         setLoadingAction(null);
         return;
       }
-      
-      console.log('[MatchDisputeCard] Action success');
+
+      const payload: any = {
+        adminId,
+        matchId: targetMatchId,
+        action: actionType === 'approve' ? 'approve_submission' : actionType,
+        adminNotes: adminNotes || `Admin action: ${actionType}`
+      };
+
+      if (actionType === 'approve' || actionType === 'approve_submission') {
+        payload.winningSubId = resultId || (submissions[0]?.id);
+        payload.action = 'approve_submission';
+      }
+
+      await matchService.resolveDispute(payload);
+      toast.success('Match dispute resolved successfully!');
       onResolved();
     } catch (err: any) {
-      console.error('[MatchDisputeCard] Critical action failure:', err);
-      alert(err.message || 'Standard Operation failed. Check logs for decryption.');
+      console.error('[MatchDisputeCard] Action failure:', err);
+      setCardError(err.message || 'Failed to execute dispute resolution action.');
     } finally {
       setLoadingAction(null);
     }
@@ -527,14 +505,15 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
 
   const handleOverrideSubmit = async () => {
     setLoadingAction('override');
+    setCardError(null);
     const targetMatchId = match.match_id || match.id;
     if (isMyMatch) {
-      alert("Unauthorized: Admins cannot resolve disputes for their own matches.");
+      setCardError("Unauthorized: Admins cannot resolve disputes for their own matches.");
       setLoadingAction(null);
       return;
     }
     if (isAlreadyFinalised) {
-      alert("This match is already finalised.");
+      setCardError("This match is already finalised.");
       setLoadingAction(null);
       return;
     }
@@ -542,14 +521,23 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
       await matchService.resolveDispute({
         adminId,
         matchId: targetMatchId,
-        overrideScore1: parseInt(overrideScore1),
-        overrideScore2: parseInt(overrideScore2),
-        adminNotes,
+        action: 'score_override',
+        overrideScore1: parseInt(overrideScore1) || 0,
+        overrideScore2: parseInt(overrideScore2) || 0,
+        winnerId: overrideWinner || undefined,
+        adminNotes: adminNotes || 'Manual score override by admin',
       });
       setShowOverrideModal(false);
+      toast.success('Score override applied!');
       onResolved();
     } catch (err: any) {
-      alert(err.message || 'Override failed');
+      console.error('[MatchDisputeCard] Override failure:', err);
+      if (err.message && (err.message.includes('draw') || err.message.includes('winner') || err.message.includes('tiebreak'))) {
+        setCardError('Draws are forbidden for this tournament stage. Please select a winner.');
+        setShowWinnerPickerInOverride(true);
+      } else {
+        setCardError(err.message || 'Manual score override failed.');
+      }
     } finally {
       setLoadingAction(null);
     }
@@ -557,14 +545,15 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
 
   const handleRescheduleSubmit = async () => {
     setLoadingAction('reschedule_action');
+    setCardError(null);
     const targetMatchId = match.match_id || match.id;
     if (isMyMatch) {
-      alert("Unauthorized: Admins cannot resolve disputes for their own matches.");
+      setCardError("Unauthorized: Admins cannot resolve disputes for their own matches.");
       setLoadingAction(null);
       return;
     }
     if (isAlreadyFinalised) {
-      alert("This match is already finalised.");
+      setCardError("This match is already finalised.");
       setLoadingAction(null);
       return;
     }
@@ -572,30 +561,20 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
       if (!rescheduleTime) {
         throw new Error('Please select a valid scheduled timestamp.');
       }
-      const date = new Date(rescheduleTime);
 
-      const { error: matchError } = await (supabase.from('matches') as any)
-        .update({
-          scheduled_at: date.toISOString(),
-          status: 'scheduled',
-          result_verification_status: 'none',
-          score1: null,
-          score2: null,
-          winner: null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', targetMatchId);
-
-      if (matchError) throw matchError;
-
-      const { error: resultError } = await (supabase.from('match_results') as any)
-        .delete()
-        .eq('match_id', targetMatchId);
+      await matchService.resolveDispute({
+        adminId,
+        matchId: targetMatchId,
+        action: 'reschedule',
+        adminNotes: adminNotes || `Rescheduled to ${rescheduleTime}`
+      });
 
       setShowRescheduleModal(false);
+      toast.success('Match rescheduled!');
       onResolved();
     } catch (err: any) {
-      alert(err.message || 'Reschedule failed');
+      console.error('[MatchDisputeCard] Reschedule failure:', err);
+      setCardError(err.message || 'Reschedule failed.');
     } finally {
       setLoadingAction(null);
     }
@@ -650,6 +629,13 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
 
       {/* Main Content */}
       <div className="p-6 space-y-6">
+        {cardError && (
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-xs font-bold uppercase tracking-wide flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-500" />
+            <span>{cardError}</span>
+          </div>
+        )}
+
         <div className="flex items-center justify-center space-x-8 py-4 relative">
           <div className="text-center group">
             <div className="w-16 h-16 bg-slate-800 rounded-2xl border border-slate-700 flex items-center justify-center mb-3 mx-auto">
@@ -889,6 +875,38 @@ export const MatchDisputeCard: React.FC<MatchDisputeCardProps> = ({ match, onRes
                 />
               </div>
             </div>
+
+            {(showWinnerPickerInOverride || (overrideScore1 !== '' && overrideScore1 === overrideScore2)) && (
+              <div className="space-y-2 mb-6">
+                <label className="text-[10px] font-black uppercase tracking-widest text-amber-400">Match Winner (Required for Knockout/Tiebreak)</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setOverrideWinner(player1Id)}
+                    className={cn(
+                      "py-3 px-4 rounded-xl text-xs font-bold uppercase transition-all border",
+                      overrideWinner === player1Id
+                        ? "bg-primary text-black border-primary font-black"
+                        : "bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700"
+                    )}
+                  >
+                    {getPublicIdentity(match.player1_username || match.player1)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOverrideWinner(player2Id)}
+                    className={cn(
+                      "py-3 px-4 rounded-xl text-xs font-bold uppercase transition-all border",
+                      overrideWinner === player2Id
+                        ? "bg-primary text-black border-primary font-black"
+                        : "bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700"
+                    )}
+                  >
+                    {getPublicIdentity(match.player2_username || match.player2)}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-col gap-3">
               <button 

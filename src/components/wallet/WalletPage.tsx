@@ -14,7 +14,7 @@ export function WalletPage() {
   if (isLoading) {
     return (
       <Shell>
-        <LoadingState message="Decrypting secure gaming ledger..." />
+        <LoadingState message="eFootball Tournaments" />
       </Shell>
     );
   }

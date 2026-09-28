@@ -117,12 +117,22 @@ export const supabase = createClient<Database>(
         const url = input.toString();
         try {
           const response = await fetch(input, init);
+          // Report success to networkService dynamically
+          import('../services/networkService').then(({ networkService }) => {
+            networkService.reportSuccess();
+          }).catch(() => {});
+
           // Safely log success or HTTP failure using cloned response
           import('./sentry').then(({ instrumentSupabaseFetch }) => {
             instrumentSupabaseFetch(url, init, response.clone(), null);
           }).catch(() => {});
           return response;
-        } catch (error) {
+        } catch (error: any) {
+          // Report failure to networkService dynamically
+          import('../services/networkService').then(({ networkService }) => {
+            networkService.reportFailure(error);
+          }).catch(() => {});
+
           // Log network or connection crash
           import('./sentry').then(({ instrumentSupabaseFetch }) => {
             instrumentSupabaseFetch(url, init, null, error);

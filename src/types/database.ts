@@ -42,7 +42,7 @@ export interface Database {
         Row: {
           id: string
           name: string
-          type: 'league' | 'knockout' | 'swiss' | 'group_stage' | 'hybrid'
+          type: 'league' | 'knockout' | 'swiss' | 'group_stage' | 'hybrid' | 'champions_league'
           max_players: number
           entry_fee: number | null
           prize_pool: number | null
@@ -66,7 +66,7 @@ export interface Database {
         Insert: {
           id?: string
           name: string
-          type: 'league' | 'knockout' | 'swiss' | 'group_stage' | 'hybrid'
+          type: 'league' | 'knockout' | 'swiss' | 'group_stage' | 'hybrid' | 'champions_league'
           max_players: number
           entry_fee?: number | null
           prize_pool?: number | null
@@ -90,7 +90,7 @@ export interface Database {
         Update: {
           id?: string
           name?: string
-          type?: 'league' | 'knockout' | 'swiss' | 'group_stage' | 'hybrid'
+          type?: 'league' | 'knockout' | 'swiss' | 'group_stage' | 'hybrid' | 'champions_league'
           max_players?: number
           entry_fee?: number | null
           prize_pool?: number | null
@@ -133,6 +133,11 @@ export interface Database {
           match_order: number | null
           scheduled_at: string | null
           group_name: string | null
+          leg?: number | null
+          tie_id?: string | null
+          aggregate_score1?: number | null
+          aggregate_score2?: number | null
+          tie_status?: string | null
         }
         Insert: {
           id?: string
@@ -154,6 +159,11 @@ export interface Database {
           match_order?: number | null
           scheduled_at?: string | null
           group_name?: string | null
+          leg?: number | null
+          tie_id?: string | null
+          aggregate_score1?: number | null
+          aggregate_score2?: number | null
+          tie_status?: string | null
         }
         Update: {
           id?: string
@@ -175,6 +185,11 @@ export interface Database {
           match_order?: number | null
           scheduled_at?: string | null
           group_name?: string | null
+          leg?: number | null
+          tie_id?: string | null
+          aggregate_score1?: number | null
+          aggregate_score2?: number | null
+          tie_status?: string | null
         }
       }
       match_results: {
@@ -298,6 +313,9 @@ export interface Database {
           group_stage_mode: string | null
           qualify_count: number | null
           double_round_robin: boolean | null
+          cl_direct_qualify_count?: number | null
+          cl_playoff_zone_count?: number | null
+          cl_two_legged_rounds?: boolean | null
         }
         Insert: {
           id?: string
@@ -317,6 +335,9 @@ export interface Database {
           group_stage_mode?: string | null
           qualify_count?: number | null
           double_round_robin?: boolean | null
+          cl_direct_qualify_count?: number | null
+          cl_playoff_zone_count?: number | null
+          cl_two_legged_rounds?: boolean | null
         }
         Update: {
           id?: string
@@ -336,6 +357,9 @@ export interface Database {
           group_stage_mode?: string | null
           qualify_count?: number | null
           double_round_robin?: boolean | null
+          cl_direct_qualify_count?: number | null
+          cl_playoff_zone_count?: number | null
+          cl_two_legged_rounds?: boolean | null
         }
       }
       messages: {

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Trophy, CheckCircle, AlertCircle, Loader2, ArrowRight, RefreshCw, Mail } from 'lucide-react';
+import LoadingState from '../components/ui/LoadingState';
 
 const logoUrl = '/android-chrome-512x512.png';
 
@@ -109,18 +110,8 @@ export default function VerifyCallback() {
 
               const profileData = profileRaw as any;
 
-              const hasIncompleteProfile = 
-                !profileData?.username || 
-                profileData.username.trim() === '' || 
-                profileData.username.startsWith('temp_user_') ||
-                !profileData?.whatsapp_number || 
-                profileData.whatsapp_number.trim() === '';
-
-              if (hasIncompleteProfile) {
-                navigate('/complete-profile', { replace: true });
-              } else {
-                navigate('/dashboard', { replace: true });
-              }
+              // Route to dashboard directly so they can browse freely without blockade
+              navigate('/dashboard', { replace: true });
             } catch (err) {
               console.error('[VerifyCallback] Error checking profile status silently:', err);
               navigate('/dashboard', { replace: true });
@@ -154,18 +145,8 @@ export default function VerifyCallback() {
 
                 const profileData = profileRaw as any;
 
-                const hasIncompleteProfile = 
-                  !profileData?.username || 
-                  profileData.username.trim() === '' || 
-                  profileData.username.startsWith('temp_user_') ||
-                  !profileData?.whatsapp_number || 
-                  profileData.whatsapp_number.trim() === '';
-
-                if (hasIncompleteProfile) {
-                  navigate('/complete-profile', { replace: true });
-                } else {
-                  navigate('/dashboard', { replace: true });
-                }
+                // Route to dashboard directly so they can browse freely without blockade
+                navigate('/dashboard', { replace: true });
               } catch (err) {
                 console.error('[VerifyCallback] Error checking profile status silently:', err);
                 navigate('/dashboard', { replace: true });
@@ -181,7 +162,7 @@ export default function VerifyCallback() {
       } catch (err: any) {
         console.error('[VerifyCallback] Exception during verification hook parsing:', err);
         setStatus('error');
-        setErrorDesc(err.message || 'An expected security check failure occurred.');
+        setErrorDesc(err.message || 'An expected eFootball Tournaments validation issue occurred.');
       }
     };
 
@@ -267,17 +248,7 @@ export default function VerifyCallback() {
           
           {/* LOADING STATE */}
           {status === 'loading' && (
-            <div className="flex flex-col items-center text-center space-y-6 py-6 animate-pulse">
-              <Loader2 className="w-12 h-12 text-primary animate-spin" />
-              <div className="space-y-2">
-                <h3 className="text-lg font-black uppercase tracking-tight text-white italic">
-                  AUTHORIZING CREDENTIALS...
-                </h3>
-                <p className="text-[11px] text-slate-400 font-semibold leading-relaxed uppercase tracking-wider">
-                  Establishing secure tunnel with Supabase authenticators. Hold on, fighter.
-                </p>
-              </div>
-            </div>
+            <LoadingState message="eFootball Tournaments" />
           )}
 
           {/* SUCCESS STATE */}

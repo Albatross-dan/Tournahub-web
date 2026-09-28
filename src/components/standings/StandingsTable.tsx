@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { motion } from 'motion/react';
+import { Link } from 'react-router-dom';
 import { cn } from '../../lib/utils';
 import LoadingState from '../ui/LoadingState';
 import { tournamentService } from '../../services/tournamentService';
@@ -8,6 +9,7 @@ import { useMatchCompletionSync } from '../../hooks/useMatchCompletionSync';
 import { PlayerBadge } from '../ui/PlayerBadge';
 import KnockoutTree from '../fixtures/KnockoutTree';
 import DownloadShareAction, { DownloadHeader, DownloadFooter } from '../common/DownloadShareAction';
+import { Trophy } from 'lucide-react';
 
 interface StandingsTableProps {
   tournamentId: string;
@@ -125,7 +127,7 @@ export default function StandingsTable({ tournamentId, groupName, registrations,
   if (loading) {
     return (
       <div className="card p-12 bg-surface/50 border-border-main">
-        <LoadingState message="Aggregating Stats..." />
+        <LoadingState message="eFootball Tournaments" />
       </div>
     );
   }
@@ -172,35 +174,73 @@ export default function StandingsTable({ tournamentId, groupName, registrations,
             </thead>
             <tbody className="divide-y divide-border-main">
               {standings.map((row, index) => {
-                const isQualified = index < 2; // Highlight top 2
+                const settings = Array.isArray((tournament as any)?.tournament_settings) 
+                  ? (tournament as any)?.tournament_settings[0] 
+                  : (tournament as any)?.tournament_settings;
+                const clDirect = settings?.cl_direct_qualify_count || 8;
+                const clPlayoff = settings?.cl_playoff_zone_count || 16;
+
+                const isClDirect = tournamentType === 'champions_league' && index < clDirect;
+                const isClPlayoff = tournamentType === 'champions_league' && index >= clDirect && index < clDirect + clPlayoff;
+                const isQualified = tournamentType !== 'champions_league' ? index < 2 : false;
+
                 return (
                   <tr 
                     key={row.username || row.id || `std-idx-${index}`} 
                     className={cn(
                       "text-sm transition-colors hover:bg-surface-hover",
-                      isQualified && "bg-emerald-500/5"
+                      isQualified && "bg-emerald-500/5",
+                      isClDirect && "bg-emerald-500/10 border-l-4 border-emerald-500",
+                      isClPlayoff && "bg-purple-500/10 border-l-4 border-purple-500"
                     )}
                   >
                     <td className="px-3 md:px-6 py-4">
-                      <span className={cn(
-                        "font-black italic px-2 py-1 rounded",
-                        (row.rank || index + 1) <= 2 ? "text-emerald-500 bg-emerald-500/10" : "text-text-muted"
-                      )}>
-                        #{row.rank || index + 1}
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        <span className={cn(
+                          "font-black italic px-2 py-1 rounded",
+                          isClDirect ? "text-emerald-400 bg-emerald-500/20" :
+                          isClPlayoff ? "text-purple-400 bg-purple-500/20" :
+                          (row.rank || index + 1) <= 2 ? "text-emerald-500 bg-emerald-500/10" : "text-text-muted"
+                        )}>
+                          #{row.rank || index + 1}
+                        </span>
+                        {isClDirect && (
+                          <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-500 text-slate-950 tracking-tighter">R16</span>
+                        )}
+                        {isClPlayoff && (
+                          <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-purple-500 text-slate-950 tracking-tighter">Playoff</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 md:px-6 py-4">
                       <div className="flex items-center space-x-3">
-                        <div className="flex items-center space-x-3 min-w-0">
-                          <PlayerBadge 
-                            badgeId={row.badge_id} 
-                            username={row.username} 
-                            size="sm" 
-                          />
-                          <span className="font-bold text-text-main uppercase italic tracking-tight truncate max-w-[120px] sm:max-w-none">
-                            {row.username}
-                          </span>
-                        </div>
+                        {row.username ? (
+                          <Link 
+                            to={`/players/${row.username}`}
+                            className="flex items-center space-x-3 min-w-0 group cursor-pointer"
+                          >
+                            <PlayerBadge 
+                              badgeId={row.badge_id} 
+                              username={row.username} 
+                              size="sm" 
+                              className="group-hover:scale-105 transition-transform"
+                            />
+                            <span className="font-bold text-text-main uppercase italic tracking-tight truncate max-w-[120px] sm:max-w-none group-hover:text-primary transition-colors">
+                              {row.username}
+                            </span>
+                          </Link>
+                        ) : (
+                          <div className="flex items-center space-x-3 min-w-0">
+                            <PlayerBadge 
+                              badgeId={row.badge_id} 
+                              username="Anonymous" 
+                              size="sm" 
+                            />
+                            <span className="font-bold text-text-muted uppercase italic tracking-tight truncate max-w-[120px] sm:max-w-none">
+                              Anonymous
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-3 md:px-6 py-4 text-center text-text-muted">{row.played}</td>
@@ -224,6 +264,16 @@ export default function StandingsTable({ tournamentId, groupName, registrations,
         </div>
         <DownloadFooter />
       </motion.div>
+
+      {tournamentType === 'champions_league' && (
+        <div className="mt-8 pt-8 border-t border-border-main space-y-4">
+          <h3 className="text-xl font-black text-text-main italic uppercase tracking-tighter flex items-center gap-2">
+            <Trophy className="w-5 h-5 text-primary" />
+            Champions League Playoff & Knockout Stage
+          </h3>
+          <KnockoutTree tournamentId={tournamentId} hideIfEmpty={true} />
+        </div>
+      )}
     </div>
   );
 }

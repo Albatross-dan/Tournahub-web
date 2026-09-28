@@ -4,7 +4,7 @@ import {
   Trophy, Users, Wallet, 
   ArrowUpRight, Gamepad2, Timer,
   Loader2, Tv, Shield, HelpCircle,
-  ChevronDown, ChevronUp, Calendar, Play, CheckCircle2, Download,
+  ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Play, CheckCircle2, Download,
   MessageSquare, Swords
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -19,6 +19,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import LoadingState from '../components/ui/LoadingState';
 import StatusBadge from '../components/ui/StatusBadge';
 import { TournamentStatus } from '../constants';
+import { get } from 'idb-keyval';
 
 import { useQuery } from '@tanstack/react-query';
 import { useRealtimeTournaments } from '../hooks/useRealtimeTournaments';
@@ -78,7 +79,7 @@ export default function Dashboard() {
   const refreshUnreadCommunityCount = React.useCallback(async () => {
     if (!user?.id) return;
     try {
-      const lastReadStr = localStorage.getItem('community_chat_last_read_at') || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const lastReadStr = (await get<string>('community_chat_last_read_at')) || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { count, error } = await (supabase as any)
         .from('community_chat_messages')
         .select('*', { count: 'exact', head: true })
@@ -108,9 +109,9 @@ export default function Dashboard() {
           schema: 'public',
           table: 'community_chat_messages'
         },
-        (payload) => {
+        async (payload) => {
           const newMessage = payload.new;
-          const lastReadStr = localStorage.getItem('community_chat_last_read_at') || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          const lastReadStr = (await get<string>('community_chat_last_read_at')) || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
           if (newMessage.sender_id !== user.id && newMessage.created_at > lastReadStr) {
             setUnreadCommunityMessages(prev => prev + 1);
           }
@@ -218,6 +219,23 @@ export default function Dashboard() {
     refetchOnWindowFocus: true,
   });
 
+  // Query weekly highlights
+  const { data: highlights = null, refetch: refetchHighlights } = useQuery<any>({
+    queryKey: ['home_weekly_highlights'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('v_home_weekly_highlights')
+        .select('*')
+        .maybeSingle();
+      if (error) {
+        console.warn('[Dashboard] Error querying weekly highlights:', error);
+        return null;
+      }
+      return data;
+    },
+    staleTime: 1000 * 60 * 30, // 30 minutes
+  });
+
   const scheduledMatches = React.useMemo(() => {
     return userMatches.filter((m: any) => 
       ['pending', 'scheduled', 'waiting_for_players'].includes(m.status)
@@ -233,8 +251,9 @@ export default function Dashboard() {
       refetchSubmittedMatchIds();
       refreshUnreadCommunityCount();
       refreshOpenChallengesCount();
+      refetchHighlights();
     }
-  }, [refetchSignal, refetchMatches, refetchStats, refetchSubmittedMatchIds, refreshUnreadCommunityCount, refreshOpenChallengesCount]);
+  }, [refetchSignal, refetchMatches, refetchStats, refetchSubmittedMatchIds, refreshUnreadCommunityCount, refreshOpenChallengesCount, refetchHighlights]);
 
   // Compatibility callback for refetchOnFocus hook
   async function loadDashboardData() {
@@ -244,8 +263,98 @@ export default function Dashboard() {
       refetchSubmittedMatchIds();
       refreshUnreadCommunityCount();
       refreshOpenChallengesCount();
+      refetchHighlights();
     }
   }
+
+  // Live Tournaments horizontal scrolling & auto-movement refs & handlers
+  const tournamentSliderRef = React.useRef<HTMLDivElement>(null);
+  const isSliderPausedRef = React.useRef(false);
+  const [isSliderHovered, setIsSliderHovered] = useState(false);
+  const isDraggingSliderRef = React.useRef(false);
+  const startXSliderRef = React.useRef(0);
+  const scrollLeftSliderRef = React.useRef(0);
+  const hasDraggedSliderRef = React.useRef(false);
+  const pauseSliderTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const handleSliderInteraction = React.useCallback(() => {
+    isSliderPausedRef.current = true;
+    if (pauseSliderTimeoutRef.current) clearTimeout(pauseSliderTimeoutRef.current);
+    pauseSliderTimeoutRef.current = setTimeout(() => {
+      isSliderPausedRef.current = false;
+    }, 4500);
+  }, []);
+
+  const handleSliderMouseDown = (e: React.MouseEvent) => {
+    if (!tournamentSliderRef.current) return;
+    isDraggingSliderRef.current = true;
+    hasDraggedSliderRef.current = false;
+    startXSliderRef.current = e.pageX - tournamentSliderRef.current.offsetLeft;
+    scrollLeftSliderRef.current = tournamentSliderRef.current.scrollLeft;
+    handleSliderInteraction();
+  };
+
+  const handleSliderMouseMove = (e: React.MouseEvent) => {
+    if (!isDraggingSliderRef.current || !tournamentSliderRef.current) return;
+    const x = e.pageX - tournamentSliderRef.current.offsetLeft;
+    const walk = (x - startXSliderRef.current) * 1.5;
+    if (Math.abs(walk) > 6) {
+      hasDraggedSliderRef.current = true;
+    }
+    tournamentSliderRef.current.scrollLeft = scrollLeftSliderRef.current - walk;
+    handleSliderInteraction();
+  };
+
+  const handleSliderMouseUp = () => {
+    isDraggingSliderRef.current = false;
+    setTimeout(() => {
+      hasDraggedSliderRef.current = false;
+    }, 60);
+  };
+
+  const handleSliderWheel = (e: React.WheelEvent) => {
+    if (!tournamentSliderRef.current) return;
+    if (Math.abs(e.deltaX) > 5 || Math.abs(e.deltaY) > 5) {
+      handleSliderInteraction();
+      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      tournamentSliderRef.current.scrollLeft += delta;
+    }
+  };
+
+  const handleScrollSliderLeft = () => {
+    handleSliderInteraction();
+    if (!tournamentSliderRef.current) return;
+    tournamentSliderRef.current.scrollBy({ left: -360, behavior: 'smooth' });
+  };
+
+  const handleScrollSliderRight = () => {
+    handleSliderInteraction();
+    if (!tournamentSliderRef.current) return;
+    tournamentSliderRef.current.scrollBy({ left: 360, behavior: 'smooth' });
+  };
+
+  // Continuous auto-movement every 4 seconds when not hovered or interacting
+  useEffect(() => {
+    if (isSliderHovered || activeTournaments.length <= 1) return;
+
+    const interval = setInterval(() => {
+      if (isSliderPausedRef.current) return;
+      const container = tournamentSliderRef.current;
+      if (!container) return;
+
+      const maxScroll = container.scrollWidth - container.clientWidth;
+      if (container.scrollLeft >= maxScroll - 15) {
+        container.scrollTo({ left: 0, behavior: 'smooth' });
+      } else {
+        container.scrollBy({ left: 360, behavior: 'smooth' });
+      }
+    }, 4000);
+
+    return () => {
+      clearInterval(interval);
+      if (pauseSliderTimeoutRef.current) clearTimeout(pauseSliderTimeoutRef.current);
+    };
+  }, [isSliderHovered, activeTournaments.length]);
 
   const container = {
     hidden: { opacity: 0 },
@@ -274,7 +383,7 @@ export default function Dashboard() {
   if (isDashboardLoading && scheduledMatches.length === 0 && activeTournaments.length === 0) {
     return (
       <Shell>
-        <LoadingState message="Synchronizing Arena..." />
+        <LoadingState message="eFootball Tournaments" />
       </Shell>
     );
   }
@@ -319,62 +428,108 @@ export default function Dashboard() {
           </motion.div>
         )}
 
-        {/* Tournament Auto-Slider (Available Tournaments) */}
+        {/* Tournament Auto-Slider (Available Tournaments) with Sharp Corners & Full Scrollability */}
         <div className="space-y-4">
-          <div>
-            <h2 className="text-xl font-black text-text-main uppercase italic tracking-tighter">Live Tournaments</h2>
-            <p className="text-xs text-text-muted font-bold uppercase tracking-widest leading-none mt-1">Tap a card to open the details view.</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-black text-text-main uppercase italic tracking-tighter">Live Tournaments</h2>
+              <p className="text-xs text-text-muted font-bold uppercase tracking-widest leading-none mt-1">Tap a card to open the details view.</p>
+            </div>
+            {activeTournaments.length > 1 && (
+              <div className="hidden sm:flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleScrollSliderLeft}
+                  aria-label="Scroll left"
+                  className="w-8 h-8 rounded-none bg-surface border border-border-main text-text-main flex items-center justify-center hover:bg-surface-hover hover:border-primary/40 transition-all cursor-pointer shadow-sm"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleScrollSliderRight}
+                  aria-label="Scroll right"
+                  className="w-8 h-8 rounded-none bg-surface border border-border-main text-text-main flex items-center justify-center hover:bg-surface-hover hover:border-primary/40 transition-all cursor-pointer shadow-sm"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </div>
           
-          <div className="relative overflow-hidden py-4 -mx-4 sm:mx-0">
-            <div className="flex px-4 sm:px-0">
+          <div className="relative group/slider py-2 -mx-4 sm:mx-0">
+            {/* Quick left/right floating overlay arrows for direct 1-click scrolling */}
+            {activeTournaments.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleScrollSliderLeft}
+                  aria-label="Scroll tournaments left"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-none bg-black/90 border border-white/20 text-white flex items-center justify-center hover:bg-primary hover:text-black hover:border-primary transition-all opacity-0 group-hover/slider:opacity-100 shadow-2xl cursor-pointer"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleScrollSliderRight}
+                  aria-label="Scroll tournaments right"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-none bg-black/90 border border-white/20 text-white flex items-center justify-center hover:bg-primary hover:text-black hover:border-primary transition-all opacity-0 group-hover/slider:opacity-100 shadow-2xl cursor-pointer"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </>
+            )}
+
+            <div 
+              ref={tournamentSliderRef}
+              onMouseEnter={() => setIsSliderHovered(true)}
+              onMouseLeave={() => {
+                setIsSliderHovered(false);
+                handleSliderMouseUp();
+              }}
+              onMouseDown={handleSliderMouseDown}
+              onMouseMove={handleSliderMouseMove}
+              onMouseUp={handleSliderMouseUp}
+              onTouchStart={handleSliderInteraction}
+              onScroll={handleSliderInteraction}
+              onWheel={handleSliderWheel}
+              className="flex gap-6 overflow-x-auto custom-scrollbar select-none cursor-grab active:cursor-grabbing pb-3 scroll-smooth px-4 sm:px-0"
+              style={{ isolation: 'isolate', transform: 'translate3d(0,0,0)' }}
+            >
               {activeLoading ? (
                 <div className="w-full flex gap-6 overflow-hidden">
                   {[1, 2, 3].map(i => (
-                    <div key={i} className="w-[300px] sm:w-[500px] aspect-[16/9] sm:aspect-[2.5/1] rounded-3xl bg-surface border border-border-main animate-pulse shrink-0" />
+                    <div key={i} className="w-[300px] sm:w-[500px] aspect-[16/9] sm:aspect-[2.5/1] rounded-none bg-surface border border-border-main animate-pulse shrink-0" />
                   ))}
                 </div>
-              ) : (
-                <motion.div 
-                  animate={activeTournaments.length > 0 ? { 
-                    x: ["0%", "-33.33%"]
-                  } : {}}
-                  transition={activeTournaments.length > 0 ? { 
-                    duration: 55, 
-                    repeat: Infinity, 
-                    ease: "linear" 
-                  } : {}}
-                  className="flex gap-6 w-max"
-                >
-                  {sliderItems.map((tournament, idx) => (
-                    <div key={`${tournament.id}-${idx}`} className="w-[300px] sm:w-[500px] shrink-0">
-                       <TournamentHeroCard tournament={tournament} />
-                    </div>
-                  ))}
-                  {activeTournaments.length === 0 && (
-                    <div className="w-[calc(100vw-2rem)] sm:w-full card p-16 text-center space-y-4 rounded-3xl border-2 border-dashed border-border-main bg-surface/20">
-                      <div className="w-16 h-16 bg-surface border border-border-main rounded-full flex items-center justify-center mx-auto">
-                        <Trophy className="w-8 h-8 text-text-muted" />
+              ) : activeTournaments.length === 0 ? (
+                <div className="w-[calc(100vw-2rem)] sm:w-full card p-16 text-center space-y-4 rounded-none border-2 border-dashed border-border-main bg-surface/20">
+                  <div className="w-16 h-16 bg-surface border border-border-main rounded-none flex items-center justify-center mx-auto">
+                    <Trophy className="w-8 h-8 text-text-muted" />
+                  </div>
+                  {isAdmin ? (
+                    <>
+                      <div>
+                        <p className="text-xl font-black text-text-main italic uppercase tracking-tighter">No active arena battles</p>
+                        <p className="text-xs text-text-muted font-bold uppercase tracking-widest mt-1">Start by creating a tournament in the admin panel.</p>
                       </div>
-                      {isAdmin ? (
-                        <>
-                          <div>
-                            <p className="text-xl font-black text-text-main italic uppercase tracking-tighter">No active arena battles</p>
-                            <p className="text-xs text-text-muted font-bold uppercase tracking-widest mt-1">Start by creating a tournament in the admin panel.</p>
-                          </div>
-                          <Link to="/admin/tournaments" className="btn-secondary inline-block px-10 py-3 text-xs uppercase italic font-black">
-                            Create Tournament
-                          </Link>
-                        </>
-                      ) : (
-                        <div>
-                          <p className="text-xl font-black text-text-main italic uppercase tracking-tighter">No active arena battles</p>
-                          <p className="text-xs text-text-muted font-bold uppercase tracking-widest mt-1">Check back soon for upcoming tournaments and challenges.</p>
-                        </div>
-                      )}
+                      <Link to="/admin/tournaments" className="btn-secondary inline-block px-10 py-3 text-xs uppercase italic font-black rounded-none">
+                        Create Tournament
+                      </Link>
+                    </>
+                  ) : (
+                    <div>
+                      <p className="text-xl font-black text-text-main italic uppercase tracking-tighter">No active arena battles</p>
+                      <p className="text-xs text-text-muted font-bold uppercase tracking-widest mt-1">Check back soon for upcoming tournaments and challenges.</p>
                     </div>
                   )}
-                </motion.div>
+                </div>
+              ) : (
+                (activeTournaments.length > 2 ? activeTournaments : sliderItems).map((tournament, idx) => (
+                  <div key={`${tournament.id}-${idx}`} className="w-[300px] sm:w-[500px] shrink-0">
+                    <TournamentHeroCard tournament={tournament} hasDraggedRef={hasDraggedSliderRef} />
+                  </div>
+                ))
               )}
             </div>
           </div>
@@ -384,7 +539,7 @@ export default function Dashboard() {
           {/* Main Feed: Scheduled Matches */}
           <motion.div variants={item} className="lg:col-span-2 space-y-8">
             {/* Community Chat + 1v1 Challenge Side-by-Side Row */}
-            <motion.div variants={item} className="flex flex-row items-stretch gap-2 w-full duration-300">
+            <div className="flex flex-row items-stretch gap-2 w-full duration-300" style={{ isolation: 'isolate', transform: 'translate3d(0,0,0)' }}>
               {/* Left Card: Community Chat */}
               <div 
                 role="button"
@@ -460,79 +615,125 @@ export default function Dashboard() {
                   <ArrowUpRight className="w-3.5 h-3.5 text-[#818cf8] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </div>
               </div>
-            </motion.div>
+            </div>
 
-            <div>
-              <SectionHeader title="Next Scheduled Battles" link="/matches" />
-              <div className="space-y-4 mt-4">
-                {scheduledMatches.length > 0 ? (
-                  <div className="space-y-4">
-                     <AnimatePresence mode="popLayout" initial={false}>
-                      {/* Show first 2 matches always */}
-                      {scheduledMatches.slice(0, 2).map((match) => (
-                        <motion.div key={match.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
-                          <MatchCard match={match} userSubmittedMatchIds={userSubmittedMatchIds} />
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
+            {highlights && (highlights.match_of_week_match_id || highlights.player_of_week_user_id) && (
+              <div className="space-y-4" style={{ isolation: 'isolate', transform: 'translate3d(0,0,0)' }}>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-black text-text-main uppercase tracking-widest flex items-center gap-2 italic">
+                    <span className="w-1.5 h-3 bg-primary rounded-full italic inline-block" />
+                    Weekly Highlights
+                  </h2>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Match of the Week Card */}
+                  {highlights.match_of_week_match_id && (
+                    <div
+                      onClick={() => navigate(`/matches/${highlights.match_of_week_match_id}`)}
+                      className="card p-4 bg-surface hover:bg-surface/80 border border-border-main hover:border-primary/20 rounded-3xl flex flex-col justify-between min-h-[140px] transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl hover:scale-[1.01]"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="bg-primary/10 text-primary px-2.5 py-1 rounded-full text-[9px] font-black tracking-wider uppercase flex items-center gap-1">
+                          <span className="animate-pulse">🔥</span> Match of the Week
+                        </span>
+                        <ArrowUpRight className="w-3.5 h-3.5 text-text-muted group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                      </div>
 
-                    {/* Remaining matches container with AnimatePresence */}
-                    <AnimatePresence initial={false}>
-                      {isSchedulesExpanded && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.3, ease: "easeInOut" }}
-                          className="overflow-hidden space-y-4"
-                        >
-                          {scheduledMatches.slice(2).map((match) => (
-                            <motion.div key={match.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
-                              <MatchCard match={match} userSubmittedMatchIds={userSubmittedMatchIds} />
-                            </motion.div>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {/* Expansion trigger card/button */}
-                    {scheduledMatches.length > 2 && (
-                      <button
-                        onClick={() => setIsSchedulesExpanded(!isSchedulesExpanded)}
-                        className={cn(
-                          "w-full py-3 px-4 bg-surface hover:bg-surface/80 border border-border-main hover:border-primary/20 rounded-2xl flex items-center justify-between transition-all duration-300 group cursor-pointer text-text-muted hover:text-text-main",
-                          isSchedulesExpanded && "border-primary/20 bg-primary/5 hover:bg-primary/5"
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="w-2.5 h-2.5 rounded-full bg-primary/20 flex items-center justify-center">
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                          </span>
-                          <span className="text-[10px] font-black uppercase tracking-wider italic">
-                            {isSchedulesExpanded ? `COLLAPSE MATCH LIST` : `EXPAND UPCOMING SCHEDULES (+${scheduledMatches.length - 2} MORE)`}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[9px] font-black tracking-wider uppercase text-text-muted">
-                            {isSchedulesExpanded ? 'HIDE' : 'SHOW ALL'}
-                          </span>
-                          <div className={cn(
-                            "w-6 h-6 rounded-lg bg-surface border border-border-main flex items-center justify-center transition-transform duration-300",
-                            isSchedulesExpanded && "rotate-180"
-                          )}>
-                            <ChevronDown className="w-3.5 h-3.5" />
+                      <div className="mt-3 space-y-1">
+                        <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest line-clamp-1">
+                          {highlights.match_of_week_tournament_name || 'Tournament'}
+                        </p>
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col items-start min-w-0 flex-1">
+                            <span 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/players/${highlights.match_of_week_player1_username}`);
+                              }}
+                              className="text-sm font-black text-text-main uppercase italic truncate max-w-full hover:text-primary transition-colors cursor-pointer"
+                            >
+                              {highlights.match_of_week_player1_username}
+                            </span>
+                            <span className="text-[9px] text-text-muted font-bold uppercase">Player 1</span>
+                          </div>
+                          <div className="px-3 flex flex-col items-center shrink-0">
+                            <span className="text-lg font-black text-primary tracking-tighter italic">
+                              {highlights.match_of_week_score1} – {highlights.match_of_week_score2}
+                            </span>
+                            <span className="text-[8px] text-text-muted font-bold uppercase tracking-widest">VS</span>
+                          </div>
+                          <div className="flex flex-col items-end min-w-0 flex-1 text-right">
+                            <span 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/players/${highlights.match_of_week_player2_username}`);
+                              }}
+                              className="text-sm font-black text-text-main uppercase italic truncate max-w-full hover:text-primary transition-colors cursor-pointer"
+                            >
+                              {highlights.match_of_week_player2_username}
+                            </span>
+                            <span className="text-[9px] text-text-muted font-bold uppercase">Player 2</span>
                           </div>
                         </div>
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="card p-12 text-center text-text-muted italic rounded-3xl border-dashed border-2 border-border-main">
-                    No matches found. Go join a tournament!
-                  </div>
-                )}
+                      </div>
+
+                      <div className="mt-3 pt-2 border-t border-border-main/50 flex items-center justify-between text-[9px]">
+                        <span className="text-text-muted font-bold uppercase tracking-widest">Combined Goals</span>
+                        <span className="font-black text-text-main bg-surface-hover px-1.5 py-0.5 rounded border border-border-main">{highlights.match_of_week_combined_goals} goals</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Player of the Week Card */}
+                  {highlights.player_of_week_user_id && (
+                    <Link
+                      to={`/players/${highlights.player_of_week_username}`}
+                      className="card p-4 bg-surface hover:bg-surface/80 border border-border-main hover:border-primary/20 rounded-3xl flex flex-col justify-between min-h-[140px] transition-all duration-300 group cursor-pointer shadow-md hover:shadow-xl hover:scale-[1.01]"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="bg-amber-500/10 text-amber-500 px-2.5 py-1 rounded-full text-[9px] font-black tracking-wider uppercase flex items-center gap-1">
+                          <span>⭐</span> Player of the Week
+                        </span>
+                        <ArrowUpRight className="w-3.5 h-3.5 text-text-muted group-hover:text-amber-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                      </div>
+
+                      <div className="mt-3 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 overflow-hidden shrink-0 flex items-center justify-center">
+                          {highlights.player_of_week_avatar_url ? (
+                            <img
+                              src={highlights.player_of_week_avatar_url}
+                              alt={highlights.player_of_week_username || 'Player'}
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <span className="text-sm font-black text-amber-500 uppercase italic">
+                              {(highlights.player_of_week_username || 'P')[0]}
+                            </span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-base font-black text-text-main uppercase italic truncate">
+                            {highlights.player_of_week_username}
+                          </p>
+                          <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest leading-none mt-0.5">
+                            Form of the Week
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-2 border-t border-border-main/50 flex items-center justify-between text-[9px]">
+                        <span className="text-text-muted font-bold uppercase tracking-widest">Performance</span>
+                        <span className="font-black text-amber-500 bg-amber-500/5 px-2 py-0.5 rounded border border-amber-500/15">
+                          {highlights.player_of_week_goals} {highlights.player_of_week_goals === 1 ? 'goal' : 'goals'} in {highlights.player_of_week_matches_played} {highlights.player_of_week_matches_played === 1 ? 'match' : 'matches'}
+                        </span>
+                      </div>
+                    </Link>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </motion.div>
 
           {/* Hall of Fame Square Card */}
@@ -709,66 +910,61 @@ export default function Dashboard() {
   );
 }
 
-function TournamentHeroCard({ tournament }: { tournament: Tournament }) {
-  const isOngoing = tournament.status === TournamentStatus.ONGOING;
-
+function TournamentHeroCard({ tournament, hasDraggedRef }: { tournament: Tournament; hasDraggedRef?: React.RefObject<boolean> }) {
   const regCount = typeof (tournament as any).registrations_count === 'object' 
     ? (tournament as any).registrations_count?.count ?? 0 
     : (tournament as any).registrations_count ?? 0;
 
   return (
-    <Link to={`/tournaments/${tournament.id}`} className="block group relative aspect-[1.4/1] rounded-[2.5rem] overflow-hidden border border-border-main hover:border-primary/50 transition-all duration-500 shadow-2xl">
-      <img src={tournament.banner_url || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=800'} alt="" className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-      <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-black/40 to-transparent" />
+    <Link 
+      to={`/tournaments/${tournament.id}`} 
+      onClick={(e) => {
+        if (hasDraggedRef?.current) {
+          e.preventDefault();
+        }
+      }}
+      className="block group relative aspect-[1.4/1] rounded-none overflow-hidden border border-border-main hover:border-primary/50 transition-all duration-500 shadow-2xl select-none"
+    >
+      <img 
+        src={tournament.banner_url || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=800'} 
+        alt="" 
+        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 rounded-none pointer-events-none" 
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent sm:bg-gradient-to-br sm:from-black/85 sm:via-black/40 sm:to-transparent rounded-none pointer-events-none" />
       
       {/* Glow Effect */}
-      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -mr-10 -mt-10" />
+      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-none blur-3xl -mr-10 -mt-10 pointer-events-none" />
 
-      <div className="absolute inset-0 p-8 flex flex-col justify-between">
+      <div className="absolute inset-0 p-3 sm:p-8 flex flex-col justify-between pointer-events-none">
+        {/* Top: Tournament Type */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <span className="px-4 py-1.5 bg-[#d4e157] text-black text-[10px] font-black rounded-full uppercase tracking-widest">
-              {tournament.type.toUpperCase()}
-            </span>
-            <StatusBadge status={tournament.status} />
-          </div>
-          <div className="w-14 h-14 bg-amber-500/80 backdrop-blur-md rounded-full flex items-center justify-center border border-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.3)]">
-            <span className="text-white font-black text-sm italic">${tournament.entry_fee || '0'}</span>
-          </div>
+          <span className="px-2 py-0.5 sm:px-4 sm:py-1.5 bg-[#d4e157] text-black text-[8px] sm:text-[10px] font-black rounded-none uppercase tracking-widest shadow-md">
+            {tournament.type.toUpperCase()}
+          </span>
         </div>
 
+        {/* Middle: Tournament Name */}
         <div>
-          <h2 className="text-4xl font-black text-white italic uppercase tracking-tighter leading-none group-hover:text-primary transition-colors">
+          <h2 className="text-base sm:text-4xl font-black text-white italic uppercase tracking-tighter leading-tight sm:leading-none group-hover:text-primary transition-colors line-clamp-2 drop-shadow-md">
             {tournament.name}
           </h2>
-          <p className="text-slate-300 text-sm font-medium mt-2 line-clamp-1">{tournament.description || 'Competitive tournament arena.'}</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-black/60 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/10 flex flex-col justify-center relative overflow-hidden">
-            <div className="flex items-center justify-between relative z-10">
-              <div>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Contenders</p>
-                <p className="text-lg font-black text-white italic">{String(regCount)}/{tournament.max_players}</p>
+        {/* Bottom: Contenders (Compact on mobile for clear banner visibility) */}
+        <div>
+          <div className="bg-black/70 sm:bg-black/85 backdrop-blur-md px-2 py-1 sm:px-5 sm:py-3 rounded-none border border-white/10 sm:border-white/15 inline-flex flex-col justify-center relative overflow-hidden max-w-full sm:max-w-xs shadow-lg">
+            <div className="flex items-center justify-between relative z-10 gap-2 sm:gap-4">
+              <div className="flex items-baseline sm:flex-col sm:items-start gap-1 sm:gap-0">
+                <p className="text-[7px] sm:text-[10px] text-slate-400 font-bold uppercase tracking-wider sm:tracking-widest">Contenders</p>
+                <p className="text-[10px] sm:text-lg font-black text-white italic leading-tight">{String(regCount)}/{tournament.max_players}</p>
               </div>
-              <Users className="w-5 h-5 text-slate-500" />
+              <Users className="w-2.5 h-2.5 sm:w-5 sm:h-5 text-slate-400 shrink-0" />
             </div>
-            <div className="absolute bottom-0 left-0 h-1 bg-primary/20 w-full" />
+            <div className="absolute bottom-0 left-0 h-[2px] sm:h-1 bg-primary/20 w-full" />
             <div 
-              className="absolute bottom-0 left-0 h-1 bg-primary transition-all duration-1000" 
+              className="absolute bottom-0 left-0 h-[2px] sm:h-1 bg-primary transition-all duration-1000" 
               style={{ width: `${Math.min(100, (Number(regCount) / (tournament.max_players || 1)) * 100)}%` }} 
             />
-          </div>
-          <div className="bg-black/60 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/10 flex flex-col justify-center">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Start time</p>
-                <p className="text-lg font-black text-white italic">
-                  {tournament.start_date ? new Date(tournament.start_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '12:00 AM'}
-                </p>
-              </div>
-              <Timer className="w-5 h-5 text-slate-500" />
-            </div>
           </div>
         </div>
       </div>
@@ -778,7 +974,7 @@ function TournamentHeroCard({ tournament }: { tournament: Tournament }) {
 
 function WinnerCard({ tournament }: { tournament: any }) {
   return (
-    <Link to={`/tournaments/${tournament.id}`} className="card p-5 hover:border-amber-500/50 transition-all group rounded-3xl relative overflow-hidden bg-gradient-to-br from-surface to-background border-amber-500/10 block h-full">
+    <Link to={`/tournaments/${tournament.id}`} className="card p-5 hover:border-amber-500/50 transition-all group rounded-none relative overflow-hidden bg-gradient-to-br from-surface to-background border-amber-500/10 block h-full">
       <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-20 transition-opacity rotate-12">
         <Trophy className="w-16 h-16 text-amber-500" />
       </div>
@@ -900,7 +1096,7 @@ function MatchCard({ match, userSubmittedMatchIds = [] }: { match: any; userSubm
         to={`/matches/${match.id}`} 
         className="btn-primary py-2 px-4 text-[10px] shadow-none group-hover:shadow-lg group-hover:shadow-primary/20 rounded-xl text-center inline-block"
       >
-        DEPLOY
+        VIEW DETAILS
       </Link>
     );
   };

@@ -99,7 +99,7 @@ export default function AdminStandings() {
         </div>
 
         {loading ? (
-          <LoadingState message="Processing League Points & Data Sets..." />
+          <LoadingState message="eFootball Tournaments" />
         ) : (
           <div className="card overflow-hidden border-white/5 bg-surface/20">
             <div className="overflow-x-auto">

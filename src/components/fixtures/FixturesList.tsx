@@ -7,10 +7,12 @@ import { PlayerBadge } from '../ui/PlayerBadge';
 import { useMatchCompletionSync } from '../../hooks/useMatchCompletionSync';
 import { Calendar, Trophy, Share2, Grid, List, Download, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { DownloadHeader, DownloadFooter } from '../common/DownloadShareAction';
 import { toPng } from 'html-to-image';
 import { toast } from 'react-hot-toast';
+import TwoLeggedTieCard from './TwoLeggedTieCard';
+import { groupMatchesIntoDisplayUnits, isPlaceholderPlayer, getPlaceholderText, formatLegLabel } from '../../utils/tieUtils';
 
 interface FixturesListProps {
   tournamentId: string;
@@ -65,9 +67,9 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
   async function fetchMatchesAndTournament() {
     try {
       const [matchesData, tournamentData, dbMatchesRes] = await Promise.all([
-        tournamentService.getFixturesWithBadges(tournamentId),
-        tournamentService.getById(tournamentId),
-        supabase.from('matches').select('id, leg').eq('tournament_id', tournamentId)
+        tournamentService.getFixturesWithBadges(tournamentId).catch(() => []),
+        tournamentService.getById(tournamentId).catch(() => null),
+        supabase.from('matches').select('id, leg').eq('tournament_id', tournamentId).then(res => res, () => ({ data: [] }))
       ]);
       const rawMatches = matchesData || [];
       const legMap = new Map<string, number>();
@@ -405,7 +407,7 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
   if (loading) {
     return (
       <div className="card p-12 bg-surface border-border-main text-center shadow-sm">
-        <LoadingState message="Mapping Brackets..." />
+        <LoadingState message="eFootball Tournaments" />
       </div>
     );
   }
@@ -427,7 +429,18 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
     let stage = match.stage || 'knockout';
     
     let roundLabel = 'General';
-    if (match.round) {
+    const sLower = String(stage).toLowerCase();
+    if (sLower === 'quarterfinal' || sLower === 'quarter_final') {
+      roundLabel = 'Quarter Finals';
+    } else if (sLower === 'semifinal' || sLower === 'semi_final') {
+      roundLabel = 'Semi Finals';
+    } else if (sLower === 'final') {
+      roundLabel = 'Grand Final';
+    } else if (sLower === 'round_of_16') {
+      roundLabel = 'Round of 16';
+    } else if (sLower === 'round_of_32') {
+      roundLabel = 'Round of 32';
+    } else if (match.round) {
       const isPlayoffs = stage === 'playoffs' || stage === 'playoff' || stage === 'play_off';
       if (isPlayoffs) {
         const rNum = Number(match.round);
@@ -462,7 +475,7 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
   }, {});
 
   const dataStages = Object.keys(groupedMatches);
-  const stagesInOrderPredefined = ['group', 'group_stage', 'league_first_leg', 'league_second_leg', 'league', 'knockout', 'main', 'quarterfinal', 'semifinal', 'final'];
+  const stagesInOrderPredefined = ['group', 'group_stage', 'league_first_leg', 'league_second_leg', 'league', 'playoffs', 'round_of_16', 'quarterfinal', 'semifinal', 'final', 'knockout', 'main'];
   
   const stagesInOrder = [
     ...stagesInOrderPredefined.filter(s => dataStages.includes(s)),
@@ -671,52 +684,94 @@ export default function FixturesList({ tournamentId }: FixturesListProps) {
                     </h4>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {roundMatches.map((match: any, idx: number) => (
-                        <motion.div
-                          key={`${match.match_id || match.id || idx}`}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: idx * 0.05 }}
-                          className="card p-5 bg-surface border-border-main hover:border-primary/30 transition-all group shadow-sm"
-                        >
-                          <div className="flex items-center justify-between mb-4">
-                            <span className={cn(
-                              "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded",
-                              match.status === 'completed' ? "bg-emerald-500/10 text-emerald-500" : "bg-primary/10 text-primary"
-                            )}>
-                              {match.status}
-                            </span>
-                            <div className="flex items-center text-text-muted space-x-2">
-                              <Calendar className="w-3 h-3" />
-                              <span className="text-[10px] font-bold uppercase tracking-tight">
-                                {match.scheduled_date && match.scheduled_time 
-                                  ? formatFixtureTime(match.scheduled_date, match.scheduled_time, match.timezone)
-                                  : (match.scheduled_at ? formatDate(match.scheduled_at) : 'Time TBD')}
-                              </span>
+                      {groupMatchesIntoDisplayUnits(roundMatches).map((unit: any, idx: number) => {
+                        if (unit.type === 'tie') {
+                          return (
+                            <div key={unit.id} className="col-span-1 md:col-span-2">
+                              <TwoLeggedTieCard tie={unit.tie} variant="public" />
                             </div>
-                          </div>
+                          );
+                        }
 
-                          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 md:gap-4 overflow-hidden">
-                            <PlayerCard 
-                              username={match.player1_username} 
-                              badgeId={match.player1_badge_id}
-                              score={match.score1}
-                              align="left"
-                              isWinner={match.status === 'completed' && match.score1 > match.score2}
-                            />
-                            <div className="shrink-0 flex flex-col items-center justify-center px-1">
-                              <div className="text-[8px] md:text-[10px] font-black text-text-muted opacity-40 bg-background px-2 py-0.5 md:py-1 rounded-full italic">VS</div>
+                        const match = unit.match;
+                        const p1Raw = match.player1_username || (typeof match.player1 === 'string' ? match.player1 : match.player1?.username);
+                        const p2Raw = match.player2_username || (typeof match.player2 === 'string' ? match.player2 : match.player2?.username);
+                        const isPlaceholder = isPlaceholderPlayer(match.player1_id || match.player1, p1Raw) && isPlaceholderPlayer(match.player2_id || match.player2, p2Raw);
+
+                        if (isPlaceholder) {
+                          return (
+                            <div key={unit.id} className="card p-6 border-dashed border-2 border-border-main/60 bg-surface/30 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-slate-800 text-slate-400">
+                                  Awaiting Results
+                                </span>
+                                <span className="text-[10px] font-bold text-text-muted">
+                                  {formatLegLabel(match.stage, match.leg)}
+                                </span>
+                              </div>
+                              <div className="py-4 text-center space-y-1">
+                                <p className="text-xs font-black text-text-muted uppercase tracking-tight">
+                                  {getPlaceholderText(match.stage, match.round)}
+                                </p>
+                              </div>
                             </div>
-                            <PlayerCard 
-                              username={match.player2_username} 
-                              badgeId={match.player2_badge_id} 
-                              score={match.score2}
-                              align="right"
-                              isWinner={match.status === 'completed' && match.score2 > match.score1}
-                            />
-                          </div>
-                        </motion.div>
-                      ))}
+                          );
+                        }
+
+                        return (
+                          <motion.div
+                            key={unit.id || `${match.match_id || match.id || idx}`}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: idx * 0.05 }}
+                            className="card p-5 bg-surface border-border-main hover:border-primary/30 transition-all group shadow-sm"
+                          >
+                            <div className="flex items-center justify-between mb-4">
+                              <div className="flex items-center gap-2">
+                                <span className={cn(
+                                  "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded",
+                                  match.status === 'completed' ? "bg-emerald-500/10 text-emerald-500" : "bg-primary/10 text-primary"
+                                )}>
+                                  {match.status}
+                                </span>
+                                {match.leg && (
+                                  <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                                    {formatLegLabel(match.stage, match.leg)}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center text-text-muted space-x-2">
+                                <Calendar className="w-3 h-3" />
+                                <span className="text-[10px] font-bold uppercase tracking-tight">
+                                  {match.scheduled_date && match.scheduled_time 
+                                    ? formatFixtureTime(match.scheduled_date, match.scheduled_time, match.timezone)
+                                    : (match.scheduled_at ? formatDate(match.scheduled_at) : 'Time TBD')}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 md:gap-4 overflow-hidden">
+                              <PlayerCard 
+                                username={match.player1_username} 
+                                badgeId={match.player1_badge_id}
+                                score={match.score1}
+                                align="left"
+                                isWinner={match.status === 'completed' && match.score1 > match.score2}
+                              />
+                              <div className="shrink-0 flex flex-col items-center justify-center px-1">
+                                <div className="text-[8px] md:text-[10px] font-black text-text-muted opacity-40 bg-background px-2 py-0.5 md:py-1 rounded-full italic">VS</div>
+                              </div>
+                              <PlayerCard 
+                                username={match.player2_username} 
+                                badgeId={match.player2_badge_id} 
+                                score={match.score2}
+                                align="right"
+                                isWinner={match.status === 'completed' && match.score2 > match.score1}
+                              />
+                            </div>
+                          </motion.div>
+                        );
+                      })}
                     </div>
 
                     {/* Image download footer */}
@@ -753,6 +808,44 @@ function PlayerCard({
 }) {
   const isLeft = align === 'left';
   
+  if (username && username.toLowerCase() !== 'tbd' && username !== 'Anonymous') {
+    return (
+      <Link 
+        to={`/players/${username}`}
+        className={cn(
+          "flex items-center gap-2 md:gap-3 min-w-0 group cursor-pointer", 
+          !isLeft && "flex-row-reverse text-right"
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <PlayerBadge 
+          badgeId={badgeId} 
+          username={username || 'TBD'} 
+          size="md"
+          className={cn(
+            "w-10 h-10 md:w-14 md:h-14 rounded-xl border-2 transition-all group-hover:scale-105",
+            isWinner ? "border-primary shadow-lg shadow-primary/20" : "border-border-main"
+          )}
+        />
+        <div className="min-w-0 flex-1">
+          <p className={cn(
+            "font-black text-[9px] md:text-xs uppercase italic tracking-tighter truncate leading-tight group-hover:text-primary transition-colors",
+            isWinner ? "text-primary" : "text-text-muted"
+          )}>
+            {getPublicIdentity(username) || 'TBD'}
+          </p>
+          {(score !== null && score !== undefined) ? (
+            <p className="text-xl md:text-3xl font-black text-text-main italic tracking-tighter leading-none mt-1">
+              {score}
+          </p>
+          ) : (
+            <div className="h-4 md:h-6" />
+          )}
+        </div>
+      </Link>
+    );
+  }
+
   return (
     <div className={cn(
       "flex items-center gap-2 md:gap-3 min-w-0", 

@@ -111,7 +111,7 @@ export default function ManageTournaments() {
                 {loading ? (
                   <tr>
                     <td colSpan={5} className="py-24">
-                      <LoadingState message="Fetching Global Tournament Repository..." />
+                      <LoadingState message="eFootball Tournaments" />
                     </td>
                   </tr>
                 ) : filtered.map((t) => (

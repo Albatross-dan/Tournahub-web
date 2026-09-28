@@ -10,17 +10,14 @@ import {
   ShieldAlert, Activity, CheckCircle2
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import LoadingState from '../../components/ui/LoadingState';
 
 export default function AdminPlatform() {
   const { status: globalStatus, checkStatus } = usePlatformStatus();
   const { user, profile, loading: authLoading } = useAuth();
 
   if (authLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[300px]">
-        <div className="w-8 h-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-      </div>
-    );
+    return <LoadingState message="eFootball Tournaments" />;
   }
 
   const isFullAdmin = profile?.role === 'admin' || user?.email?.toLowerCase().trim() === 'danieloguda11221@gmail.com';

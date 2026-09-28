@@ -8,7 +8,7 @@ import {
   Trash2, ExternalLink, ArrowUpRight,
   TrendingUp, Clock, Gamepad2, Radio,
   Shield, Gavel, ShieldAlert, FileText, UserCheck,
-  Loader2, Wrench, Megaphone, AlertTriangle
+  Loader2, Wrench, Megaphone, AlertTriangle, Store
 } from 'lucide-react';
 import { Tournament } from '../../types/database';
 import { Link } from 'react-router-dom';
@@ -888,6 +888,7 @@ export default function AdminDashboard() {
                 <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest italic">Operations HQ</h4>
                 <div className="space-y-3">
                   <AdminUtilLink to="/admin/moderation" icon={<Activity className="text-amber-500" />} label="Moderation HQ" />
+                  <AdminUtilLink to="/admin/marketplace" icon={<Store className="text-primary" />} label="Marketplace Desk" />
                   <AdminUtilLink to="/admin/tournaments" icon={<Trophy />} label="Event Registry" />
                   <AdminUtilLink to="/admin/players" icon={<Users />} label="Contender List" />
                   <AdminUtilLink to="/admin/fixtures" icon={<Gamepad2 />} label="Results Engine" />

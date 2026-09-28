@@ -110,35 +110,6 @@ export default function SettingsMenu() {
     }
   }, []);
 
-  // Trigger auto prompt if default permission on settings mount
-  useEffect(() => {
-    if (user && 'Notification' in window) {
-      const currentPerm = Notification.permission;
-      if (currentPerm === 'default') {
-        console.log('[SettingsMenu] Permission is default on mount. Promoting request...');
-        const triggerAutoPrompt = async () => {
-          try {
-            const token = await requestNotificationPermission(user.id);
-            const resultingPerm = Notification.permission;
-            setPermissionStatus(resultingPerm);
-            if (resultingPerm === 'granted') {
-              toast.success('System notifications successfully authorized!');
-              await updatePreference({ in_app_enabled: true });
-            } else if (resultingPerm === 'denied') {
-              toast.error('Notification access was blocked. Please enable them in your browser settings.');
-              await updatePreference({ in_app_enabled: false });
-            }
-          } catch (e) {
-            console.error('[SettingsMenu] Auto prompt failed:', e);
-          }
-        };
-
-        const timer = setTimeout(triggerAutoPrompt, 1000);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [user]);
-
   useEffect(() => {
     localStorage.setItem('settings_sounds', String(soundsEnabled));
   }, [soundsEnabled]);
@@ -204,15 +175,9 @@ export default function SettingsMenu() {
     try {
       const data = await profileService.getNotificationPreferences(user!.id) as UserPreferences;
       if (data) {
-        // Sync preferences state with the real browser state
         if ('Notification' in window) {
           const currentPerm = Notification.permission;
-          if (currentPerm === 'denied') {
-            data.in_app_enabled = false;
-            await profileService.updateNotificationPreferences(user!.id, { in_app_enabled: false });
-          } else if (currentPerm === 'default') {
-            data.in_app_enabled = false;
-          } else if (currentPerm === 'granted') {
+          if (currentPerm === 'granted') {
             const token = localStorage.getItem('fcm_token');
             if (!token) {
               console.log('[SettingsMenu] Permission is granted, but local fcm_token is missing. Syncing token...');
@@ -221,8 +186,6 @@ export default function SettingsMenu() {
               registerPushToken();
             }, 100);
           }
-        } else {
-          data.in_app_enabled = false;
         }
 
         setPreferences(data);
@@ -394,89 +357,116 @@ export default function SettingsMenu() {
         </h3>
 
         <div className="space-y-3">
-         {[
-            { id: 'in_app_enabled', label: 'Push Notifications', desc: 'Receive real-time match & tournament alerts', icon: Smartphone },
+          {/* Push Notifications Toggle */}
+          {(() => {
+            const isPushSupported = typeof window !== 'undefined' && 'Notification' in window;
+            const isPushActive = isPushSupported && !!preferences?.push_enabled;
+
+            const handleToggle = async () => {
+              if (!user) return;
+              if (!isPushSupported) {
+                toast.error('System notifications are not supported in this browser.');
+                return;
+              }
+
+              // Check if running inside an iframe
+              if (typeof window !== 'undefined' && window.self !== window.top && permissionStatus !== 'granted') {
+                toast.error(
+                  "Notification requests are blocked in this preview iframe. Please click the 'Open in New Tab' icon at the top-right of the screen to enable push alerts!",
+                  { duration: 6000 }
+                );
+                return;
+              }
+
+              setSaving(true);
+              try {
+                // Permission already granted — pure DB toggle, no popup needed
+                if (permissionStatus === 'granted') {
+                  const nextValue = !preferences?.push_enabled;
+                  await updatePreference({ push_enabled: nextValue });
+                  if (nextValue) {
+                    await requestNotificationPermission(user.id);
+                    toast.success('System notifications successfully activated!');
+                  } else {
+                    await revokePushToken();
+                    toast.success('Push notifications disabled.');
+                  }
+                  return;
+                }
+
+                // Permission not granted yet ('default' or 'denied')
+                // Just attempt the request again — no instructions, no branching.
+                const result = await Notification.requestPermission();
+                setPermissionStatus(result);
+
+                if (result === 'granted') {
+                  await requestNotificationPermission(user.id);
+                  await updatePreference({ push_enabled: true });
+                  toast.success('System notifications successfully activated!');
+                } else if (result === 'denied') {
+                  await updatePreference({ push_enabled: false });
+                  toast.error('Notification permission denied. Please allow notifications in your browser settings to enable push alerts.');
+                }
+              } catch (err: any) {
+                console.error('Error handling push toggle:', err);
+                toast.error(`Failed to request notification permission: ${err?.message || err || 'Unknown error'}`);
+              } finally {
+                setSaving(false);
+              }
+            };
+
+            return (
+              <button
+                disabled={saving}
+                onClick={handleToggle}
+                className={cn(
+                  "w-full card p-5 text-left border-2 transition-all flex items-center justify-between group cursor-pointer",
+                  isPushActive 
+                    ? "bg-indigo-500/5 border-indigo-500/30" 
+                    : "bg-surface border-border-main grayscale"
+                )}
+              >
+                <div className="flex items-center space-x-5">
+                  <div className={cn(
+                    "w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
+                    isPushActive ? "bg-indigo-500/20 text-indigo-400" : "bg-background text-text-muted"
+                  )}>
+                    <Smartphone className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-text-main uppercase italic tracking-tighter">Push Notifications</h4>
+                    <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest leading-none mt-1">
+                      Receive real-time match & tournament alerts
+                    </p>
+                  </div>
+                </div>
+                
+                <Toggle active={isPushActive} color="indigo" />
+              </button>
+            );
+          })()}
+
+          {/* Standard notification channels */}
+          {[
             { id: 'email_enabled', label: 'Email Reports', desc: 'Financial summaries and tournament results', icon: Mail },
             { id: 'tournament_notifications', label: 'Tournament Updates', desc: 'Alerts when your joined tournaments start', icon: Zap },
             { id: 'security_notifications', label: 'Security Alerts', desc: 'Important account and login notifications', icon: Shield }
           ].map((pref) => {
-            const isPush = pref.id === 'in_app_enabled';
-            const isPushSupported = 'Notification' in window;
-            const currentPushPerm = isPushSupported ? Notification.permission : 'not_supported';
-            const isActive = isPush 
-              ? (!!preferences?.[pref.id] && isPushSupported && currentPushPerm === 'granted')
-              : !!preferences?.[pref.id];
+            const isActive = !!preferences?.[pref.id];
 
             return (
               <button
                 key={pref.id}
                 onClick={async () => {
                   if (!user) return;
-                  const nextValue = !isActive;
-                  
-                  if (isPush) {
-                    if (!isPushSupported) {
-                      toast.error('System notifications are not supported in this browser.');
-                      return;
-                    }
-                    
-                    if (nextValue) {
-                      if (currentPushPerm === 'denied') {
-                        toast.error('Notifications are blocked in your browser. Please enable them in your device settings then return here.', {
-                          duration: 6000
-                        });
-                        return;
-                      }
-                      
-                      if (currentPushPerm === 'default') {
-                        console.log('[SettingsMenu] Requesting permission dynamically on toggle...');
-                        const token = await requestNotificationPermission(user!.id);
-                        const resPerm = Notification.permission;
-                        setPermissionStatus(resPerm);
-                        if (resPerm === 'granted' && token) {
-                          toast.success('System notifications successfully authorized!');
-                          await updatePreference({ in_app_enabled: true });
-                        } else {
-                          toast.error(resPerm === 'denied' 
-                            ? 'Notifications are blocked in your browser. Please enable them in your device settings then return here.'
-                            : 'Notifications authorization was denied.'
-                          );
-                          await updatePreference({ in_app_enabled: false });
-                        }
-                        return;
-                      }
-                      
-                      if (currentPushPerm === 'granted') {
-                        console.log('[SettingsMenu] Turn ON requested, permission already granted. Syncing...');
-                        const token = await requestNotificationPermission(user!.id);
-                        if (token) {
-                          toast.success('System notifications successfully activated!');
-                          await updatePreference({ in_app_enabled: true });
-                        } else {
-                          toast.error('Failed to retrieve push token. Check your FCM status.');
-                          await updatePreference({ in_app_enabled: false });
-                        }
-                        return;
-                      }
-                    } else {
-                      // Turning OFF
-                      console.log('[SettingsMenu] Turning OFF push notifications. Revoking...');
-                      await revokePushToken();
-                      await updatePreference({ in_app_enabled: false });
-                      toast.success('Push notifications disabled.');
-                      return;
-                    }
-                  } else {
-                    await updatePreference({ [pref.id]: nextValue });
-                  }
+                  await updatePreference({ [pref.id]: !isActive });
                 }}
-                disabled={saving || (isPush && (!isPushSupported || currentPushPerm === 'denied'))}
+                disabled={saving}
                 className={cn(
-                  "w-full card p-5 text-left border-2 transition-all flex items-center justify-between group",
+                  "w-full card p-5 text-left border-2 transition-all flex items-center justify-between group cursor-pointer",
                   isActive 
                     ? "bg-indigo-500/5 border-indigo-500/30" 
-                    : "bg-surface border-border-main grayscale",
-                  isPush && (!isPushSupported || currentPushPerm === 'denied') && "opacity-75 cursor-not-allowed"
+                    : "bg-surface border-border-main grayscale"
                 )}
               >
                 <div className="flex items-center space-x-5">
@@ -489,17 +479,6 @@ export default function SettingsMenu() {
                   <div>
                     <h4 className="text-sm font-black text-text-main uppercase italic tracking-tighter">{pref.label}</h4>
                     <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest leading-none mt-1">{pref.desc}</p>
-                    
-                    {isPush && !isPushSupported && (
-                      <p className="text-[10px] text-amber-500 font-extrabold uppercase mt-2 border-t border-amber-500/10 pt-1.5 leading-normal">
-                        ⚠️ Add this app to your Home Screen to enable notifications on iOS
-                      </p>
-                    )}
-                    {isPush && isPushSupported && currentPushPerm === 'denied' && (
-                      <p className="text-[10px] text-red-500 font-extrabold uppercase mt-2 border-t border-red-500/10 pt-1.5 leading-normal">
-                        🚫 Notifications are blocked in your browser. Please enable them in your device settings then return here.
-                      </p>
-                    )}
                   </div>
                 </div>
                 

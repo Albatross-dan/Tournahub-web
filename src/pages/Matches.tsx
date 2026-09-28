@@ -204,7 +204,7 @@ export default function Matches() {
 
         <div className="pt-8">
           {loading ? (
-            <LoadingState message={activeTab === 'matches' ? "Recalculating Brackets..." : "Syncing COMMS..."} />
+            <LoadingState message="eFootball Tournaments" />
           ) : activeTab === 'matches' ? (
             matches.length > 0 ? (
               <div className="space-y-6">

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, Lock, Loader2, CheckCircle2, Eye, EyeOff, AlertTriangle, ArrowRight } from 'lucide-react';
+import LoadingState from '../components/ui/LoadingState';
 
 const logoUrl = '/android-chrome-512x512.png';
 
@@ -141,14 +142,7 @@ export default function ResetPassword() {
   };
 
   if (checkingSession) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-4">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
-          <p className="text-slate-500 font-black uppercase tracking-[0.3em] text-[10px] animate-pulse">Establishing Secure Session...</p>
-        </div>
-      </div>
-    );
+    return <LoadingState fullPage message="eFootball Tournaments" />;
   }
 
   return (

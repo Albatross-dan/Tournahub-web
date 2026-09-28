@@ -107,7 +107,7 @@ export default function EditTournament() {
         </div>
 
         {loading ? (
-          <LoadingState message="Fetching Event Parameters..." />
+          <LoadingState message="eFootball Tournaments" />
         ) : tournament ? (
           <TournamentForm mode="edit" initialData={tournament} />
         ) : (

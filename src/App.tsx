@@ -34,6 +34,7 @@ import Landing from './pages/Landing';
 import Rules from './pages/Rules';
 import Help from './pages/Help';
 import CompleteProfile from './pages/CompleteProfile';
+import PlayerProfile from './pages/PlayerProfile';
 
 import ChallengeLobby from './pages/ChallengeLobby';
 import ChallengeDetails from './pages/ChallengeDetails';
@@ -55,6 +56,16 @@ const LiveTournament = lazy(() => import('./pages/admin/LiveTournament'));
 const Moderation = lazy(() => import('./pages/admin/Moderation'));
 const ModerationLogs = lazy(() => import('./pages/admin/ModerationLogs'));
 const StaffManagement = lazy(() => import('./pages/admin/StaffManagement'));
+const StaffPanel = lazy(() => import('./pages/StaffPanel'));
+
+// Lazy load marketplace pages
+const MarketplaceBrowse = lazy(() => import('./pages/marketplace/MarketplaceBrowse'));
+const ListingDetail = lazy(() => import('./pages/marketplace/ListingDetail'));
+const CreateEditListing = lazy(() => import('./pages/marketplace/CreateEditListing'));
+const MyOrders = lazy(() => import('./pages/marketplace/MyOrders'));
+const MySales = lazy(() => import('./pages/marketplace/MySales'));
+const SellerProfile = lazy(() => import('./pages/marketplace/SellerProfile'));
+const AdminMarketplace = lazy(() => import('./pages/marketplace/AdminMarketplace'));
 
 function HomeRoute() {
   const { user } = useAuth();
@@ -108,7 +119,7 @@ function RootPlatformGate({ children }: { children: React.ReactNode }) {
     return <LoadingState fullPage />;
   }
 
-  const isPublicRoute = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/terms', '/privacy-policy', '/privacy', '/legal', '/rules', '/help', '/verify-email', '/verify-callback'].includes(location.pathname);
+  const isPublicRoute = ['/', '/login', '/signup', '/forgot-password', '/reset-password', '/terms', '/privacy-policy', '/privacy', '/legal', '/rules', '/help', '/verify-email', '/verify-callback'].includes(location.pathname) || location.pathname.startsWith('/players/');
 
   if (status?.is_blocked && !isPublicRoute && !isAdmin) {
     return <MaintenanceScreen />;
@@ -145,6 +156,7 @@ function AppRoutes() {
                 <Route path="/help" element={<Help />} />
                 <Route path="/verify-email" element={<VerifyEmail />} />
                 <Route path="/verify-callback" element={<VerifyCallback />} />
+                <Route path="/players/:username" element={<PlayerProfile />} />
                 
                 <Route element={<ProtectedRoute />}>
                   <Route path="/complete-profile" element={<CompleteProfile />} />
@@ -152,6 +164,7 @@ function AppRoutes() {
                   <Route path="/tournaments" element={<Tournaments />} />
                   <Route path="/tournaments/:id" element={<TournamentDetails />} />
                   <Route path="/tournaments/:id/champion" element={<TournamentChampion />} />
+                  <Route path="/champion/:id" element={<TournamentChampion />} />
                   <Route path="/matches/:id" element={<MatchDetails />} />
                   <Route path="/matches" element={<Matches />} />
                   <Route path="/streams" element={<LiveStreams />} />
@@ -163,14 +176,23 @@ function AppRoutes() {
                   <Route path="/payment/callback" element={<PaymentCallback />} />
                   <Route path="/profile/wins" element={<WinnerHistory />} />
                   <Route path="/profile" element={<Profile />} />
+                  <Route path="/staff" element={<StaffPanel />} />
                   <Route path="/challenge-lobby" element={<ChallengeLobby />} />
                   <Route path="/challenges/:id" element={<ChallengeDetails />} />
                   <Route path="/challenges/:id/chat" element={<ChallengeChat />} />
+                  <Route path="/marketplace" element={<MarketplaceBrowse />} />
+                  <Route path="/marketplace/listing/:id" element={<ListingDetail />} />
+                  <Route path="/marketplace/create" element={<CreateEditListing />} />
+                  <Route path="/marketplace/edit/:id" element={<CreateEditListing />} />
+                  <Route path="/marketplace/orders" element={<MyOrders />} />
+                  <Route path="/marketplace/sales" element={<MySales />} />
+                  <Route path="/marketplace/profile/:sellerId" element={<SellerProfile />} />
                 </Route>
 
                 <Route element={<ProtectedRoute allowAdminOnly />}>
                   <Route path="/admin" element={<AdminDashboard />} />
                   <Route path="/admin/platform" element={<AdminPlatform />} />
+                  <Route path="/admin/marketplace" element={<AdminMarketplace />} />
                   <Route path="/admin/tournaments" element={<ManageTournaments />} />
                   <Route path="/admin/tournaments/create" element={<CreateTournament />} />
                   <Route path="/admin/tournaments/:id" element={<EditTournament />} />
@@ -198,14 +220,14 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <Router>
-        <ErrorBoundary>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <Router>
           <PwaUpdateProvider>
             <AppRoutes />
           </PwaUpdateProvider>
-        </ErrorBoundary>
-      </Router>
-    </QueryClientProvider>
+        </Router>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

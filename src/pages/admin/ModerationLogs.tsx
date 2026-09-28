@@ -213,7 +213,7 @@ export default function ModerationLogs() {
                 {loading ? (
                   <tr>
                     <td colSpan={5} className="py-24">
-                      <LoadingState message="Decrypting Global Audit Trails..." />
+                      <LoadingState message="eFootball Tournaments" />
                     </td>
                   </tr>
                 ) : logs.length > 0 ? (

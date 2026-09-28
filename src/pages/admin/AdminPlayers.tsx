@@ -8,7 +8,8 @@ import {
   Activity, ArrowUpRight, Ban, CheckCircle2,
   Clock, RefreshCw, ChevronLeft, ChevronRight,
   User, ShieldAlert, FileText, Trash2, X, Plus, Copy,
-  Loader2, History, Lock, Unlock
+  Loader2, History, Lock, Unlock,
+  MessageSquare, ExternalLink, AlertTriangle
 } from 'lucide-react';
 import { formatCurrency, cn, getPublicIdentity } from '../../lib/utils';
 import LoadingState from '../../components/ui/LoadingState';
@@ -332,20 +333,40 @@ export default function AdminPlayers() {
   async function loadUserDetail(userId: string) {
     setLoadingDetail(true);
     try {
-      const [userData, walletAdminData, txData] = await Promise.all([
+      const [userData, walletAdminData, txData, openTournamentRes] = await Promise.all([
         moderationService.getUser(userId),
         supabase.from('v_wallets_admin').select('*').eq('user_id', userId).maybeSingle(),
         supabase.from('wallet_transactions')
           .select('id, type, amount, status, description, created_at, tournament_id, tournament_name')
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
-          .limit(50)
+          .limit(50),
+        supabase.from('tournaments')
+          .select('id, name, start_date, created_at')
+          .eq('status', 'registration_open')
+          .order('created_at', { ascending: false })
+          .limit(10)
       ]);
+
+      const openTournaments: any[] = (openTournamentRes.data as any[]) || [];
+      const bestOpenTournament = openTournaments.length > 0
+        ? [...openTournaments].sort((a: any, b: any) => {
+            if (a.start_date && b.start_date) {
+              return new Date(a.start_date).getTime() - new Date(b.start_date).getTime();
+            }
+            if (a.start_date && !b.start_date) return -1;
+            if (!a.start_date && b.start_date) return 1;
+            const aCreated = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const bCreated = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return bCreated - aCreated;
+          })[0]
+        : null;
 
       setSelectedUserFull({
         ...(userData || {}),
         walletAdmin: walletAdminData?.data || null,
-        transactions: txData?.data || []
+        transactions: txData?.data || [],
+        openTournamentName: bestOpenTournament?.name || null
       });
     } catch (err) {
       console.error('Error fetching user detail:', err);
@@ -473,7 +494,7 @@ export default function AdminPlayers() {
                 {loading ? (
                   <tr>
                     <td colSpan={5} className="py-24">
-                      <LoadingState message="Decrypting Core Clearance Database..." />
+                      <LoadingState message="eFootball Tournaments" />
                     </td>
                   </tr>
                 ) : users.length > 0 ? (
@@ -694,18 +715,89 @@ export default function AdminPlayers() {
                         </button>
                       </div>
 
-                      <div className="space-y-1.5 mt-3 text-xs text-slate-400 font-bold border-t border-slate-800/40 pt-2.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span>📱 WhatsApp:</span>
-                          <span className="text-slate-300 select-all">{selectedUserFull.profile?.whatsapp_number || "Not set"}</span>
-                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase border leading-none ${
-                            selectedUserFull.profile?.whatsapp_number_verified 
-                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
-                              : "bg-red-500/10 text-red-400 border-red-500/20"
-                          }`}>
-                            {selectedUserFull.profile?.whatsapp_number_verified ? "✅ Verified" : "❌ Unverified"}
-                          </span>
-                        </div>
+                      <div className="space-y-2 mt-3 text-xs text-slate-400 font-bold border-t border-slate-800/40 pt-2.5">
+                        {(() => {
+                          const waNumber = selectedUserFull.profile?.whatsapp_number;
+                          const hasNumber = Boolean(waNumber && String(waNumber).trim() !== '');
+                          const isVerified = Boolean(selectedUserFull.profile?.whatsapp_number_verified);
+                          const digitsOnly = hasNumber ? String(waNumber).replace(/\D/g, '') : '';
+                          const isValidLength = digitsOnly.length >= 8 && digitsOnly.length <= 15;
+
+                          const openTournamentName = selectedUserFull.openTournamentName;
+                          const username = selectedUserFull.profile?.username || 'Contender';
+                          const recruitmentMessage = openTournamentName
+                            ? `Hey ${username}, this is TournaHub Official 👋 \u2014 spots are filling up fast for ${openTournamentName}! Don't miss out \u2014 register now: tournahub.me ⏳🏆`
+                            : null;
+                          const whatsappUrl = recruitmentMessage
+                            ? `https://wa.me/${digitsOnly}?text=${encodeURIComponent(recruitmentMessage)}`
+                            : `https://wa.me/${digitsOnly}`;
+
+                          return (
+                            <div className="flex flex-col gap-1.5 bg-slate-950/50 p-2.5 rounded-xl border border-slate-800/60">
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-slate-400">📱 WhatsApp:</span>
+                                  <span className="text-slate-200 select-all font-mono font-medium">
+                                    {hasNumber ? waNumber : "Not set"}
+                                  </span>
+                                  {hasNumber && (
+                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase border leading-none ${
+                                      isVerified 
+                                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
+                                        : "bg-red-500/10 text-red-400 border-red-500/20"
+                                    }`}>
+                                      {isVerified ? "✅ Verified" : "❌ Unverified"}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Tap-to-Chat WhatsApp Button */}
+                                {hasNumber && (
+                                  isValidLength ? (
+                                    <a
+                                      href={whatsappUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-[10px] font-black uppercase tracking-wider transition-all hover:scale-105 active:scale-95 shadow-sm"
+                                      title={
+                                        openTournamentName
+                                          ? `Open WhatsApp chat with ${username} (pre-filled recruitment message for ${openTournamentName})`
+                                          : `Open WhatsApp chat with ${username} (no tournament currently open for registration)`
+                                      }
+                                    >
+                                      <MessageSquare className="w-3 h-3 text-emerald-400 fill-emerald-500/20" />
+                                      <span>Chat</span>
+                                      <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                                    </a>
+                                  ) : (
+                                    <span 
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 cursor-not-allowed select-none"
+                                      title="Digit count is out of standard E.164 range (8 to 15 digits). Manual verification recommended."
+                                    >
+                                      <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                                      <span>Number looks invalid</span>
+                                    </span>
+                                  )
+                                )}
+                              </div>
+
+                              {/* Admin-facing note on recruitment message status */}
+                              {hasNumber && isValidLength && (
+                                <div className="flex items-center justify-between text-[10px] text-slate-500 border-t border-slate-800/40 pt-1.5 mt-0.5">
+                                  {openTournamentName ? (
+                                    <span className="text-emerald-400/90 font-medium truncate">
+                                      Pre-filled recruit invite: <span className="text-emerald-300 font-bold">{openTournamentName}</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-amber-400/80 italic">
+                                      No tournament currently open for registration (plain chat only)
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                         <div className="flex items-center gap-1.5">
                           <span>🌍 Country:</span>
                           <span className="text-slate-300 uppercase">

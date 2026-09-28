@@ -7,12 +7,18 @@ import {
   Gamepad2, Search, Trophy, FilterIcon, 
   Play, CheckCircle2, ChevronRight,
   Zap, Save, RefreshCcw, User as UserIcon,
-  Eye, Image as ImageIcon, ExternalLink
+  Eye, Image as ImageIcon, ExternalLink,
+  AlertTriangle, X
 } from 'lucide-react';
 import { formatCurrency, cn, getSignedUrl, getPublicIdentity } from '../../lib/utils';
 import LoadingState from '../../components/ui/LoadingState';
 import StorageImage from '../../components/common/StorageImage';
 import { useAuth } from '../../contexts/AuthContext';
+import TwoLeggedTieCard from '../../components/fixtures/TwoLeggedTieCard';
+import LevelTieResolutionBanner from '../../components/admin/LevelTieResolutionBanner';
+import { groupMatchesIntoDisplayUnits, GroupedTie, isPlaceholderPlayer, getPlaceholderText, getPlayerUuid } from '../../utils/tieUtils';
+import { PlayerBadge } from '../../components/ui/PlayerBadge';
+import toast from 'react-hot-toast';
 
 export default function AdminFixtures() {
   const { can, loading: authLoading } = useAuth();
@@ -22,6 +28,8 @@ export default function AdminFixtures() {
   const [matchResults, setMatchResults] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [resolveModalTie, setResolveModalTie] = useState<GroupedTie | null>(null);
+  const [resolvingBusy, setResolvingBusy] = useState(false);
 
   if (authLoading) {
     return <LoadingState />;
@@ -116,11 +124,18 @@ export default function AdminFixtures() {
     const match = matches.find(m => m.id === matchId);
     if (!match) return;
     
-    const winnerId = s1 > s2 ? match.player1.id : 
-                     s2 > s1 ? match.player2.id : null;
+    const p1Id = match.player1?.id || match.player1;
+    const p2Id = match.player2?.id || match.player2;
+    const winnerId = s1 > s2 ? p1Id : s2 > s1 ? p2Id : null;
     
-    if (!winnerId && s1 === s2) {
-      alert('Draws are not supported for verification yet. Please set a winner.');
+    const stage = match.stage || '';
+    const tournamentType = match.tournaments?.type || '';
+    const drawForbiddenStages = ['knockout', 'quarterfinal', 'semifinal', 'final', 'third_place', 'round_of_16', 'round_of_32', 'playoffs'];
+    const drawForbidden = drawForbiddenStages.includes(stage) || tournamentType === 'knockout';
+    const isTwoLeggedMatch = !!match.tie_id || match.leg === 1 || match.leg === 2;
+
+    if (drawForbidden && !winnerId && s1 === s2 && !isTwoLeggedMatch) {
+      alert('Draws are not supported for verification yet in single-leg matches. Please set a winner.');
       return;
     }
 
@@ -134,6 +149,36 @@ export default function AdminFixtures() {
       setBusy(false);
     }
   };
+
+  const handleResolveTieWinner = async (playerIndex: 1 | 2) => {
+    if (!resolveModalTie || !resolveModalTie.tie_id) {
+      toast.error('Missing tie identifier');
+      return;
+    }
+    setResolvingBusy(true);
+    try {
+      const playerObj = playerIndex === 1 ? resolveModalTie.player1 : resolveModalTie.player2;
+      const username = playerIndex === 1 ? resolveModalTie.player1_username : resolveModalTie.player2_username;
+      const directId = playerIndex === 1 ? resolveModalTie.player1_id : resolveModalTie.player2_id;
+      let winnerId = directId;
+      if (!winnerId) {
+        winnerId = await getPlayerUuid(playerObj, username, resolveModalTie.leg1 || resolveModalTie.leg2, playerIndex);
+      }
+      if (!winnerId) {
+        throw new Error(`Could not resolve player ID for "${username || 'Player'}".`);
+      }
+      await matchService.resolveLevelTie(resolveModalTie.tie_id, winnerId);
+      toast.success('Tie resolved! Winner advanced to the next round.');
+      setResolveModalTie(null);
+      await fetchMatches(selectedTournament!);
+    } catch (err: any) {
+      toast.error(`Error resolving tie: ${err.message}`);
+    } finally {
+      setResolvingBusy(false);
+    }
+  };
+
+  const displayUnits = groupMatchesIntoDisplayUnits(matches);
 
   return (
     <AdminShell>
@@ -182,24 +227,99 @@ export default function AdminFixtures() {
             </div>
           </div>
         ) : loading ? (
-          <LoadingState message="Scanning Encrypted Fixture Logs..." />
+          <LoadingState message="eFootball Tournaments" />
         ) : (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {matches.map((match) => (
-                <FixtureCard 
-                  key={match.id} 
-                  match={match} 
-                  onUpdate={updateScore}
-                  result={matchResults[match.id] || null}
-                />
-              ))}
+            <LevelTieResolutionBanner
+              ties={displayUnits.filter((u) => u.type === 'tie').map((u) => (u as any).tie)}
+              onResolved={() => fetchMatches(selectedTournament!)}
+            />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {displayUnits.map((unit) => {
+                if (unit.type === 'tie') {
+                  return (
+                    <div key={unit.id} className="col-span-1 md:col-span-2">
+                      <TwoLeggedTieCard 
+                        tie={unit.tie}
+                        variant="admin"
+                        onUpdateScore={updateScore}
+                        onResolveTie={(t) => setResolveModalTie(t)}
+                        onResolved={() => fetchMatches(selectedTournament!)}
+                        matchResults={matchResults}
+                      />
+                    </div>
+                  );
+                }
+
+                return (
+                  <FixtureCard 
+                    key={unit.id} 
+                    match={unit.match} 
+                    onUpdate={updateScore}
+                    result={matchResults[unit.match.id] || null}
+                  />
+                );
+              })}
             </div>
             {matches.length === 0 && (
               <div className="card p-20 text-center border-dashed border-2 border-slate-800">
                 <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">No matches have been deployed for this operation yet.</p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Modal for Admin Tie Resolution */}
+        {resolveModalTie && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="card bg-slate-900 border border-slate-800 p-6 max-w-md w-full shadow-2xl rounded-3xl animate-in fade-in zoom-in duration-200">
+              <h3 className="text-lg font-black text-white italic uppercase tracking-tighter flex items-center gap-2 mb-2">
+                <Trophy className="w-5 h-5 text-amber-500" />
+                Resolve Level Tie
+              </h3>
+              <p className="text-xs text-slate-400 mb-6">
+                Aggregate is tied ({resolveModalTie.aggregate_score1}–{resolveModalTie.aggregate_score2}). Enter extra time / penalty winner or select the advancing player:
+              </p>
+
+              <div className="space-y-3 mb-6">
+                <button
+                  disabled={resolvingBusy}
+                  onClick={() => handleResolveTieWinner(1)}
+                  className="w-full p-4 rounded-2xl bg-slate-800/80 hover:bg-primary/20 border border-slate-700 hover:border-primary transition-all flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <PlayerBadge badgeId={resolveModalTie.player1_badge_id} username={resolveModalTie.player1_username || 'Player 1'} size="sm" />
+                    <span className="font-bold text-white group-hover:text-primary uppercase tracking-tight truncate">
+                      {resolveModalTie.player1_username ? getPublicIdentity(resolveModalTie.player1_username) : 'Player 1'}
+                    </span>
+                  </div>
+                  <span className="text-xs font-black uppercase text-primary px-2.5 py-1 rounded bg-primary/10">Advance</span>
+                </button>
+
+                <button
+                  disabled={resolvingBusy}
+                  onClick={() => handleResolveTieWinner(2)}
+                  className="w-full p-4 rounded-2xl bg-slate-800/80 hover:bg-primary/20 border border-slate-700 hover:border-primary transition-all flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <PlayerBadge badgeId={resolveModalTie.player2_badge_id} username={resolveModalTie.player2_username || 'Player 2'} size="sm" />
+                    <span className="font-bold text-white group-hover:text-primary uppercase tracking-tight truncate">
+                      {resolveModalTie.player2_username ? getPublicIdentity(resolveModalTie.player2_username) : 'Player 2'}
+                    </span>
+                  </div>
+                  <span className="text-xs font-black uppercase text-primary px-2.5 py-1 rounded bg-primary/10">Advance</span>
+                </button>
+              </div>
+
+              <button
+                disabled={resolvingBusy}
+                onClick={() => setResolveModalTie(null)}
+                className="w-full py-3 bg-slate-800 text-slate-400 rounded-xl font-bold uppercase tracking-wider hover:bg-slate-700 hover:text-white transition-all text-xs"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -217,17 +337,48 @@ function FixtureCard({ match, onUpdate, result }: { match: any; onUpdate: (id: s
     setS2(match.score2 || 0);
   }, [match.score1, match.score2]);
 
+  const p1Raw = match.player1?.username || match.player1_username || (typeof match.player1 === 'string' ? match.player1 : null);
+  const p2Raw = match.player2?.username || match.player2_username || (typeof match.player2 === 'string' ? match.player2 : null);
+
+  const isPlaceholder = isPlaceholderPlayer(match.player1, p1Raw) && isPlaceholderPlayer(match.player2, p2Raw);
+
+  const stageLabel = (match.stage === 'final') ? 'Grand Final' :
+    ((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 1) ? 'Quarter Final' :
+    ((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 2) ? 'Semi Final' :
+    ((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 3) ? 'Final' :
+    `Round ${match.round} • ${match.stage?.replace('_', ' ')}`;
+
+  if (isPlaceholder) {
+    return (
+      <div className="card p-6 border-dashed border-2 border-white/10 bg-surface/10 space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest italic">
+            {stageLabel}
+          </span>
+          <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-slate-900 text-slate-500">
+            Awaiting Results
+          </span>
+        </div>
+        <div className="py-6 text-center space-y-1">
+          <p className="text-xs font-black text-slate-400 uppercase tracking-tight">
+            {getPlaceholderText(match.stage, match.round)}
+          </p>
+          <p className="text-[9px] text-slate-600 uppercase tracking-widest">
+            Participants will populate automatically when previous round concludes
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={cn(
       "card p-6 border-white/5 bg-surface/20 hover:border-primary/20 transition-all",
       match.status === 'completed' ? 'opacity-80' : ''
     )}>
       <div className="flex items-center justify-between mb-6">
-        <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest italic">
-          {((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 1) ? 'Quarter Final' :
-           ((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 2) ? 'Semi Final' :
-           ((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 3) ? 'Final' :
-           `Round ${match.round}`} • {match.stage?.replace('_', ' ')}
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">
+          {stageLabel}
         </span>
         {match.status === 'completed' ? (
           <div className="flex items-center text-emerald-500 text-[10px] font-black uppercase tracking-widest italic">
@@ -246,8 +397,8 @@ function FixtureCard({ match, onUpdate, result }: { match: any; onUpdate: (id: s
 
       <div className="space-y-4">
         {[
-          { id: match.player1?.id, profile: match.player1, score: s1, setScore: setS1, isWinner: match.winner === match.player1?.id },
-          { id: match.player2?.id, profile: match.player2, score: s2, setScore: setS2, isWinner: match.winner === match.player2?.id }
+          { id: match.player1?.id, profile: match.player1, username: p1Raw, score: s1, setScore: setS1, isWinner: match.winner === match.player1?.id },
+          { id: match.player2?.id, profile: match.player2, username: p2Raw, score: s2, setScore: setS2, isWinner: match.winner === match.player2?.id }
         ].map((p, i) => (
           <div key={i} className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -255,13 +406,13 @@ function FixtureCard({ match, onUpdate, result }: { match: any; onUpdate: (id: s
                 "w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs border transition-all",
                 p.isWinner ? "bg-primary/20 text-primary border-primary/30" : "bg-slate-900 text-slate-500 border-slate-800"
               )}>
-                {(getPublicIdentity(p.profile) || 'U')[0].toUpperCase()}
+                {(getPublicIdentity(p.username || p.profile) || 'U')[0].toUpperCase()}
               </div>
               <span className={cn(
                 "text-sm font-black uppercase tracking-tight truncate max-w-[120px]",
                 p.isWinner ? "text-primary" : "text-white"
               )}>
-                {getPublicIdentity(p.profile)}
+                {getPublicIdentity(p.username || p.profile)}
               </span>
             </div>
             
@@ -326,5 +477,3 @@ function FixtureCard({ match, onUpdate, result }: { match: any; onUpdate: (id: s
     </div>
   );
 }
-
-import { X } from 'lucide-react';

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Trophy, Phone, Loader2, CheckCircle, XCircle, LogOut, Globe } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import SEO from '../components/common/SEO';
@@ -74,6 +74,7 @@ function getFlagEmoji(countryCode: string) {
 export default function CompleteProfile() {
   const { user, profile, refreshAuth, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [username, setUsername] = useState('');
   const [selectedCountry, setSelectedCountry] = useState<CountryCode>('KE');
@@ -256,8 +257,10 @@ export default function CompleteProfile() {
       // Re-fetch updated profile inside contexts
       await refreshAuth();
       
-      // Navigate to main application landing
-      navigate('/dashboard', { replace: true });
+      // Navigate to main application landing or requested page
+      const queryParams = new URLSearchParams(location.search);
+      const redirectTo = location.state?.redirectTo || queryParams.get('redirectTo') || '/dashboard';
+      navigate(redirectTo, { replace: true, state: location.state?.forwardedState });
     } catch (err: any) {
       console.error('[CompleteProfile] Error saving profile:', err);
       // Backend already enforces E.164 — if the save still fails with a constraint error, catch it and show
@@ -436,14 +439,14 @@ export default function CompleteProfile() {
               {/* Phone Input Box with static calling code prefix next to it */}
               <div className="md:col-span-2 relative">
                 <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-1">Phone Number</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black italic text-sm leading-none select-none">
+                <div className="flex items-center bg-background/40 border border-border-main rounded-2xl h-14 px-4 gap-3 focus-within:ring-1 focus-within:ring-primary/50 focus-within:border-primary/50 transition-all">
+                  <span className="text-primary font-black italic text-sm leading-none select-none shrink-0">
                     {getCountryCallingCode(selectedCountry) ? `+${getCountryCallingCode(selectedCountry)}` : ''}
                   </span>
                   <input
                     type="tel"
                     disabled={loading}
-                    className="w-full bg-background/40 border border-border-main rounded-2xl pl-16 pr-4 py-4 text-xs font-bold transition-all placeholder-zinc-700 text-white shadow-inner focus:ring-1 focus:ring-primary/50 focus:border-primary/50 outline-none h-14"
+                    className="flex-1 bg-transparent border-none outline-none font-bold text-white placeholder-zinc-700 py-3 h-full min-w-0 text-xs"
                     placeholder={`e.g. ${placeholder}`}
                     value={numberInput}
                     onChange={(e) => handleNumberChange(e.target.value)}

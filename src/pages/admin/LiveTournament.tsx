@@ -55,7 +55,7 @@ export default function LiveTournament() {
     }
   };
 
-  if (loading) return <LoadingState fullPage message="Establishing Secure Feed..." />;
+  if (loading) return <LoadingState fullPage message="eFootball Tournaments" />;
 
   return (
     <AdminShell>

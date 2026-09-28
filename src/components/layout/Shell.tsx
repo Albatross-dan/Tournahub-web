@@ -1,23 +1,33 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from './Navbar';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import UpcomingMaintenanceBanner from './UpcomingMaintenanceBanner';
 import AnnouncementBanner from './AnnouncementBanner';
-import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Trophy, Calendar, Wallet } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, Trophy, Calendar, Wallet, Bell, Store, ShieldAlert, ArrowRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
+import { toast } from 'react-hot-toast';
+import { supabase } from '../../lib/supabase';
+import { requestNotificationPermission } from '../../lib/notifications';
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const SUPPORT_EMAIL = 'mailto:support@tournahub.me';
   const COMMUNITY_WHATSAPP = 'https://whatsapp.com/channel/0029Vb7nKTkK5cDClzvMYT1Z';
   const location = useLocation();
-  const { refetchSignal } = useAuth();
+  const { refetchSignal, user, profile } = useAuth();
+
+  const hasIncompleteProfile = 
+    !profile?.username || 
+    profile.username.trim() === '' || 
+    !profile?.whatsapp_number || 
+    profile.whatsapp_number.trim() === '';
 
   const bottomNavItems = [
     { name: 'Home', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Tournaments', path: '/tournaments', icon: Trophy },
     { name: 'Matches', path: '/matches', icon: Calendar },
+    { name: 'Market', path: '/marketplace', icon: Store },
     { name: 'Wallet', path: '/wallet', icon: Wallet },
   ];
 
@@ -30,6 +40,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background flex flex-col relative overflow-hidden font-sans">
+      <NotificationPermissionPrompt />
       {/* Background Decorative Gradient */}
       <div className="absolute top-0 left-0 w-full h-[600px] bg-[radial-gradient(circle_at_top,rgba(0,209,255,0.03)_0%,transparent_100%)] pointer-events-none" />
       
@@ -40,6 +51,36 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         {/* Top-aligned warnings and banners */}
         <UpcomingMaintenanceBanner />
         <AnnouncementBanner />
+
+        {/* Profile Incomplete Warning Banner (Non-blocking) */}
+        {user && hasIncompleteProfile && (
+          <div className="w-full bg-[#facc15]/10 border-b border-[#facc15]/20 px-4 py-3 text-amber-200 relative z-30">
+            <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-[#facc15]/15 text-[#facc15] rounded-xl border border-[#facc15]/20">
+                  <ShieldAlert className="w-4.5 h-4.5 animate-pulse" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black italic uppercase tracking-wider text-[#facc15]">
+                    Profile Dossier Incomplete
+                  </h4>
+                  <p className="text-[10px] text-amber-300 font-bold uppercase tracking-wider mt-0.5">
+                    Your profile isn't complete — finish it to join active tournaments.
+                  </p>
+                </div>
+              </div>
+              
+              <Link
+                to="/complete-profile"
+                state={{ redirectTo: location.pathname + location.search }}
+                className="self-start sm:self-center flex items-center justify-center px-4 py-2 bg-[#facc15] hover:bg-white text-slate-950 text-[10px] font-black uppercase italic tracking-wider rounded-xl cursor-pointer transition-all active:scale-95 duration-250 shadow-lg shadow-amber-950/20"
+              >
+                Complete Profile
+                <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+              </Link>
+            </div>
+          </div>
+        )}
  
         {/* Main Content */}
         <main className="flex-1 px-4 overflow-y-auto w-full custom-scrollbar">
@@ -76,7 +117,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Mobile Bottom Navigation Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-background border-t border-border-main py-2.5 px-3 z-50 flex items-center justify-around shadow-[0_-5px_20px_rgba(0,0,0,0.5)]">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[var(--bg-card)] border-t border-[var(--bg-card-border)] py-2 px-3 z-50 flex items-center justify-around shadow-lg">
         {bottomNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = checkActive(item.path);
@@ -85,26 +126,26 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               key={item.path}
               to={item.path}
               className={cn(
-                "flex flex-col items-center justify-center space-y-1 py-1 px-4 rounded-xl transition-all duration-300 relative",
+                "flex flex-col items-center justify-center space-y-0.5 py-1 px-1.5 rounded-lg transition-all duration-200 relative",
                 isActive 
-                  ? "text-primary font-black scale-102" 
-                  : "text-text-muted hover:text-text-main"
+                  ? "text-[var(--accent)]" 
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               )}
             >
               {isActive && (
                 <motion.div
                   layoutId="activeBottomIndicator"
-                  className="absolute -top-2.5 w-12 h-[2px] bg-primary shadow-[0_0_8px_#00d1ff] rounded-full"
+                  className="absolute -top-2 w-10 h-[2px] bg-[var(--accent)] rounded-full"
                   transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                 />
               )}
               <Icon 
                 className={cn(
-                  "w-5 h-5 transition-transform duration-300",
-                  isActive ? "stroke-[2.5px] scale-110 drop-shadow-[0_0_4px_rgba(0,209,255,0.4)]" : "stroke-[2px]"
+                  "w-4 h-4 transition-transform duration-200",
+                  isActive ? "stroke-[2.2px]" : "stroke-[1.8px]"
                 )} 
               />
-              <span className="text-[9px] font-bold uppercase tracking-wider">
+              <span className="text-[11px] font-normal">
                 {item.name}
               </span>
             </Link>
@@ -114,3 +155,103 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
+function NotificationPermissionPrompt() {
+  const { user } = useAuth();
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'default') return;
+
+    const lastShown = localStorage.getItem('th_notif_prompt_last_shown');
+    const daysSince = lastShown
+      ? (Date.now() - Number(lastShown)) / 86400000
+      : Infinity;
+
+    if (daysSince < 3) return; // Wait at least 3 days between requests
+
+    const timer = setTimeout(() => setShow(true), 4000); // 4 seconds delay
+    return () => clearTimeout(timer);
+  }, [user]);
+
+  const dismiss = () => {
+    setShow(false);
+    localStorage.setItem('th_notif_prompt_last_shown', Date.now().toString());
+  };
+
+  const handleEnable = async () => {
+    dismiss();
+    try {
+      const result = await Notification.requestPermission();
+      if (result === 'granted') {
+        await requestNotificationPermission(user!.id);
+        const { error } = await (supabase as any)
+          .from('user_notification_preferences')
+          .upsert({
+            user_id: user!.id,
+            push_enabled: true,
+            updated_at: new Date().toISOString()
+          });
+        if (error) console.error('Error enabling push in DB:', error);
+        toast.success('Notifications successfully enabled!');
+      }
+    } catch (err) {
+      console.error('Error during soft permission grant:', err);
+    }
+  };
+
+  if (!show) return null;
+
+  return (
+    <AnimatePresence>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        {/* Backdrop */}
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={dismiss}
+          className="absolute inset-0 bg-black/65 backdrop-blur-sm"
+        />
+        {/* Container */}
+        <motion.div 
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-surface border border-border-main p-6 shadow-2xl z-10 space-y-4"
+        >
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+              <Bell className="w-5 h-5 animate-bounce" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-text-main uppercase italic tracking-tighter">Stay In The Action</h3>
+              <p className="text-[10px] font-bold text-primary uppercase tracking-widest leading-none mt-1">Push alerts active</p>
+            </div>
+          </div>
+          <p className="text-xs font-semibold text-text-muted leading-relaxed">
+            Get notified instantly when your match starts, when tournament results are submitted, or when an admin sends you a message.
+          </p>
+          <div className="flex items-center gap-3 pt-2">
+            <button 
+              onClick={dismiss}
+              className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all duration-200 cursor-pointer text-center"
+            >
+              Maybe Later
+            </button>
+            <button 
+              onClick={handleEnable}
+              className="flex-1 py-2.5 bg-primary hover:bg-primary-dark text-slate-950 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all duration-200 cursor-pointer text-center"
+            >
+              Enable Now
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    </AnimatePresence>
+  );
+}
+
+

@@ -35,33 +35,87 @@ const defaultStatus: PlatformStatus = {
 
 export function PlatformStatusProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const [status, setStatus] = useState<PlatformStatus | null>(null);
-  const [loading, setLoading] = useState(true);
+  
+  // Initialize status from localStorage immediately to support network-resilience and zero startup lag
+  const [status, setStatus] = useState<PlatformStatus | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = window.localStorage.getItem('TOURNAHUB_PLATFORM_STATUS');
+        if (cached) {
+          return JSON.parse(cached);
+        }
+      } catch (e) {
+        console.warn('[PlatformStatusProvider] Error reading cached platform status:', e);
+      }
+    }
+    return defaultStatus;
+  });
+
+  // Default loading to false if we already have a cached value, or false in general to avoid blocking startup
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = window.localStorage.getItem('TOURNAHUB_PLATFORM_STATUS');
+        return !cached; // If we have no cache at all, let it fetch once, otherwise don't block
+      } catch (e) {
+        console.warn('[PlatformStatusProvider] Error checking cached state for loading:', e);
+      }
+    }
+    return false;
+  });
+
   const [unreadAnnouncements, setUnreadAnnouncements] = useState<AnnouncementNotification[]>([]);
-  const isFetchingRef = useRef(false);
+  
+  // Track active in-flight request abort controller to safely cancel duplicate or stale requests
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // 1. Fetch current status with fallback timeout unblocker
+  // 1. Fetch current status with robust AbortController timeout and cancellation support
   const checkStatus = async (): Promise<PlatformStatus | null> => {
-    if (isFetchingRef.current) return status;
-    isFetchingRef.current = true;
-    try {
-      const getPromise = platformService.getPlatformStatus();
-      const timeoutPromise = new Promise<PlatformStatus>((resolve) => 
-        setTimeout(() => {
-          console.warn('[PlatformStatusProvider] Status check exceeded 2.5s timeout. Using default unblocked status.');
-          resolve(defaultStatus);
-        }, 2500)
-      );
+    // Abort any duplicate/stale in-flight status requests before starting a new one
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
 
-      const data = await Promise.race([getPromise, timeoutPromise]);
-      setStatus(data);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    // Timeout trigger: Abort the request if it exceeds a 5s window
+    const timeoutId = setTimeout(() => {
+      console.warn('[PlatformStatusProvider] Status check exceeded 5s timeout. Aborting request.');
+      controller.abort();
+    }, 5000);
+
+    try {
+      const data = await platformService.getPlatformStatus({ signal: controller.signal });
+      
+      // Only set status if this request wasn't superseded/cancelled
+      if (!controller.signal.aborted) {
+        setStatus(data);
+        if (typeof window !== 'undefined') {
+          try {
+            window.localStorage.setItem('TOURNAHUB_PLATFORM_STATUS', JSON.stringify(data));
+          } catch (e) {
+            console.warn('[PlatformStatusProvider] Error writing to platform status cache:', e);
+          }
+        }
+      }
       return data;
-    } catch (err) {
-      console.warn('[PlatformStatusProvider] Error polling status:', err);
-      setStatus(defaultStatus);
-      return defaultStatus;
+    } catch (err: any) {
+      const isAbort = err.name === 'AbortError' || err instanceof DOMException;
+      if (isAbort) {
+        console.log('[PlatformStatusProvider] Platform status request was aborted/cancelled.');
+      } else {
+        console.warn('[PlatformStatusProvider] Error polling status:', err);
+      }
+
+      // Return existing status to protect client execution from blocking or crashing
+      const currentStatus = status || defaultStatus;
+      return currentStatus;
     } finally {
-      isFetchingRef.current = false;
+      clearTimeout(timeoutId);
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
       setLoading(false);
     }
   };
@@ -118,7 +172,13 @@ export function PlatformStatusProvider({ children }: { children: React.ReactNode
       setLoading(false);
     }, 2500);
 
-    return () => clearTimeout(unblockTimer);
+    return () => {
+      clearTimeout(unblockTimer);
+      // Abort active in-flight requests on logout, unmount, or session transitions
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [user]);
 
   // Load announcements and subscribe to real-time notification changes

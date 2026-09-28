@@ -3,7 +3,7 @@ import { User } from '@supabase/supabase-js';
 import { ensureAuthenticated, supabase, safeLocalStorage } from '../lib/supabase';
 import { Profile } from '../types/database';
 import { queryClient } from '../lib/queryClient';
-import { requestNotificationPermission, listenForForegroundNotifications, deleteFcmTokenOnLogout, syncTokenToSupabase, registerPushToken } from '../lib/notifications';
+import { requestNotificationPermission, listenForForegroundNotifications, deleteFcmTokenOnLogout, syncTokenToSupabase, registerPushToken, resetNotificationGuards } from '../lib/notifications';
 import { Trophy, Zap, Loader2, Sparkles, AlertCircle } from 'lucide-react';
 
 // Professional fallback timeout engine to prevent hangs and guarantee resolution
@@ -502,6 +502,53 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     return () => clearInterval(interval);
   }, [user]);
 
+  // Realtime Profile Synchronization (Role, Username, Avatar updates)
+  useEffect(() => {
+    if (!user) return;
+
+    console.log('[AuthContext] Setting up realtime subscription for user profile:', user.id);
+    const profileChannel = supabase
+      .channel(`profile-role-sync-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${user.id}`,
+        },
+        (payload: any) => {
+          console.log('[AuthContext] Realtime profile update event received:', payload);
+          if (payload.new && typeof payload.new === 'object') {
+            const updatedProfile = payload.new as Profile;
+            setProfile(prev => {
+              if (!prev) return updatedProfile;
+              if (
+                prev.role !== updatedProfile.role ||
+                prev.username !== updatedProfile.username ||
+                prev.avatar_url !== updatedProfile.avatar_url
+              ) {
+                console.log('[AuthContext] Profile state updated dynamically in real-time:', updatedProfile);
+                return {
+                  ...prev,
+                  ...updatedProfile,
+                };
+              }
+              return prev;
+            });
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log(`[AuthContext] Realtime profile subscription status: ${status}`);
+      });
+
+    return () => {
+      console.log('[AuthContext] Cleaning up realtime profile subscription for user:', user.id);
+      supabase.removeChannel(profileChannel);
+    };
+  }, [user]);
+
   // Realtime Presence — join a global presence channel
   useEffect(() => {
     if (!user) {
@@ -554,7 +601,8 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         // This strictly prevents automatic browser popups on load context.
         const currentPermission = typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default';
         if (currentPermission === 'granted') {
-          console.log('[AuthContext] Notification permission already granted. Completing automatic FCM token retrieval and sync...');
+          console.log('[AuthContext] Notification permission already granted. Resetting guards and completing automatic FCM token retrieval and sync...');
+          resetNotificationGuards();
           await registerPushToken();
         } else {
           console.log('[AuthContext] Notification permission is not granted (current state:', currentPermission + '). Skipping automatic prompt to adhere to browser user-gesture restrictions.');
@@ -703,48 +751,25 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
           const userId = session.user.id;
           lastUserIdRef.current = userId;
           
-          // Centrally register push token immediately upon SIGNED_IN
-          registerPushToken();
+          console.log('[Push] ── SIGNED_IN event detected. Explicitly resetting token flags.');
+          resetNotificationGuards();
           
-          const currentPermission = typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default';
-          if (currentPermission === 'granted') {
-            console.log('[AuthContext] SIGNED_IN event detected and notification permission already granted. Syncing FCM token in background:', userId);
-            requestNotificationPermission(userId).then(async (token) => {
-              if (token) {
-                const fcmToken = token;
-                console.log('[AuthContext] Retrieved FCM Token on SIGNED_IN event:', fcmToken);
-                // Call the centralized sync function
-                await syncTokenToSupabase(userId, fcmToken);
-              } else {
-                console.warn('[AuthContext] No FCM token returned during SIGNED_IN event. Verify permissions and configuration.');
-              }
-            }).catch(err => {
-              console.error('[AuthContext] Error in requestNotificationPermission during SIGNED_IN:', err);
-            });
-          } else {
-            console.log('[AuthContext] SIGNED_IN event detected. Notification permission is not granted (current state:', currentPermission + '). Skipping automated permission request.');
-          }
+          // Centrally register/initialize push notifications immediately upon SIGNED_IN
+          console.log('[Push] ── Triggering registerPushToken()...');
+          registerPushToken();
         }
       }
 
       if (event === 'SIGNED_OUT') {
         const userId = lastUserIdRef.current;
-        const currentToken = safeLocalStorage.getItem('fcm_token');
-        if (userId && currentToken) {
-          console.log('[AuthContext] SIGNED_OUT event detected. Deleting notification token for user:', userId);
-          try {
-            const { error: deleteError } = await (supabase as any).from('notification_tokens')
-              .delete()
-              .eq('user_id', userId)
-              .eq('token', currentToken);
-            if (deleteError) {
-              console.error('[AuthContext] Failed to delete token on SIGNED_OUT:', deleteError.message);
-            } else {
-              console.log('[AuthContext] Successfully deleted notification token on SIGNED_OUT.');
-            }
-          } catch (deleteErr) {
-            console.error('[AuthContext] Exception while deleting token on SIGNED_OUT:', deleteErr);
-          }
+        console.log('[AuthContext] SIGNED_OUT event detected. Triggering FCM token cleanup and resetting guards...');
+        
+        // Reset notification guards immediately and clean up token before clearing user state
+        resetNotificationGuards();
+        if (userId) {
+          deleteFcmTokenOnLogout(userId).catch(err => {
+            console.warn('[AuthContext] FCM token cleanup on SIGNED_OUT failed safely:', err);
+          });
         }
         safeLocalStorage.removeItem('fcm_token');
 
@@ -860,6 +885,14 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
 
         if (session) {
           console.log('[Reconnection] User session is valid. Auto-reviving states...');
+          
+          // Force refresh session on foreground/resume to immediately pick up database-level role updates
+          try {
+            console.log('[Reconnection] Refreshing session to sync role/metadata updates...');
+            await withTimeout(supabase.auth.refreshSession(), 4000, null);
+          } catch (refreshErr) {
+            console.warn('[Reconnection] Failed to refresh session on resume (non-fatal):', refreshErr);
+          }
           
           // Revive Supabase WSS stream
           if (supabase.realtime) {
@@ -1018,6 +1051,14 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     console.log('[Auth] Initiating sign out sequence...');
     const currentUserId = user?.id;
     
+    // Reset notification guards and clean up FCM token BEFORE clearing user session state
+    resetNotificationGuards();
+    if (currentUserId) {
+      deleteFcmTokenOnLogout(currentUserId).catch(err => {
+        console.warn('[AuthContext] FCM token cleanup on logout failed safely:', err);
+      });
+    }
+    
     // 1. Clear state immediately to update UI
     setUser(null);
     setProfile(null);
@@ -1033,12 +1074,6 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       sessionStorage.clear();
     } catch (err) {
       console.warn('[Auth] Failed to clear queryClient or sessionStorage on signOut:', err);
-    }
-    
-    if (currentUserId) {
-      deleteFcmTokenOnLogout(currentUserId).catch(err => {
-        console.warn('[AuthContext] FCM token cleanup on logout failed safely:', err);
-      });
     }
     
     try {

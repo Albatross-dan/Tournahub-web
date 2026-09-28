@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import Shell from '../components/layout/Shell';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   Swords, Plus, Trophy, Wallet, RefreshCw, Search, X, Shield, 
   HelpCircle, ArrowRight, User, Check, Flame, MessageSquare, ShieldAlert,
-  Timer, Zap
+  Timer, Zap, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { PlayerBadge } from '../components/ui/PlayerBadge';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { tournamentService } from '../services/tournamentService';
+import LoadingState from '../components/ui/LoadingState';
 
 function getFlagEmoji(countryCode: string | null | undefined): string {
   if (!countryCode) return '';
@@ -154,6 +155,11 @@ export default function ChallengeLobby() {
   const pauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const scrollDirectionRef = useRef<1 | -1>(1); // 1 = right, -1 = left
 
+  const isDraggingRef = useRef(false);
+  const startXRef = useRef(0);
+  const scrollLeftStartRef = useRef(0);
+  const hasDraggedRef = useRef(false);
+
   const handleInteraction = () => {
     setIsPaused(true);
     if (pauseTimeoutRef.current) {
@@ -161,7 +167,58 @@ export default function ChallengeLobby() {
     }
     pauseTimeoutRef.current = setTimeout(() => {
       setIsPaused(false);
-    }, 5000);
+    }, 6000);
+  };
+
+  const handleScrollLeft = () => {
+    handleInteraction();
+    if (carouselRef.current) {
+      carouselRef.current.scrollBy({ left: -260, behavior: 'smooth' });
+    }
+  };
+
+  const handleScrollRight = () => {
+    handleInteraction();
+    if (carouselRef.current) {
+      carouselRef.current.scrollBy({ left: 260, behavior: 'smooth' });
+    }
+  };
+
+  const handleCarouselMouseDown = (e: React.MouseEvent) => {
+    if (!carouselRef.current) return;
+    isDraggingRef.current = true;
+    hasDraggedRef.current = false;
+    startXRef.current = e.pageX - carouselRef.current.offsetLeft;
+    scrollLeftStartRef.current = carouselRef.current.scrollLeft;
+    setIsPaused(true);
+  };
+
+  const handleCarouselMouseMove = (e: React.MouseEvent) => {
+    if (!isDraggingRef.current || !carouselRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - carouselRef.current.offsetLeft;
+    const walk = x - startXRef.current;
+    if (Math.abs(walk) > 5) {
+      hasDraggedRef.current = true;
+    }
+    carouselRef.current.scrollLeft = scrollLeftStartRef.current - walk;
+  };
+
+  const handleCarouselMouseUp = () => {
+    isDraggingRef.current = false;
+    setTimeout(() => {
+      hasDraggedRef.current = false;
+    }, 60);
+    handleInteraction();
+  };
+
+  const handleCarouselWheel = (e: React.WheelEvent) => {
+    if (carouselRef.current) {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        carouselRef.current.scrollLeft += e.deltaY;
+      }
+      handleInteraction();
+    }
   };
 
   const [activeChallenges, setActiveChallenges] = useState<any[]>([]);
@@ -735,7 +792,7 @@ export default function ChallengeLobby() {
           <div className="space-y-3">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse inline-block" />
+                <span className="w-2.5 h-2.5 bg-amber-500 rounded-none animate-pulse inline-block" />
                 <span className="text-xs font-black uppercase tracking-widest text-zinc-400 italic">🏆 WINNERS</span>
               </div>
               <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider pl-[18px]">
@@ -743,7 +800,25 @@ export default function ChallengeLobby() {
               </p>
             </div>
 
-            <div className="relative w-full">
+            <div className="relative w-full group/carousel">
+              {/* Left & Right Scroll Navigation Arrows */}
+              <button
+                type="button"
+                onClick={handleScrollLeft}
+                aria-label="Scroll left"
+                className="absolute left-1 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-none bg-zinc-950/90 border border-zinc-700/80 text-white flex items-center justify-center hover:bg-zinc-800 hover:border-zinc-500 transition-all opacity-0 group-hover/carousel:opacity-100 shadow-xl cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleScrollRight}
+                aria-label="Scroll right"
+                className="absolute right-1 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-none bg-zinc-950/90 border border-zinc-700/80 text-white flex items-center justify-center hover:bg-zinc-800 hover:border-zinc-500 transition-all opacity-0 group-hover/carousel:opacity-100 shadow-xl cursor-pointer"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+
               {/* Fade masks */}
               <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-zinc-950 to-transparent pointer-events-none z-10" />
               <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-zinc-950 to-transparent pointer-events-none z-10" />
@@ -752,15 +827,28 @@ export default function ChallengeLobby() {
                 ref={carouselRef}
                 onScroll={handleInteraction}
                 onTouchStart={handleInteraction}
-                onMouseDown={handleInteraction}
-                className="flex gap-4 overflow-x-auto scrollbar-hide snap-x snap-mandatory -webkit-overflow-scrolling-touch pb-2 scroll-smooth"
+                onMouseDown={handleCarouselMouseDown}
+                onMouseMove={handleCarouselMouseMove}
+                onMouseUp={handleCarouselMouseUp}
+                onMouseLeave={() => {
+                  handleCarouselMouseUp();
+                  handleInteraction();
+                }}
+                onMouseEnter={() => setIsPaused(true)}
+                onWheel={handleCarouselWheel}
+                className="flex gap-4 overflow-x-auto custom-scrollbar select-none cursor-grab active:cursor-grabbing pb-2 scroll-smooth"
               >
                 {recentWinners.map((winner, idx) => (
                   <div 
                     key={`${winner.user_id}-${idx}`}
-                    onClick={!winner.is_current_user ? () => handleOpenCreateModal(winner.username, winner.user_id) : undefined}
+                    onClick={() => {
+                      if (hasDraggedRef.current) return;
+                      if (!winner.is_current_user) {
+                        handleOpenCreateModal(winner.username, winner.user_id);
+                      }
+                    }}
                     className={cn(
-                      "w-[140px] shrink-0 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 flex flex-col justify-between items-center text-center snap-start relative group transition-all duration-300",
+                      "w-[140px] shrink-0 bg-zinc-950 border border-zinc-800 rounded-none p-3 flex flex-col justify-between items-center text-center relative group transition-all duration-300",
                       !winner.is_current_user && "cursor-pointer hover:border-blue-500/50 hover:bg-zinc-900/40 active:scale-[0.98]"
                     )}
                   >
@@ -771,20 +859,40 @@ export default function ChallengeLobby() {
                     )}
 
                     {/* Winner Badge */}
-                    <div className="w-12 h-12 flex items-center justify-center mt-2 mb-1">
+                    <Link 
+                      to={`/players/${winner.username}`}
+                      onClick={(e) => {
+                        if (hasDraggedRef.current) {
+                          e.preventDefault();
+                          return;
+                        }
+                        e.stopPropagation();
+                      }}
+                      className="w-12 h-12 flex items-center justify-center mt-2 mb-1 group/badge cursor-pointer"
+                    >
                       <PlayerBadge 
                         badgeId={winner.winner_badge_id} 
                         username={winner.username || 'Winner'} 
                         size="md"
-                        className="w-10 h-10"
+                        className="w-10 h-10 group-hover/badge:scale-105 transition-transform"
                       />
-                    </div>
+                    </Link>
 
                     {/* Winner Username */}
                     <div className="w-full">
-                      <span className="block text-xs font-black text-white uppercase italic tracking-tight truncate max-w-full">
+                      <Link
+                        to={`/players/${winner.username}`}
+                        onClick={(e) => {
+                          if (hasDraggedRef.current) {
+                            e.preventDefault();
+                            return;
+                          }
+                          e.stopPropagation();
+                        }}
+                        className="block text-xs font-black text-white uppercase italic tracking-tight truncate max-w-full hover:text-primary transition-colors cursor-pointer"
+                      >
                         {winner.username}
-                      </span>
+                      </Link>
                     </div>
 
                     {/* Stats */}
@@ -799,12 +907,12 @@ export default function ChallengeLobby() {
 
                     {/* Challenge Button or Current User Badge */}
                     {winner.is_current_user ? (
-                      <div className="w-full py-1.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-zinc-950 text-[10px] font-black uppercase tracking-wider rounded-lg shadow-md select-none text-center">
+                      <div className="w-full py-1.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-zinc-950 text-[10px] font-black uppercase tracking-wider rounded-none shadow-md select-none text-center">
                         YOU 🏆
                       </div>
                     ) : (
                       <div
-                        className="w-full py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 group-hover:from-blue-500 group-hover:to-indigo-500 text-white text-[10px] font-black uppercase tracking-wider rounded-lg transition-all shadow-md text-center select-none"
+                        className="w-full py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 group-hover:from-blue-500 group-hover:to-indigo-500 text-white text-[10px] font-black uppercase tracking-wider rounded-none transition-all shadow-md text-center select-none"
                       >
                         Challenge
                       </div>
@@ -821,7 +929,7 @@ export default function ChallengeLobby() {
           <div className="space-y-3">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 bg-zinc-700 rounded-full animate-pulse inline-block" />
+                <span className="w-2.5 h-2.5 bg-zinc-700 rounded-none animate-pulse inline-block" />
                 <span className="text-xs font-black uppercase tracking-widest text-zinc-500 italic">🏆 WINNERS</span>
               </div>
               <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-wider pl-[18px]">
@@ -829,11 +937,11 @@ export default function ChallengeLobby() {
               </p>
             </div>
 
-            <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2">
+            <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar">
               {[1, 2, 3].map((i) => (
                 <div 
                   key={i}
-                  className="w-[140px] h-[185px] bg-zinc-900/50 border border-zinc-800/80 rounded-2xl animate-pulse shrink-0"
+                  className="w-[140px] h-[185px] bg-zinc-900/50 border border-zinc-800/80 rounded-none animate-pulse shrink-0"
                 />
               ))}
             </div>
@@ -847,9 +955,8 @@ export default function ChallengeLobby() {
           </div>
 
           {activeLoading ? (
-            <div className="flex flex-col items-center justify-center py-10 space-y-3 bg-zinc-950 rounded-3xl border border-zinc-800/80">
-              <RefreshCw className="w-6 h-6 text-blue-500 animate-spin" />
-              <p className="text-[10px] uppercase tracking-widest text-zinc-500 animate-pulse">Loading active challenges...</p>
+            <div className="bg-zinc-950 rounded-none border border-zinc-800/80">
+              <LoadingState message="eFootball Tournaments" />
             </div>
           ) : activeError ? (
             <div className="text-center py-6 bg-zinc-950 rounded-3xl border border-red-500/20 text-red-400">
@@ -875,17 +982,25 @@ export default function ChallengeLobby() {
                         {/* VS Separator with both badges facing each other */}
                         <div className="flex items-center gap-4">
                           <div className="flex items-center gap-2">
-                            <PlayerBadge 
-                              badgeId={myBadgeId} 
-                              username={myUsername || 'You'} 
-                              size="md"
-                              className="w-12 h-12 ring-2 ring-blue-500/20"
-                            />
+                            <Link 
+                              to={`/players/${myUsername}`}
+                              className="group cursor-pointer"
+                            >
+                              <PlayerBadge 
+                                badgeId={myBadgeId} 
+                                username={myUsername || 'You'} 
+                                size="md"
+                                className="w-12 h-12 ring-2 ring-blue-500/20 group-hover:scale-105 transition-transform"
+                              />
+                            </Link>
                             <div className="hidden sm:block">
                               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">You</span>
-                              <span className="text-sm font-black text-white italic truncate max-w-[100px] block">
+                              <Link 
+                                to={`/players/${myUsername}`}
+                                className="text-sm font-black text-white italic truncate max-w-[100px] block hover:text-primary transition-colors cursor-pointer"
+                              >
                                 {myUsername || 'You'}
-                              </span>
+                              </Link>
                             </div>
                           </div>
 
@@ -894,18 +1009,26 @@ export default function ChallengeLobby() {
                           </span>
 
                           <div className="flex items-center gap-2">
-                            <PlayerBadge 
-                              badgeId={match.opponent_badge_id} 
-                              username={match.opponent_username || 'Opponent'} 
-                              size="md"
-                              className="w-12 h-12 ring-2 ring-red-500/20"
-                            />
+                            <Link 
+                              to={`/players/${match.opponent_username}`}
+                              className="group cursor-pointer"
+                            >
+                              <PlayerBadge 
+                                badgeId={match.opponent_badge_id} 
+                                username={match.opponent_username || 'Opponent'} 
+                                size="md"
+                                className="w-12 h-12 ring-2 ring-red-500/20 group-hover:scale-105 transition-transform"
+                              />
+                            </Link>
                             <div>
                               <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Opponent</span>
                               <div className="flex items-center gap-1">
-                                <span className="text-sm font-black text-white italic truncate max-w-[120px] block">
+                                <Link 
+                                  to={`/players/${match.opponent_username}`}
+                                  className="text-sm font-black text-white italic truncate max-w-[120px] block hover:text-primary transition-colors cursor-pointer"
+                                >
                                   {match.opponent_username || 'Opponent'}
-                                </span>
+                                </Link>
                                 {match.opponent_country && (
                                   <span className="text-xs" title={match.opponent_country}>🌐</span>
                                 )}
@@ -1045,10 +1168,7 @@ export default function ChallengeLobby() {
         {activeTab === 'lobby' ? (
           <div>
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-20 space-y-4">
-                <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
-                <p className="text-xs uppercase tracking-widest text-zinc-500 animate-pulse">Syncing Challenge Lobby...</p>
-              </div>
+              <LoadingState message="eFootball Tournaments" />
             ) : challenges.length === 0 ? (
               <div className="text-center py-20 bg-zinc-950 rounded-3xl border border-zinc-800 border-dashed space-y-4">
                 <div className="w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center mx-auto text-zinc-600">
@@ -1078,15 +1198,25 @@ export default function ChallengeLobby() {
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-center gap-3">
-                          <PlayerBadge 
-                            badgeId={item.creator_badge_id} 
-                            username={item.creator_username || 'Creator'} 
-                            size="md"
-                            className="w-12 h-12"
-                          />
+                          <Link 
+                            to={`/players/${item.creator_username}`}
+                            className="cursor-pointer hover:scale-105 transition-transform"
+                          >
+                            <PlayerBadge 
+                              badgeId={item.creator_badge_id} 
+                              username={item.creator_username || 'Creator'} 
+                              size="md"
+                              className="w-12 h-12"
+                            />
+                          </Link>
                           <div className="space-y-1">
                             <div className="flex items-center gap-1.5">
-                              <span className="text-sm font-black text-white italic">{item.creator_username || 'Anonymous'}</span>
+                              <Link 
+                                to={`/players/${item.creator_username}`}
+                                className="text-sm font-black text-white italic hover:text-primary transition-colors cursor-pointer"
+                              >
+                                {item.creator_username || 'Anonymous'}
+                              </Link>
                               {item.creator_country && (
                                 <span className="text-xs" title={item.creator_country}>🌐</span>
                               )}
@@ -1150,10 +1280,7 @@ export default function ChallengeLobby() {
         ) : (
           <div>
             {historyLoading ? (
-              <div className="flex flex-col items-center justify-center py-20 space-y-4">
-                <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
-                <p className="text-xs uppercase tracking-widest text-zinc-500 animate-pulse">Syncing Match History...</p>
-              </div>
+              <LoadingState message="eFootball Tournaments" />
             ) : history.length === 0 ? (
               <div className="text-center py-20 bg-zinc-950 rounded-3xl border border-zinc-800 border-dashed">
                 <p className="text-sm text-zinc-500">You haven't participated in any 1v1 challenges yet.</p>
@@ -1177,16 +1304,28 @@ export default function ChallengeLobby() {
                       className="bg-zinc-950 hover:bg-zinc-900/60 transition-all border border-zinc-800/80 p-4 rounded-2xl flex items-center justify-between gap-4 cursor-pointer"
                     >
                       <div className="flex items-center gap-3">
-                        <PlayerBadge 
-                          badgeId={oppBadge} 
-                          username={oppUsername || 'Opponent'} 
-                          size="sm"
-                          className="w-10 h-10"
-                        />
+                        <Link 
+                          to={`/players/${oppUsername}`} 
+                          onClick={(e) => e.stopPropagation()} 
+                          className="cursor-pointer hover:scale-105 transition-transform"
+                        >
+                          <PlayerBadge 
+                            badgeId={oppBadge} 
+                            username={oppUsername || 'Opponent'} 
+                            size="sm"
+                            className="w-10 h-10"
+                          />
+                        </Link>
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-black text-zinc-400 uppercase tracking-widest">vs</span>
-                            <span className="text-sm font-bold text-white">{oppUsername || 'Opponent'}</span>
+                            <Link 
+                              to={`/players/${oppUsername}`} 
+                              onClick={(e) => e.stopPropagation()} 
+                              className="text-sm font-bold text-white hover:text-primary transition-colors cursor-pointer"
+                            >
+                              {oppUsername || 'Opponent'}
+                            </Link>
                           </div>
                           <p className="text-[10px] text-zinc-500">
                             {new Date(hist.played_at).toLocaleDateString()} at {new Date(hist.played_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

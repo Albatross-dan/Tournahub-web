@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Trophy, Users, 
   Gamepad2, Wallet, BarChart3, 
   ChevronRight, LogOut, Shield,
-  Menu, X, Gavel, Wrench, ShieldCheck
+  Menu, X, Gavel, Wrench, ShieldCheck, Store
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -14,6 +14,7 @@ import { useAuth } from '../../contexts/AuthContext';
 const logoUrl = '/android-chrome-512x512.png';
 import UpcomingMaintenanceBanner from './UpcomingMaintenanceBanner';
 import AnnouncementBanner from './AnnouncementBanner';
+import LoadingState from '../ui/LoadingState';
 
 const PERMISSION_LABELS: Record<string, string> = {
   manage_disputes: 'Dispute Manager',
@@ -23,21 +24,25 @@ const PERMISSION_LABELS: Record<string, string> = {
   manage_challenges: 'Challenge Manager',
   view_reports: 'Reports Viewer',
   view_players: 'Player Inspector',
+  manage_marketplace: 'Marketplace Moderator',
 };
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, loading, isAdmin, refetchSignal, can, permissionSet } = useAuth();
+  const { user, profile, loading, isAdmin, refetchSignal, can, permissionSet, permissionsLoading, accountStatus } = useAuth();
 
   const isFullAdmin = profile?.role === 'admin' || user?.email?.toLowerCase().trim() === 'danieloguda11221@gmail.com';
   const canAccessAdmin = isFullAdmin || (permissionSet && permissionSet.size > 0);
+
+  const isShelledLoading = loading || permissionsLoading || (user && !profile) || (user && !accountStatus);
 
   const navItems = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard, show: true },
     { name: 'Platform Gates', path: '/admin/platform', icon: Wrench, show: isFullAdmin },
     { name: 'Staff Management', path: '/admin/staff', icon: ShieldCheck, show: isFullAdmin },
+    { name: 'Marketplace', path: '/admin/marketplace', icon: Store, show: isFullAdmin || can('manage_marketplace') },
     { name: 'Tournaments', path: '/admin/tournaments', icon: Trophy, show: can('manage_tournaments') },
     { name: 'Fixtures', path: '/admin/fixtures', icon: Gamepad2, show: can('manage_matches') },
     { name: 'Disputes', path: '/admin/moderation', icon: Gavel, show: can('manage_disputes') },
@@ -51,7 +56,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     console.log('[AdminShell] Route Entry Evaluation:', {
       timestamp: new Date().toISOString(),
       path: location.pathname,
-      loading,
+      isShelledLoading,
       hasUser: !!user,
       userId: user?.id,
       userRole: profile?.role,
@@ -59,23 +64,17 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       canAccessAdmin
     });
 
-    if (!loading && (!user || !canAccessAdmin)) {
+    if (!isShelledLoading && (!user || !canAccessAdmin)) {
       console.warn('[AdminShell] Missing admin or staff rights. Redirecting user to /dashboard:', { email: user?.email, canAccessAdmin, role: profile?.role });
       navigate('/dashboard', { replace: true });
     }
-  }, [user, profile, canAccessAdmin, loading, navigate, location.pathname]);
+  }, [user, profile, canAccessAdmin, isShelledLoading, navigate, location.pathname]);
 
   const { disputedMatches = [], singleSubmissionMatches = [], abandonedMatches = [], noShowCount = 0 } = useAdminDisputes(user?.id || '');
   const totalAlerts = disputedMatches.length + singleSubmissionMatches.length + abandonedMatches.length + noShowCount;
 
-  if (loading) {
-    console.log('[AdminShell] Loading admin shell credentials verification...');
-    return (
-      <div className="min-h-screen bg-[#0a0b1e] flex flex-col items-center justify-center space-y-4">
-        <div className="w-8 h-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-        <span className="text-[10px] uppercase font-black tracking-widest text-slate-500 animate-pulse">Running admin credential check...</span>
-      </div>
-    );
+  if (isShelledLoading) {
+    return <LoadingState fullPage message="eFootball Tournaments" />;
   }
 
   if (!canAccessAdmin) {

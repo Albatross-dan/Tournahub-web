@@ -459,8 +459,12 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
       return;
     }
 
-    const isKnockout = match?.tournaments?.type === 'knockout';
-    if (isKnockout && s1Val === s2Val) {
+    const stage = match?.stage || '';
+    const tournamentType = match?.tournaments?.type || '';
+    const drawForbiddenStages = ['knockout', 'quarterfinal', 'semifinal', 'final', 'third_place', 'round_of_16', 'round_of_32', 'playoffs'];
+    const drawForbidden = drawForbiddenStages.includes(stage) || tournamentType === 'knockout';
+
+    if (drawForbidden && s1Val === s2Val) {
       setLocalError('Knockout tournaments do not allow equal scores (no draws).');
       return;
     }
