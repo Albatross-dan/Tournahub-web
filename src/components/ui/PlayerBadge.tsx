@@ -84,3 +84,5 @@ export const PlayerBadge: React.FC<PlayerBadgeProps> = ({
     </div>
   );
 };
+
+export default PlayerBadge;

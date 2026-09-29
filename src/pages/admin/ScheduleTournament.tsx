@@ -195,7 +195,7 @@ export default function ScheduleTournament() {
     }
   };
 
-  if (loading) return <LoadingState fullPage message="Deciphering Deployment Protocols..." />;
+  if (loading) return <LoadingState fullPage message="eFootball Tournaments" />;
 
   return (
     <AdminShell>

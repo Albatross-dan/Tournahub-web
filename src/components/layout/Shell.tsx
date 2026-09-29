@@ -117,7 +117,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Mobile Bottom Navigation Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-background border-t border-border-main py-2.5 px-3 z-50 flex items-center justify-around shadow-[0_-5px_20px_rgba(0,0,0,0.5)]">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[var(--bg-card)] border-t border-[var(--bg-card-border)] py-2 px-3 z-50 flex items-center justify-around shadow-lg">
         {bottomNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = checkActive(item.path);
@@ -128,24 +128,24 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               className={cn(
                 "flex flex-col items-center justify-center space-y-0.5 py-1 px-1.5 rounded-lg transition-all duration-200 relative",
                 isActive 
-                  ? "text-primary font-black scale-102" 
-                  : "text-text-muted hover:text-text-main"
+                  ? "text-[var(--accent)]" 
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               )}
             >
               {isActive && (
                 <motion.div
                   layoutId="activeBottomIndicator"
-                  className="absolute -top-2.5 w-12 h-[2px] bg-primary shadow-[0_0_8px_#00d1ff] rounded-full"
+                  className="absolute -top-2 w-10 h-[2px] bg-[var(--accent)] rounded-full"
                   transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                 />
               )}
               <Icon 
                 className={cn(
-                  "w-5 h-5 transition-transform duration-300",
-                  isActive ? "stroke-[2.5px] scale-110 drop-shadow-[0_0_4px_rgba(0,209,255,0.4)]" : "stroke-[2px]"
+                  "w-4 h-4 transition-transform duration-200",
+                  isActive ? "stroke-[2.2px]" : "stroke-[1.8px]"
                 )} 
               />
-              <span className="text-[9px] font-bold uppercase tracking-wider">
+              <span className="text-[11px] font-normal">
                 {item.name}
               </span>
             </Link>

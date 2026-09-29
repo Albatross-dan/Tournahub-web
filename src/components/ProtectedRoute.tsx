@@ -3,6 +3,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { ShieldAlert, LogOut, Loader2 } from 'lucide-react';
+import LoadingState from './ui/LoadingState';
 
 interface ProtectedRouteProps {
   allowAdminOnly?: boolean;
@@ -36,20 +37,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowAdminOnly =
   }, [allowAdminOnly, loading, permissionsLoading, user, profile, isAdmin, accountStatus, location.pathname, permissionSet]);
 
   if (loading || permissionsLoading || (user && !profile) || (user && !accountStatus)) {
-    return (
-      <div className="min-h-screen bg-[#000000] flex flex-col items-center justify-center relative p-4">
-        <div className="absolute top-[30%] left-[30%] w-[250px] h-[250px] bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
-        
-        <div className="flex flex-col items-center space-y-4 relative z-10">
-          <div className="relative">
-            <div className="w-12 h-12 rounded-full border-2 border-primary-dark/20 border-t-2 border-t-primary animate-spin" />
-          </div>
-          <p className="text-[10px] text-slate-450 font-black uppercase tracking-[0.2em] animate-pulse">
-            Running security checks...
-          </p>
-        </div>
-      </div>
-    );
+    return <LoadingState fullPage message="eFootball Tournaments" />;
   }
 
   if (!user) {
@@ -109,7 +97,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowAdminOnly =
           </h3>
 
           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block mb-4">
-            Security Blockade
+            Account Notice
           </p>
 
           <div className="space-y-4 mb-8">

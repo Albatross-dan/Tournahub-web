@@ -103,7 +103,7 @@ export default function WalletHistory() {
 
         {loading ? (
           <div className="py-20 text-center">
-            <LoadingState message="Scanning Blockchain..." />
+            <LoadingState message="eFootball Tournaments" />
           </div>
         ) : (
           <div className="space-y-6">

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Trophy, CheckCircle, AlertCircle, Loader2, ArrowRight, RefreshCw, Mail } from 'lucide-react';
+import LoadingState from '../components/ui/LoadingState';
 
 const logoUrl = '/android-chrome-512x512.png';
 
@@ -161,7 +162,7 @@ export default function VerifyCallback() {
       } catch (err: any) {
         console.error('[VerifyCallback] Exception during verification hook parsing:', err);
         setStatus('error');
-        setErrorDesc(err.message || 'An expected security check failure occurred.');
+        setErrorDesc(err.message || 'An expected eFootball Tournaments validation issue occurred.');
       }
     };
 

@@ -12,6 +12,7 @@ import { PlayerBadge } from '../components/ui/PlayerBadge';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { storageService } from '../services/storageService';
+import LoadingState from '../components/ui/LoadingState';
 
 export default function ChallengeDetails() {
   const { id: challengeId } = useParams<{ id: string }>();
@@ -327,10 +328,7 @@ export default function ChallengeDetails() {
   if (loading) {
     return (
       <Shell>
-        <div className="flex flex-col items-center justify-center py-40 space-y-4">
-          <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
-          <p className="text-xs uppercase tracking-widest text-zinc-500 animate-pulse">Syncing Challenge Arena...</p>
-        </div>
+        <LoadingState message="eFootball Tournaments" />
       </Shell>
     );
   }

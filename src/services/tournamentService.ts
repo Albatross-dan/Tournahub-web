@@ -730,10 +730,10 @@ export const tournamentService = {
     for (const f of fixturesList) {
       if (!f) continue;
       
-      const p1Id = f.player1 || f.player1_username || '';
-      const p2Id = f.player2 || f.player2_username || '';
-      const sortedPlayers = [p1Id, p2Id].sort().join('-');
-      const matchKey = `${f.stage || ''}-${f.round || ''}-${f.group_name || ''}-${sortedPlayers}`;
+      const mId = f.match_id || f.id;
+      const matchKey = mId 
+        ? String(mId)
+        : `${f.stage || ''}-${f.round || ''}-${f.group_name || ''}-${f.match_order || ''}-${f.player1 || f.player1_username || ''}-${f.player2 || f.player2_username || ''}`;
 
       if (!seen.has(matchKey)) {
         seen.add(matchKey);

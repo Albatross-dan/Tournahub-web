@@ -127,7 +127,7 @@ export default function StandingsTable({ tournamentId, groupName, registrations,
   if (loading) {
     return (
       <div className="card p-12 bg-surface/50 border-border-main">
-        <LoadingState message="Aggregating Stats..." />
+        <LoadingState message="eFootball Tournaments" />
       </div>
     );
   }

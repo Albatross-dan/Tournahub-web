@@ -118,7 +118,7 @@ export default function ChampionCard({ data }: ChampionCardProps) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
       className={cn(
-        "relative w-full max-w-lg mx-auto overflow-hidden rounded-[2.5rem] border backdrop-blur-xl bg-black/80",
+        "relative w-full max-w-lg mx-auto overflow-hidden rounded-none border backdrop-blur-xl bg-black/80",
         theme.border
       )}
       style={{ boxShadow: `0 0 40px ${theme.glow}` }}

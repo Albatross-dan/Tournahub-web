@@ -494,7 +494,7 @@ export default function AdminPlayers() {
                 {loading ? (
                   <tr>
                     <td colSpan={5} className="py-24">
-                      <LoadingState message="Decrypting Core Clearance Database..." />
+                      <LoadingState message="eFootball Tournaments" />
                     </td>
                   </tr>
                 ) : users.length > 0 ? (

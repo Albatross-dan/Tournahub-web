@@ -40,7 +40,7 @@ export default function WinnerHistory() {
 
   if (loading) return (
     <Shell>
-      <LoadingState message="Fetching Hall of Fame..." />
+      <LoadingState message="eFootball Tournaments" />
     </Shell>
   );
 

@@ -307,7 +307,7 @@ export default function MatchDetails() {
 
   if (loading) return (
     <Shell>
-      <LoadingState message="Syncing Match Data..." />
+      <LoadingState message="eFootball Tournaments" />
     </Shell>
   );
   

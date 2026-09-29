@@ -827,5 +827,34 @@ export const matchService = {
     
     if (error) throw error;
     return (data || []) as any[];
+  },
+
+  async resolveLevelTie(tieId: string, winnerId: string, adminId?: string) {
+    await ensureAuthenticated();
+
+    let resolvedAdminId = adminId;
+    if (!resolvedAdminId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      resolvedAdminId = session?.user?.id;
+    }
+    if (!resolvedAdminId) {
+      throw new Error('Admin authorization required to resolve a tie.');
+    }
+
+    const { data, error } = await (supabase as any).rpc('fn_cl_resolve_level_tie', {
+      p_tie_id: tieId,
+      p_winner_id: winnerId,
+      p_admin_id: resolvedAdminId
+    });
+
+    if (error) {
+      throw new Error(error.message || 'Error executing RPC');
+    }
+
+    if (data && (data.success === false || data.error)) {
+      throw new Error(data.error || 'Failed to resolve tie');
+    }
+
+    return data;
   }
 };

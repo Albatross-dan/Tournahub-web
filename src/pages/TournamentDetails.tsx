@@ -60,7 +60,7 @@ export default function TournamentDetails() {
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
-  const [activeTab, setActiveTab] = useState<'info' | 'fixtures' | 'standings' | 'players'>('info');
+  const [activeTab, setActiveTab] = useState<'fixtures' | 'standings' | 'players' | 'info'>('fixtures');
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   
   // Registration Flow State
@@ -339,7 +339,7 @@ export default function TournamentDetails() {
   if (tournamentLoading || (loading && !registrations.length)) {
     return (
       <Shell>
-        <LoadingState message="Accessing Tournament Crypt..." />
+        <LoadingState message="eFootball Tournaments" />
       </Shell>
     );
   }
@@ -993,15 +993,122 @@ export default function TournamentDetails() {
           )}
         </AnimatePresence>
 
+        {/* Top Navigation Menu: Fixtures, Standings, Contenders, Info */}
+        <div className="border-b border-border-main overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+          <div className="flex items-center space-x-1 sm:space-x-2">
+            {(['fixtures', 'standings', 'players', 'info'] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={cn(
+                  "px-5 sm:px-8 py-3.5 sm:py-4 text-xs font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] transition-all relative whitespace-nowrap",
+                  activeTab === tab ? "text-primary bg-primary/10 rounded-t-lg" : "text-text-muted hover:text-text-main hover:bg-surface/40"
+                )}
+              >
+                {tab === 'players' ? 'contenders' : tab === 'info' ? 'mission briefing' : tab}
+                {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary shadow-sm shadow-primary/50" />}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Tab View Content */}
+        <div className="min-h-[350px]">
+          {activeTab === 'fixtures' && (
+            <FixturesList tournamentId={tournament.id} />
+          )}
+
+          {activeTab === 'standings' && (
+            tournament.type === 'group_stage' ? (
+              <GroupStageTournamentView tournamentId={tournament.id} />
+            ) : (
+              <StandingsTable tournamentId={tournament.id} registrations={registrations} tournamentType={tournament.type} />
+            )
+          )}
+
+          {activeTab === 'players' && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {registrations.length > 0 ? registrations.map((player, idx) => (
+                <div key={`player-${player.user_id || player.id || idx}`} className="card p-4 flex items-center space-x-3 bg-surface hover:border-primary-light transition-all shadow-sm">
+                  {player.username || player.profiles?.username ? (
+                    <Link to={`/players/${player.username || player.profiles?.username}`}>
+                      <PlayerBadge 
+                        badgeId={player.badge_id} 
+                        username={player.username || player.profiles?.username || 'Anonymous'} 
+                        size="md" 
+                        className="hover:scale-105 transition-transform"
+                      />
+                    </Link>
+                  ) : (
+                    <PlayerBadge 
+                      badgeId={player.badge_id} 
+                      username="Anonymous" 
+                      size="md" 
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      {player.username || player.profiles?.username ? (
+                        <Link 
+                          to={`/players/${player.username || player.profiles?.username}`}
+                          className="font-bold text-text-main uppercase italic tracking-tight truncate hover:text-primary transition-colors"
+                        >
+                          {player.username || player.profiles?.username}
+                        </Link>
+                      ) : (
+                        <p className="font-bold text-text-main uppercase italic tracking-tight truncate">Anonymous</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-[10px] text-primary font-bold uppercase tracking-widest">{player.registration_status || player.status || 'Registered'}</p>
+                      {player.badge_id && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="Badge Selected" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )) : (
+                <div className="col-span-full py-12 text-center text-text-muted italic">
+                  No contenders have registered for this tournament yet.
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'info' && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="space-y-6"
+            >
+              <div className="card p-6 sm:p-8 space-y-4">
+                <h2 className="text-xl sm:text-2xl font-black text-text-main italic uppercase tracking-tighter">Mission Briefing</h2>
+                <p className="text-text-muted leading-relaxed text-base sm:text-lg font-medium">
+                  {tournament.description || 'Secure your spot in the bracket and fight for glory and a share of the massive prize pool.'}
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </div>
+
+        {/* Below the Menu: Selected Identity */}
         <AnimatePresence>
           {id && isRegistered && (
             <motion.div
               layout
-              initial={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="space-y-4"
+              exit={{ opacity: 0, scale: 0.98 }}
+              className="space-y-4 pt-6 border-t border-border-main"
+              id="badge-picker-section"
             >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-primary" />
+                  <h3 className="text-base sm:text-lg font-black text-text-main italic uppercase tracking-tighter">Selected Identity</h3>
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-text-muted">Registered Contender</span>
+              </div>
               <BadgeSelector 
                 tournamentId={id}
                 tournamentStatus={currentStatus}
@@ -1015,72 +1122,55 @@ export default function TournamentDetails() {
           )}
         </AnimatePresence>
 
-        {/* Content Tabs */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          <div className="lg:col-span-1 space-y-6">
-            <div className="card divide-y divide-slate-800">
-              <div className="p-6 space-y-4">
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Prize Pool</h3>
-                <p className="text-4xl font-black text-emerald-500 italic leading-none">
-                  {formatCurrency(currentPrizePool)}
-                </p>
-                <div className="space-y-2">
-                  <PrizeRow pos="1st" percent={tournament.prize_1st_percent || 60} pool={currentPrizePool} />
-                  <PrizeRow pos="2nd" percent={tournament.prize_2nd_percent || 25} pool={currentPrizePool} />
-                  <PrizeRow pos="3rd" percent={tournament.prize_3rd_percent || 15} pool={currentPrizePool} />
+        {/* Below the Menu: Important Dates and Prize Pool */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-border-main">
+          {/* Important Dates */}
+          <div className="card p-6 space-y-4">
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-primary" />
+              Important Dates
+            </h3>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-bold uppercase">Registration Ends</p>
+                  <p className="text-sm font-semibold text-white">
+                    {tournament.start_date ? new Date(new Date(tournament.start_date).getTime() - 86400000).toLocaleDateString() : 'TBD'}
+                  </p>
                 </div>
               </div>
-              
-              <div className="p-6 grid grid-cols-2 gap-6">
-                <InfoItem icon={<Users className="w-5 h-5 text-primary" />} label="Total Contenders" value={tournament.max_players.toString()} />
-                <InfoItem icon={<Calendar className="w-5 h-5 text-blue-500" />} label="Entry Fee" value={tournament.entry_fee ? formatCurrency(tournament.entry_fee) : 'Free'} />
-              </div>
-            </div>
-
-            <div className="card p-6 space-y-4">
-              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Important Dates</h3>
-              <div className="space-y-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300">
-                    <Calendar className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 font-bold uppercase">Registration Ends</p>
-                    <p className="text-sm font-semibold text-white">
-                      {tournament.start_date ? new Date(new Date(tournament.start_date).getTime() - 86400000).toLocaleDateString() : 'TBD'}
-                    </p>
-                  </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                  <Trophy className="w-5 h-5" />
                 </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                    <Trophy className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-primary font-bold uppercase">Tournament Starts</p>
-                    <p className="text-sm font-semibold text-white">
-                      {tournament.start_date ? new Date(tournament.start_date).toLocaleDateString() : 'TBD'}
-                    </p>
-                  </div>
+                <div>
+                  <p className="text-xs text-primary font-bold uppercase">Tournament Starts</p>
+                  <p className="text-sm font-semibold text-white">
+                    {tournament.start_date ? new Date(tournament.start_date).toLocaleDateString() : 'TBD'}
+                  </p>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="lg:col-span-3 space-y-6">
-            <div className="flex items-center space-x-1 border-b border-border-main overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
-              {(['info', 'fixtures', 'standings', 'players'] as const).map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={cn(
-                    "px-6 sm:px-8 py-4 text-xs font-black uppercase tracking-[0.1em] sm:tracking-[0.2em] transition-all relative whitespace-nowrap",
-                    activeTab === tab ? "text-primary bg-primary/5" : "text-text-muted hover:text-text-main"
-                  )}
-                >
-                  {tab === 'players' ? 'contenders' : tab}
-                  {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary" />}
-                </button>
-              ))}
+          {/* Prize Pool */}
+          <div className="card divide-y divide-slate-800">
+            <div className="p-6 space-y-4">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-amber-400" />
+                Prize Pool
+              </h3>
+              <p className="text-4xl font-black text-emerald-500 italic leading-none">
+                {formatCurrency(currentPrizePool)}
+              </p>
+              <div className="space-y-2">
+                <PrizeRow pos="1st" percent={tournament.prize_1st_percent || 60} pool={currentPrizePool} />
+                <PrizeRow pos="2nd" percent={tournament.prize_2nd_percent || 25} pool={currentPrizePool} />
+                <PrizeRow pos="3rd" percent={tournament.prize_3rd_percent || 15} pool={currentPrizePool} />
+              </div>
             </div>
             
             <div className="p-6 grid grid-cols-2 gap-6">

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Star, ArrowUpRight, Award } from 'lucide-react';
+import { Trophy, Star, ArrowUpRight, Award, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { RecentChampionFeedItem } from '../../types/champion';
 import { Link } from 'react-router-dom';
@@ -63,16 +63,28 @@ export default function RecentChampions() {
     : FALLBACK_CHAMPIONS;
   const [currentIndex, setCurrentIndex] = useState(0);
   const [direction, setDirection] = useState(1);
+  const [isHovered, setIsHovered] = useState(false);
 
-  // Auto transition every 4 seconds alternating left and right
-  useEffect(() => {
+  const handleNext = () => {
     if (displayChampions.length <= 1) return;
+    setDirection(1);
+    setCurrentIndex((prev) => (prev + 1) % displayChampions.length);
+  };
+
+  const handlePrev = () => {
+    if (displayChampions.length <= 1) return;
+    setDirection(-1);
+    setCurrentIndex((prev) => (prev - 1 + displayChampions.length) % displayChampions.length);
+  };
+
+  // Auto transition every 4 seconds alternating direction when not hovered
+  useEffect(() => {
+    if (isHovered || displayChampions.length <= 1) return;
     const timer = setInterval(() => {
-      setDirection((prev) => prev * -1);
-      setCurrentIndex((prev) => (prev + 1) % displayChampions.length);
+      handleNext();
     }, 4000);
     return () => clearInterval(timer);
-  }, [displayChampions.length]);
+  }, [isHovered, displayChampions.length]);
 
   const currentChampion = displayChampions[currentIndex];
 
@@ -110,12 +122,18 @@ export default function RecentChampions() {
           <Trophy className="w-4 h-4 text-amber-500 fill-amber-500/20" />
           <h3 className="font-black text-text-main uppercase italic text-xs tracking-wider">Hall of Fame</h3>
         </div>
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center space-x-1.5">
           {displayChampions.map((_, idx) => (
-            <div
+            <button
+              type="button"
               key={idx}
-              className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                idx === currentIndex ? 'bg-amber-500 w-3' : 'bg-border-main'
+              onClick={() => {
+                setDirection(idx >= currentIndex ? 1 : -1);
+                setCurrentIndex(idx);
+              }}
+              aria-label={`Go to slide ${idx + 1}`}
+              className={`h-1.5 rounded-none transition-all duration-300 cursor-pointer ${
+                idx === currentIndex ? 'bg-amber-500 w-4' : 'bg-border-main w-2 hover:bg-zinc-600'
               }`}
             />
           ))}

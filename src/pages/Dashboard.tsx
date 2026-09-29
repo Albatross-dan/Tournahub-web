@@ -4,7 +4,7 @@ import {
   Trophy, Users, Wallet, 
   ArrowUpRight, Gamepad2, Timer,
   Loader2, Tv, Shield, HelpCircle,
-  ChevronDown, ChevronUp, Calendar, Play, CheckCircle2, Download,
+  ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Play, CheckCircle2, Download,
   MessageSquare, Swords
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -267,6 +267,95 @@ export default function Dashboard() {
     }
   }
 
+  // Live Tournaments horizontal scrolling & auto-movement refs & handlers
+  const tournamentSliderRef = React.useRef<HTMLDivElement>(null);
+  const isSliderPausedRef = React.useRef(false);
+  const [isSliderHovered, setIsSliderHovered] = useState(false);
+  const isDraggingSliderRef = React.useRef(false);
+  const startXSliderRef = React.useRef(0);
+  const scrollLeftSliderRef = React.useRef(0);
+  const hasDraggedSliderRef = React.useRef(false);
+  const pauseSliderTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const handleSliderInteraction = React.useCallback(() => {
+    isSliderPausedRef.current = true;
+    if (pauseSliderTimeoutRef.current) clearTimeout(pauseSliderTimeoutRef.current);
+    pauseSliderTimeoutRef.current = setTimeout(() => {
+      isSliderPausedRef.current = false;
+    }, 4500);
+  }, []);
+
+  const handleSliderMouseDown = (e: React.MouseEvent) => {
+    if (!tournamentSliderRef.current) return;
+    isDraggingSliderRef.current = true;
+    hasDraggedSliderRef.current = false;
+    startXSliderRef.current = e.pageX - tournamentSliderRef.current.offsetLeft;
+    scrollLeftSliderRef.current = tournamentSliderRef.current.scrollLeft;
+    handleSliderInteraction();
+  };
+
+  const handleSliderMouseMove = (e: React.MouseEvent) => {
+    if (!isDraggingSliderRef.current || !tournamentSliderRef.current) return;
+    const x = e.pageX - tournamentSliderRef.current.offsetLeft;
+    const walk = (x - startXSliderRef.current) * 1.5;
+    if (Math.abs(walk) > 6) {
+      hasDraggedSliderRef.current = true;
+    }
+    tournamentSliderRef.current.scrollLeft = scrollLeftSliderRef.current - walk;
+    handleSliderInteraction();
+  };
+
+  const handleSliderMouseUp = () => {
+    isDraggingSliderRef.current = false;
+    setTimeout(() => {
+      hasDraggedSliderRef.current = false;
+    }, 60);
+  };
+
+  const handleSliderWheel = (e: React.WheelEvent) => {
+    if (!tournamentSliderRef.current) return;
+    if (Math.abs(e.deltaX) > 5 || Math.abs(e.deltaY) > 5) {
+      handleSliderInteraction();
+      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      tournamentSliderRef.current.scrollLeft += delta;
+    }
+  };
+
+  const handleScrollSliderLeft = () => {
+    handleSliderInteraction();
+    if (!tournamentSliderRef.current) return;
+    tournamentSliderRef.current.scrollBy({ left: -360, behavior: 'smooth' });
+  };
+
+  const handleScrollSliderRight = () => {
+    handleSliderInteraction();
+    if (!tournamentSliderRef.current) return;
+    tournamentSliderRef.current.scrollBy({ left: 360, behavior: 'smooth' });
+  };
+
+  // Continuous auto-movement every 4 seconds when not hovered or interacting
+  useEffect(() => {
+    if (isSliderHovered || activeTournaments.length <= 1) return;
+
+    const interval = setInterval(() => {
+      if (isSliderPausedRef.current) return;
+      const container = tournamentSliderRef.current;
+      if (!container) return;
+
+      const maxScroll = container.scrollWidth - container.clientWidth;
+      if (container.scrollLeft >= maxScroll - 15) {
+        container.scrollTo({ left: 0, behavior: 'smooth' });
+      } else {
+        container.scrollBy({ left: 360, behavior: 'smooth' });
+      }
+    }, 4000);
+
+    return () => {
+      clearInterval(interval);
+      if (pauseSliderTimeoutRef.current) clearTimeout(pauseSliderTimeoutRef.current);
+    };
+  }, [isSliderHovered, activeTournaments.length]);
+
   const container = {
     hidden: { opacity: 0 },
     show: {
@@ -294,7 +383,7 @@ export default function Dashboard() {
   if (isDashboardLoading && scheduledMatches.length === 0 && activeTournaments.length === 0) {
     return (
       <Shell>
-        <LoadingState message="Synchronizing Arena..." />
+        <LoadingState message="eFootball Tournaments" />
       </Shell>
     );
   }
@@ -339,11 +428,33 @@ export default function Dashboard() {
           </motion.div>
         )}
 
-        {/* Tournament Auto-Slider (Available Tournaments) */}
+        {/* Tournament Auto-Slider (Available Tournaments) with Sharp Corners & Full Scrollability */}
         <div className="space-y-4">
-          <div>
-            <h2 className="text-xl font-black text-text-main uppercase italic tracking-tighter">Live Tournaments</h2>
-            <p className="text-xs text-text-muted font-bold uppercase tracking-widest leading-none mt-1">Tap a card to open the details view.</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-black text-text-main uppercase italic tracking-tighter">Live Tournaments</h2>
+              <p className="text-xs text-text-muted font-bold uppercase tracking-widest leading-none mt-1">Tap a card to open the details view.</p>
+            </div>
+            {activeTournaments.length > 1 && (
+              <div className="hidden sm:flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleScrollSliderLeft}
+                  aria-label="Scroll left"
+                  className="w-8 h-8 rounded-none bg-surface border border-border-main text-text-main flex items-center justify-center hover:bg-surface-hover hover:border-primary/40 transition-all cursor-pointer shadow-sm"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleScrollSliderRight}
+                  aria-label="Scroll right"
+                  className="w-8 h-8 rounded-none bg-surface border border-border-main text-text-main flex items-center justify-center hover:bg-surface-hover hover:border-primary/40 transition-all cursor-pointer shadow-sm"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </div>
           
           <div className="relative group/slider py-2 -mx-4 sm:mx-0">
@@ -388,7 +499,7 @@ export default function Dashboard() {
               {activeLoading ? (
                 <div className="w-full flex gap-6 overflow-hidden">
                   {[1, 2, 3].map(i => (
-                    <div key={i} className="w-[300px] sm:w-[500px] aspect-[16/9] sm:aspect-[2.5/1] rounded-3xl bg-surface border border-border-main animate-pulse shrink-0" />
+                    <div key={i} className="w-[300px] sm:w-[500px] aspect-[16/9] sm:aspect-[2.5/1] rounded-none bg-surface border border-border-main animate-pulse shrink-0" />
                   ))}
                 </div>
               ) : activeTournaments.length === 0 ? (
@@ -402,25 +513,23 @@ export default function Dashboard() {
                         <p className="text-xl font-black text-text-main italic uppercase tracking-tighter">No active arena battles</p>
                         <p className="text-xs text-text-muted font-bold uppercase tracking-widest mt-1">Start by creating a tournament in the admin panel.</p>
                       </div>
-                      {isAdmin ? (
-                        <>
-                          <div>
-                            <p className="text-xl font-black text-text-main italic uppercase tracking-tighter">No active arena battles</p>
-                            <p className="text-xs text-text-muted font-bold uppercase tracking-widest mt-1">Start by creating a tournament in the admin panel.</p>
-                          </div>
-                          <Link to="/admin/tournaments" className="btn-secondary inline-block px-10 py-3 text-xs uppercase italic font-black">
-                            Create Tournament
-                          </Link>
-                        </>
-                      ) : (
-                        <div>
-                          <p className="text-xl font-black text-text-main italic uppercase tracking-tighter">No active arena battles</p>
-                          <p className="text-xs text-text-muted font-bold uppercase tracking-widest mt-1">Check back soon for upcoming tournaments and challenges.</p>
-                        </div>
-                      )}
+                      <Link to="/admin/tournaments" className="btn-secondary inline-block px-10 py-3 text-xs uppercase italic font-black rounded-none">
+                        Create Tournament
+                      </Link>
+                    </>
+                  ) : (
+                    <div>
+                      <p className="text-xl font-black text-text-main italic uppercase tracking-tighter">No active arena battles</p>
+                      <p className="text-xs text-text-muted font-bold uppercase tracking-widest mt-1">Check back soon for upcoming tournaments and challenges.</p>
                     </div>
                   )}
-                </motion.div>
+                </div>
+              ) : (
+                (activeTournaments.length > 2 ? activeTournaments : sliderItems).map((tournament, idx) => (
+                  <div key={`${tournament.id}-${idx}`} className="w-[300px] sm:w-[500px] shrink-0">
+                    <TournamentHeroCard tournament={tournament} hasDraggedRef={hasDraggedSliderRef} />
+                  </div>
+                ))
               )}
             </div>
           </div>
@@ -801,9 +910,7 @@ export default function Dashboard() {
   );
 }
 
-function TournamentHeroCard({ tournament }: { tournament: Tournament }) {
-  const isOngoing = tournament.status === TournamentStatus.ONGOING;
-
+function TournamentHeroCard({ tournament, hasDraggedRef }: { tournament: Tournament; hasDraggedRef?: React.RefObject<boolean> }) {
   const regCount = typeof (tournament as any).registrations_count === 'object' 
     ? (tournament as any).registrations_count?.count ?? 0 
     : (tournament as any).registrations_count ?? 0;
@@ -826,20 +933,21 @@ function TournamentHeroCard({ tournament }: { tournament: Tournament }) {
       <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent sm:bg-gradient-to-br sm:from-black/85 sm:via-black/40 sm:to-transparent rounded-none pointer-events-none" />
       
       {/* Glow Effect */}
-      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -mr-10 -mt-10" />
+      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-none blur-3xl -mr-10 -mt-10 pointer-events-none" />
 
-      <div className="absolute inset-0 p-8 flex flex-col justify-between">
+      <div className="absolute inset-0 p-3 sm:p-8 flex flex-col justify-between pointer-events-none">
+        {/* Top: Tournament Type */}
         <div className="flex items-center justify-between">
           <span className="px-2 py-0.5 sm:px-4 sm:py-1.5 bg-[#d4e157] text-black text-[8px] sm:text-[10px] font-black rounded-none uppercase tracking-widest shadow-md">
             {tournament.type.toUpperCase()}
           </span>
         </div>
 
+        {/* Middle: Tournament Name */}
         <div>
-          <h2 className="text-4xl font-black text-white italic uppercase tracking-tighter leading-none group-hover:text-primary transition-colors">
+          <h2 className="text-base sm:text-4xl font-black text-white italic uppercase tracking-tighter leading-tight sm:leading-none group-hover:text-primary transition-colors line-clamp-2 drop-shadow-md">
             {tournament.name}
           </h2>
-          <p className="text-slate-300 text-sm font-medium mt-2 line-clamp-1">{tournament.description || 'Competitive tournament arena.'}</p>
         </div>
 
         {/* Bottom: Contenders (Compact on mobile for clear banner visibility) */}
@@ -850,11 +958,11 @@ function TournamentHeroCard({ tournament }: { tournament: Tournament }) {
                 <p className="text-[7px] sm:text-[10px] text-slate-400 font-bold uppercase tracking-wider sm:tracking-widest">Contenders</p>
                 <p className="text-[10px] sm:text-lg font-black text-white italic leading-tight">{String(regCount)}/{tournament.max_players}</p>
               </div>
-              <Users className="w-5 h-5 text-slate-500" />
+              <Users className="w-2.5 h-2.5 sm:w-5 sm:h-5 text-slate-400 shrink-0" />
             </div>
-            <div className="absolute bottom-0 left-0 h-1 bg-primary/20 w-full" />
+            <div className="absolute bottom-0 left-0 h-[2px] sm:h-1 bg-primary/20 w-full" />
             <div 
-              className="absolute bottom-0 left-0 h-1 bg-primary transition-all duration-1000" 
+              className="absolute bottom-0 left-0 h-[2px] sm:h-1 bg-primary transition-all duration-1000" 
               style={{ width: `${Math.min(100, (Number(regCount) / (tournament.max_players || 1)) * 100)}%` }} 
             />
           </div>
@@ -866,7 +974,7 @@ function TournamentHeroCard({ tournament }: { tournament: Tournament }) {
 
 function WinnerCard({ tournament }: { tournament: any }) {
   return (
-    <Link to={`/tournaments/${tournament.id}`} className="card p-5 hover:border-amber-500/50 transition-all group rounded-3xl relative overflow-hidden bg-gradient-to-br from-surface to-background border-amber-500/10 block h-full">
+    <Link to={`/tournaments/${tournament.id}`} className="card p-5 hover:border-amber-500/50 transition-all group rounded-none relative overflow-hidden bg-gradient-to-br from-surface to-background border-amber-500/10 block h-full">
       <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-20 transition-opacity rotate-12">
         <Trophy className="w-16 h-16 text-amber-500" />
       </div>

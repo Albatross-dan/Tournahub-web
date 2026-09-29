@@ -84,7 +84,7 @@ export default function Chat() {
 
         <div className="card divide-y divide-slate-800 rounded-3xl overflow-hidden border-slate-800/50">
           {loading ? (
-            <LoadingState message="Establishing Link..." />
+            <LoadingState message="eFootball Tournaments" />
           ) : conversations.length > 0 ? (
             conversations.map((conv) => {
               const match = conv.matches;

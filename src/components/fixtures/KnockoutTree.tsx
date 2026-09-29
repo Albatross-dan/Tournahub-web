@@ -138,7 +138,7 @@ export default function KnockoutTree({ tournamentId, hideIfEmpty }: KnockoutTree
   if (loading) {
     return (
       <div id="bracket-loading" className="card p-12 bg-surface/50 border-border-main text-center shadow-sm">
-        <LoadingState message="Mapping Brackets..." />
+        <LoadingState message="eFootball Tournaments" />
       </div>
     );
   }

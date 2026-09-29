@@ -237,7 +237,7 @@ export default function Notifications() {
                 {inIframe ? <AlertTriangle className="text-amber-500 w-4 h-4 flex-shrink-0" /> : <Monitor className="text-emerald-500 w-4 h-4 flex-shrink-0" />}
               </div>
               <div className="w-full min-w-0">
-                <p className="font-bold uppercase tracking-wide">Security Sandbox Check</p>
+                <p className="font-bold uppercase tracking-wide">Browser Sandbox Check</p>
                 <p className="text-[11px] text-slate-400 mt-1 leading-relaxed italic font-medium">
                   {inIframe 
                     ? "Currently running inside an iFrame container. Browsers block native notification requests in nested frames. Open in New Tab to trigger permission." 
@@ -310,7 +310,7 @@ export default function Notifications() {
 
         <div className="card divide-y divide-slate-800 rounded-3xl overflow-hidden border-slate-800/50">
           {loading ? (
-            <LoadingState message="Polling Subsystems..." />
+            <LoadingState message="eFootball Tournaments" />
           ) : notifications.length > 0 ? (
             notifications.map((notif) => (
               <div 

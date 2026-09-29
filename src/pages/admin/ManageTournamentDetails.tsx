@@ -25,6 +25,9 @@ import TournamentPrizeConfigComponent from '../../components/admin/TournamentPri
 import TournamentDistributePrizesComponent from '../../components/admin/TournamentDistributePrizesComponent';
 import TournamentLeaderboardComponent from '../../components/admin/TournamentLeaderboardComponent';
 import TournamentLifecycleControlsComponent from '../../components/admin/TournamentLifecycleControlsComponent';
+import TwoLeggedTieCard from '../../components/fixtures/TwoLeggedTieCard';
+import LevelTieResolutionBanner from '../../components/admin/LevelTieResolutionBanner';
+import { groupMatchesIntoDisplayUnits } from '../../utils/tieUtils';
 
 export default function ManageTournamentDetails() {
   const { id } = useParams<{ id: string }>();
@@ -238,7 +241,7 @@ export default function ManageTournamentDetails() {
 
   if (tournamentLoading || (loading && !registrations.length && !matches.length)) return (
     <AdminShell>
-      <LoadingState message="Connecting to Tournament Hub..." />
+      <LoadingState message="eFootball Tournaments" />
     </AdminShell>
   );
 
@@ -522,6 +525,8 @@ function PlayersList({ registrations, maxPlayers, badges }: { registrations: any
 function MatchesManagement({ matches, tournamentId, onUpdate }: { matches: Match[], tournamentId: string, onUpdate: () => void }) {
   const navigate = useNavigate();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const displayUnits = groupMatchesIntoDisplayUnits(matches);
+  const ties = displayUnits.filter((u: any) => u.type === 'tie').map((u: any) => u.tie);
 
   return (
     <div className="space-y-8">
@@ -555,11 +560,35 @@ function MatchesManagement({ matches, tournamentId, onUpdate }: { matches: Match
         </div>
       </div>
 
+      <LevelTieResolutionBanner ties={ties} onResolved={onUpdate} />
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {matches.map((match: any) => {
-          if (!match) return null;
-          return (
-            <div key={match.id} className="card p-8 hover:border-primary/30 transition-all border-white/5 bg-surface/20 flex flex-col sm:flex-row items-center justify-between gap-6 group">
+              {displayUnits.map((unit: any) => {
+                if (unit.type === 'tie') {
+                  return (
+                    <div key={unit.id} className="col-span-1 md:col-span-2">
+                      <TwoLeggedTieCard 
+                        tie={unit.tie}
+                        variant="admin"
+                        onResolved={onUpdate}
+                        onUpdateScore={async (matchId, s1, s2) => {
+                          const match = matches.find(m => m.id === matchId);
+                          if (!match) return;
+                          const p1Id = typeof match.player1 === 'object' ? (match.player1 as any)?.id : match.player1;
+                          const p2Id = typeof match.player2 === 'object' ? (match.player2 as any)?.id : match.player2;
+                          const winnerId = s1 > s2 ? p1Id : s2 > s1 ? p2Id : null;
+                          await (matchService as any).verifyResult(matchId, winnerId, s1, s2);
+                          onUpdate();
+                        }}
+                      />
+                    </div>
+                  );
+                }
+
+                const match = unit.match;
+                if (!match) return null;
+                return (
+                  <div key={match.id} className="card p-8 hover:border-primary/30 transition-all border-white/5 bg-surface/20 flex flex-col sm:flex-row items-center justify-between gap-6 group">
               <div className="flex items-center space-x-6 w-full sm:w-auto">
                 <div className="text-center bg-slate-950 border border-slate-800 p-4 rounded-2xl w-16">
                   <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 italic">Round</p>

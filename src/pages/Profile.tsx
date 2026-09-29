@@ -558,7 +558,7 @@ export default function Profile() {
                         {checking ? "Verifying Credentials" : "Admin Control"}
                       </h4>
                       <p className="text-xs font-bold text-primary uppercase tracking-widest">
-                        {checking ? "Checking Security Authorization" : "Access Management Hub"}
+                        {checking ? "eFootball Tournaments" : "Access Management Hub"}
                       </p>
                     </div>
                   </div>

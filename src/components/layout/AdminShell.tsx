@@ -14,6 +14,7 @@ import { useAuth } from '../../contexts/AuthContext';
 const logoUrl = '/android-chrome-512x512.png';
 import UpcomingMaintenanceBanner from './UpcomingMaintenanceBanner';
 import AnnouncementBanner from './AnnouncementBanner';
+import LoadingState from '../ui/LoadingState';
 
 const PERMISSION_LABELS: Record<string, string> = {
   manage_disputes: 'Dispute Manager',
