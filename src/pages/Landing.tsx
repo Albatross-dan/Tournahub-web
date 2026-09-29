@@ -60,43 +60,42 @@ export default function Landing() {
         }}
       />
       {/* 1. HEADER / NAVIGATION */}
-      <header className="sticky top-0 z-50 bg-[#040511]/80 backdrop-blur-xl border-b border-white/5 py-4 px-6 md:px-12 transition-all">
+      <header className="sticky top-0 z-50 bg-[#facc15] border-b border-yellow-500 py-3.5 px-6 md:px-12 transition-all shadow-md">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           {/* Logo Left */}
           <Link to="/" className="flex items-center space-x-3 group cursor-pointer focus:outline-none">
             <div className="relative">
-              <div className="absolute inset-0 bg-primary/25 blur-lg rounded-full opacity-60 group-hover:opacity-100 transition-opacity" />
               <img src={logoUrl} alt="Tournahub Logo" className="w-10 h-10 object-contain relative z-10 group-hover:scale-105 transition-transform" />
             </div>
             <div>
-              <h1 className="text-xl md:text-2xl font-black text-white italic tracking-tighter uppercase">
-                Tourna<span className="text-primary font-black italic">hub</span>
+              <h1 className="text-xl md:text-2xl font-black text-slate-950 italic tracking-tighter uppercase">
+                Tourna<span className="text-black font-extrabold italic bg-slate-950 text-[#facc15] px-1.5 py-0.5 rounded-md ml-1 not-italic text-sm">HUB</span>
               </h1>
             </div>
           </Link>
 
           {/* Navigation Links - Desktop Only */}
           <nav className="hidden lg:flex items-center space-x-8">
-            <button onClick={() => scrollToSection('about')} className="text-xs font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary transition-colors cursor-pointer">About</button>
-            <button onClick={() => scrollToSection('tournament-types')} className="text-xs font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary transition-colors cursor-pointer">Tournaments</button>
-            <button onClick={() => scrollToSection('prizes')} className="text-xs font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary transition-colors cursor-pointer text-nowrap">Prize Pool</button>
-            <Link to="/rules" className="text-xs font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary transition-colors cursor-pointer">Rules</Link>
-            <Link to="/help" className="text-xs font-black uppercase tracking-widest text-primary hover:text-primary-hover transition-colors cursor-pointer">Help Center</Link>
-            <a href={COMMUNITY_WHATSAPP} target="_blank" rel="noopener noreferrer" className="text-xs font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary transition-colors cursor-pointer">Community</a>
-            <a href={SUPPORT_EMAIL} className="text-xs font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary transition-colors cursor-pointer">Support</a>
+            <button onClick={() => scrollToSection('about')} className="text-xs font-black uppercase tracking-widest text-slate-900 hover:text-black transition-colors cursor-pointer">About</button>
+            <button onClick={() => scrollToSection('tournament-types')} className="text-xs font-black uppercase tracking-widest text-slate-900 hover:text-black transition-colors cursor-pointer">Tournaments</button>
+            <button onClick={() => scrollToSection('prizes')} className="text-xs font-black uppercase tracking-widest text-slate-900 hover:text-black transition-colors cursor-pointer text-nowrap">Prize Pool</button>
+            <Link to="/rules" className="text-xs font-black uppercase tracking-widest text-slate-900 hover:text-black transition-colors cursor-pointer">Rules</Link>
+            <Link to="/help" className="text-xs font-black uppercase tracking-widest text-slate-950 underline underline-offset-4 font-extrabold hover:text-black transition-colors cursor-pointer">Help Center</Link>
+            <a href={COMMUNITY_WHATSAPP} target="_blank" rel="noopener noreferrer" className="text-xs font-black uppercase tracking-widest text-slate-900 hover:text-black transition-colors cursor-pointer">Community</a>
+            <a href={SUPPORT_EMAIL} className="text-xs font-black uppercase tracking-widest text-slate-900 hover:text-black transition-colors cursor-pointer">Support</a>
           </nav>
 
           {/* Actions Right - Desktop Only */}
           <div className="hidden lg:flex items-center space-x-4">
             <button 
               onClick={handleLogin}
-              className="px-6 py-2.5 bg-transparent border border-white/10 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-white/5 hover:border-white/30 transition-all cursor-pointer"
+              className="px-6 py-2.5 bg-slate-950/10 border border-slate-950/20 text-slate-950 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-950 hover:text-[#facc15] transition-all cursor-pointer shadow-sm"
             >
               Login
             </button>
             <button 
               onClick={handleJoinNow}
-              className="px-6 py-2.5 bg-primary hover:bg-primary-hover text-black rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 hover:scale-105 cursor-pointer flex items-center gap-1"
+              className="px-6 py-2.5 bg-slate-950 hover:bg-black text-[#facc15] rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md hover:scale-105 cursor-pointer flex items-center gap-1 border border-slate-900"
             >
               Sign Up <ArrowUpRight className="w-3.5 h-3.5" />
             </button>
@@ -105,7 +104,7 @@ export default function Landing() {
           {/* Hamburger Menu - Mobile Trigger */}
           <button 
             onClick={() => setIsHamburgerOpen(!isHamburgerOpen)} 
-            className="p-2 border border-white/10 bg-white/5 hover:bg-white/10 rounded-xl text-primary cursor-pointer lg:hidden flex items-center justify-center transition-all"
+            className="p-2 border border-slate-950/20 bg-slate-950/10 hover:bg-slate-950/20 rounded-xl text-slate-950 cursor-pointer lg:hidden flex items-center justify-center transition-all"
             aria-label="Toggle Hamburger Menu"
           >
             {isHamburgerOpen ? <X className="w-6 h-6 animate-pulse" /> : <Menu className="w-6 h-6" />}
@@ -121,24 +120,24 @@ export default function Landing() {
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.3 }}
-            className="lg:hidden fixed top-[73px] left-0 right-0 z-40 bg-[#050614]/98 border-b border-white/15 px-6 py-8 backdrop-blur-3xl overflow-y-auto max-h-[calc(100vh-73px)] shadow-2xl flex flex-col space-y-6"
+            className="lg:hidden fixed top-[69px] left-0 right-0 z-40 bg-[#facc15] border-b border-yellow-500 px-6 py-8 overflow-y-auto max-h-[calc(100vh-69px)] shadow-2xl flex flex-col space-y-6"
           >
             <div className="flex flex-col space-y-4">
               <button 
                 onClick={() => scrollToSection('about')} 
-                className="w-full text-left py-3 border-b border-white/5 text-sm font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary"
+                className="w-full text-left py-3 border-b border-yellow-600/30 text-sm font-black uppercase tracking-widest text-slate-950 hover:text-black cursor-pointer"
               >
                 About Section
               </button>
               <button 
                 onClick={() => scrollToSection('tournament-types')} 
-                className="w-full text-left py-3 border-b border-white/5 text-sm font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary"
+                className="w-full text-left py-3 border-b border-yellow-600/30 text-sm font-black uppercase tracking-widest text-slate-950 hover:text-black cursor-pointer"
               >
                 Tournaments Section
               </button>
               <button 
                 onClick={() => scrollToSection('prizes')} 
-                className="w-full text-left py-3 border-b border-white/5 text-sm font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary"
+                className="w-full text-left py-3 border-b border-yellow-600/30 text-sm font-black uppercase tracking-widest text-slate-950 hover:text-black cursor-pointer"
               >
                 Prize Pool Section
               </button>
@@ -147,34 +146,34 @@ export default function Landing() {
                 target="_blank" 
                 rel="noopener noreferrer" 
                 onClick={() => setIsHamburgerOpen(false)}
-                className="w-full text-left py-3 border-b border-white/5 text-sm font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary flex items-center justify-between"
+                className="w-full text-left py-3 border-b border-yellow-600/30 text-sm font-black uppercase tracking-widest text-slate-950 hover:text-black flex items-center justify-between"
               >
                 <span>Community Link</span>
-                <ArrowUpRight className="w-4 h-4 text-primary" />
+                <ArrowUpRight className="w-4 h-4 text-slate-950" />
               </a>
               <a 
                 href={SUPPORT_EMAIL} 
                 onClick={() => setIsHamburgerOpen(false)}
-                className="w-full text-left py-3 border-b border-white/5 text-sm font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary flex items-center justify-between"
+                className="w-full text-left py-3 border-b border-yellow-600/30 text-sm font-black uppercase tracking-widest text-slate-950 hover:text-black flex items-center justify-between"
               >
                 <span>Support Link</span>
-                <Mail className="w-4 h-4 text-primary" />
+                <Mail className="w-4 h-4 text-slate-950" />
               </a>
               <Link 
                 to="/rules" 
                 onClick={() => setIsHamburgerOpen(false)}
-                className="w-full text-left py-3 border-b border-white/5 text-sm font-black uppercase tracking-widest text-[#a3a3c2] hover:text-primary flex items-center justify-between"
+                className="w-full text-left py-3 border-b border-yellow-600/30 text-sm font-black uppercase tracking-widest text-slate-950 hover:text-black flex items-center justify-between"
               >
                 <span>Tournament Rules</span>
-                <HelpCircle className="w-4 h-4 text-primary" />
+                <HelpCircle className="w-4 h-4 text-slate-950" />
               </Link>
               <Link 
                 to="/help" 
                 onClick={() => setIsHamburgerOpen(false)}
-                className="w-full text-left py-3 border-b border-white/5 text-sm font-black uppercase tracking-widest text-primary hover:text-primary-hover flex items-center justify-between"
+                className="w-full text-left py-3 border-b border-yellow-600/30 text-sm font-black uppercase tracking-widest text-slate-950 font-black hover:text-black flex items-center justify-between"
               >
                 <span>Help Center & FAQ</span>
-                <BookOpen className="w-4 h-4 text-primary" />
+                <BookOpen className="w-4 h-4 text-slate-950" />
               </Link>
               <Link 
                 to="/privacy-policy" 

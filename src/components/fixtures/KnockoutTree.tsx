@@ -12,8 +12,6 @@ import { overrideTournamentChampion } from '../../utils/tournamentOverrides';
 import DownloadShareAction, { DownloadHeader, DownloadFooter } from '../common/DownloadShareAction';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
-import { groupMatchesIntoDisplayUnits, getPlayerUuid } from '../../utils/tieUtils';
-import { matchService } from '../../services/matchService';
 
 interface KnockoutTreeProps {
   tournamentId: string;
@@ -27,8 +25,6 @@ export default function KnockoutTree({ tournamentId, hideIfEmpty }: KnockoutTree
   const [tournament, setTournament] = useState<any>(null);
   const [dbChampion, setDbChampion] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const [resolveModalTie, setResolveModalTie] = useState<any | null>(null);
-  const [resolvingBusy, setResolvingBusy] = useState(false);
   const { refreshCount } = useMatchCompletionSync(tournamentId);
 
   useEffect(() => {
@@ -138,7 +134,7 @@ export default function KnockoutTree({ tournamentId, hideIfEmpty }: KnockoutTree
   if (loading) {
     return (
       <div id="bracket-loading" className="card p-12 bg-surface/50 border-border-main text-center shadow-sm">
-        <LoadingState message="eFootball Tournaments" />
+        <LoadingState message="Mapping Brackets..." />
       </div>
     );
   }
@@ -176,43 +172,13 @@ export default function KnockoutTree({ tournamentId, hideIfEmpty }: KnockoutTree
     (m) => m && m.stage && (m.stage === 'third_place' || m.stage === 'third-place' || m.stage.toLowerCase().includes('third'))
   );
 
-  const displayUnits = groupMatchesIntoDisplayUnits(bracketMatches);
-  const groupedBracketTies = displayUnits.map((unit) => {
-    if (unit.type === 'single') {
-      return unit.match;
-    }
-    const tie = unit.tie;
-    return {
-      ...tie.leg1,
-      id: unit.id,
-      match_id: tie.leg2?.id || tie.leg1?.id || unit.id,
-      tie_id: tie.tie_id,
-      round: tie.round,
-      stage: tie.stage,
-      bracket_slot: tie.leg1?.bracket_slot ?? tie.leg2?.bracket_slot,
-      match_order: tie.leg1?.match_order ?? tie.leg2?.match_order,
-      leg1: tie.leg1,
-      leg2: tie.leg2,
-      player1: tie.player1,
-      player2: tie.player2,
-      player1_id: tie.leg1?.player1_id || tie.leg1?.player1 || tie.player1,
-      player2_id: tie.leg1?.player2_id || tie.leg1?.player2 || tie.player2,
-      player1_username: tie.player1_username,
-      player2_username: tie.player2_username,
-      player1_badge_id: tie.player1_badge_id,
-      player2_badge_id: tie.player2_badge_id,
-      aggregate_score1: tie.aggregate_score1,
-      aggregate_score2: tie.aggregate_score2,
-      score1: tie.aggregate_score1,
-      score2: tie.aggregate_score2,
-      tie_status: tie.tie_status,
-      status: tie.is_completed ? 'completed' : (tie.is_leg1_completed ? 'in_progress' : (tie.leg1?.status || 'scheduled')),
-      winner: tie.winner_username,
-      winner_username: tie.winner_username,
-      is_placeholder: tie.is_placeholder,
-      matches: tie.matches
-    };
-  });
+  const groupedBracketTies = bracketMatches.map((m: any) => ({
+    ...m,
+    id: m.id || m.match_id,
+    match_id: m.match_id || m.id,
+    aggregate_score1: m.score1,
+    aggregate_score2: m.score2,
+  }));
 
   // Group by round
   const roundMap = groupedBracketTies.reduce((acc: any, match) => {
@@ -435,7 +401,7 @@ export default function KnockoutTree({ tournamentId, hideIfEmpty }: KnockoutTree
                       className="absolute"
                       style={{ left: `${xOffset}px`, width: `${colWidth}px`, top: `${topPos}px` }}
                     >
-                      <MatchNode match={match} roundLabel={getRoundLabel(roundKey, isFinalCol)} onResolveTie={(tie) => setResolveModalTie(tie)} canManage={canManage} />
+                      <MatchNode match={match} roundLabel={getRoundLabel(roundKey, isFinalCol)} canManage={canManage} />
                     </div>
                   );
                 })}
@@ -599,119 +565,13 @@ export default function KnockoutTree({ tournamentId, hideIfEmpty }: KnockoutTree
                   3rd Place Track
                 </span>
               </div>
-              <MatchNode match={thirdPlaceMatch} roundLabel="3rd Place Match" onResolveTie={(tie) => setResolveModalTie(tie)} canManage={canManage} />
+              <MatchNode match={thirdPlaceMatch} roundLabel="3rd Place Match" canManage={canManage} />
             </div>
           )}
 
         </div>
         <DownloadFooter />
       </div>
-
-      {resolveModalTie && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="card bg-slate-900 border border-slate-800 p-6 max-w-md w-full shadow-2xl rounded-3xl animate-in fade-in zoom-in duration-200">
-            <h3 className="text-lg font-black text-white italic uppercase tracking-tighter flex items-center gap-2 mb-2">
-              <Trophy className="w-5 h-5 text-amber-500" />
-              Resolve Level Tie
-            </h3>
-            <p className="text-xs text-slate-400 mb-6">
-              Aggregate tied. Enter extra time / penalty winner or apply tiebreaker rule. Choose the advancing player:
-            </p>
-
-            <div className="space-y-3 mb-6">
-              <button
-                disabled={resolvingBusy}
-                onClick={async () => {
-                  if (!resolveModalTie.tie_id) {
-                    toast.error('Missing tie ID');
-                    return;
-                  }
-                  setResolvingBusy(true);
-                  try {
-                    let winnerId = resolveModalTie.player1_id;
-                    if (!winnerId) {
-                      winnerId = await getPlayerUuid(
-                        resolveModalTie.player1,
-                        resolveModalTie.player1_username,
-                        resolveModalTie.leg1 || resolveModalTie.leg2,
-                        1
-                      );
-                    }
-                    if (!winnerId) {
-                      throw new Error(`Could not resolve user ID for "${resolveModalTie.player1_username || 'Player 1'}".`);
-                    }
-
-                    await matchService.resolveLevelTie(resolveModalTie.tie_id, winnerId);
-                    toast.success('Tie resolved! Winner advanced to next round.');
-                    setResolveModalTie(null);
-                    await fetchMatches();
-                  } catch (err: any) {
-                    toast.error(`Error resolving tie: ${err.message}`);
-                  } finally {
-                    setResolvingBusy(false);
-                  }
-                }}
-                className="w-full p-4 rounded-2xl bg-slate-800/80 hover:bg-primary/20 border border-slate-700 hover:border-primary transition-all flex items-center justify-between group cursor-pointer"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <PlayerBadge badgeId={resolveModalTie.player1_badge_id} username={resolveModalTie.player1_username || 'Player 1'} size="sm" />
-                  <span className="font-bold text-white group-hover:text-primary uppercase tracking-tight truncate">{resolveModalTie.player1_username || 'Player 1'}</span>
-                </div>
-                <span className="text-xs font-black uppercase text-primary px-2.5 py-1 rounded bg-primary/10">Advance</span>
-              </button>
-
-              <button
-                disabled={resolvingBusy}
-                onClick={async () => {
-                  if (!resolveModalTie.tie_id) {
-                    toast.error('Missing tie ID');
-                    return;
-                  }
-                  setResolvingBusy(true);
-                  try {
-                    let winnerId = resolveModalTie.player2_id;
-                    if (!winnerId) {
-                      winnerId = await getPlayerUuid(
-                        resolveModalTie.player2,
-                        resolveModalTie.player2_username,
-                        resolveModalTie.leg1 || resolveModalTie.leg2,
-                        2
-                      );
-                    }
-                    if (!winnerId) {
-                      throw new Error(`Could not resolve user ID for "${resolveModalTie.player2_username || 'Player 2'}".`);
-                    }
-
-                    await matchService.resolveLevelTie(resolveModalTie.tie_id, winnerId);
-                    toast.success('Tie resolved! Winner advanced to next round.');
-                    setResolveModalTie(null);
-                    await fetchMatches();
-                  } catch (err: any) {
-                    toast.error(`Error resolving tie: ${err.message}`);
-                  } finally {
-                    setResolvingBusy(false);
-                  }
-                }}
-                className="w-full p-4 rounded-2xl bg-slate-800/80 hover:bg-primary/20 border border-slate-700 hover:border-primary transition-all flex items-center justify-between group cursor-pointer"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <PlayerBadge badgeId={resolveModalTie.player2_badge_id} username={resolveModalTie.player2_username || 'Player 2'} size="sm" />
-                  <span className="font-bold text-white group-hover:text-primary uppercase tracking-tight truncate">{resolveModalTie.player2_username || 'Player 2'}</span>
-                </div>
-                <span className="text-xs font-black uppercase text-primary px-2.5 py-1 rounded bg-primary/10">Advance</span>
-              </button>
-            </div>
-
-            <button
-              disabled={resolvingBusy}
-              onClick={() => setResolveModalTie(null)}
-              className="w-full py-3 bg-slate-800 text-slate-400 rounded-xl font-bold uppercase tracking-wider hover:bg-slate-700 hover:text-white transition-all text-xs"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -137,28 +137,6 @@ export default function TournamentForm({ initialData, mode }: TournamentFormProp
   const watchPlayoff = watch('cl_playoff_zone_count');
   const watchMaxPlayers = watch('max_players');
   const watchType = watch('type');
-
-  useEffect(() => {
-    if (watchType === 'champions_league') {
-      const direct = getNumberOrDefault(watchDirect, 8);
-      const playoff = getNumberOrDefault(watchPlayoff, 0);
-      const knockoutTeams = direct + Math.floor(playoff / 2);
-      const isPowerOfTwo = knockoutTeams >= 2 && (knockoutTeams & (knockoutTeams - 1)) === 0;
-
-      if (isPowerOfTwo) {
-        clearErrors('cl_direct_qualify_count');
-      } else {
-        trigger('cl_direct_qualify_count');
-      }
-
-      const maxCapacity = getNumberOrDefault(watchMaxPlayers, 0);
-      if (maxCapacity >= direct + playoff) {
-        clearErrors('max_players');
-      } else {
-        trigger('max_players');
-      }
-    }
-  }, [watchDirect, watchPlayoff, watchMaxPlayers, watchType, clearErrors, trigger]);
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

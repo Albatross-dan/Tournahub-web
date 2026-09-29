@@ -65,16 +65,15 @@ export default function Navbar() {
   };
 
   return (
-    <header className="px-6 py-4 border-b border-border-main bg-background/80 backdrop-blur-2xl sticky top-0 z-50">
+    <header className="px-6 py-3.5 border-b border-yellow-500 bg-[#facc15] sticky top-0 z-50 shadow-md">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
-        <NavLink to="/dashboard" className="flex items-center space-x-4 group cursor-pointer">
+        <NavLink to="/dashboard" className="flex items-center space-x-3 group cursor-pointer">
           <div className="relative">
-            <div className="absolute inset-0 bg-primary/20 blur-lg rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-            <img src={logoUrl} alt="TournaHub" className="w-10 h-10 object-contain relative z-10" referrerPolicy="no-referrer" />
+            <img src={logoUrl} alt="TournaHub" className="w-10 h-10 object-contain relative z-10 transition-transform group-hover:scale-105" referrerPolicy="no-referrer" />
           </div>
           <div>
-            <h1 className="text-xl font-black text-text-main italic -tracking-widest uppercase transition-colors group-hover:text-primary">
-              Tourna<span className="text-primary italic">Hub</span>
+            <h1 className="text-xl font-black text-slate-950 italic -tracking-widest uppercase transition-colors">
+              Tourna<span className="text-black font-extrabold italic bg-slate-950 text-[#facc15] px-1.5 py-0.5 rounded-md ml-1 not-italic text-sm">HUB</span>
             </h1>
           </div>
         </NavLink>
@@ -85,39 +84,37 @@ export default function Navbar() {
             {isStaff && (
               <NavLink 
                 to="/staff" 
-                className="flex items-center space-x-2 sm:px-3.5 px-2.5 py-2.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 transition-all font-black uppercase text-[10px] tracking-wider italic shadow-sm active:scale-95 duration-200 cursor-pointer"
+                className="flex items-center space-x-2 sm:px-3.5 px-2.5 py-2.5 rounded-xl bg-slate-950 text-[#facc15] hover:bg-black border border-slate-900 transition-all font-black uppercase text-[10px] tracking-wider italic shadow-sm active:scale-95 duration-200 cursor-pointer"
                 title="Staff Operations Panel"
               >
-                <Shield size={12} className="stroke-[2.5px] text-cyan-400 animate-pulse" />
+                <Shield size={12} className="stroke-[2.5px] text-[#facc15] animate-pulse" />
                 <span className="hidden sm:inline">Staff Hub</span>
               </NavLink>
             )}
 
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="w-11 h-11 rounded-xl bg-surface border border-border-main flex items-center justify-center text-primary transition-all active:scale-95 hover:bg-surface-hover shadow-sm"
+              className="w-11 h-11 rounded-xl bg-slate-950 hover:bg-black border border-slate-900 flex items-center justify-center text-[#facc15] transition-all active:scale-95 shadow-sm cursor-pointer"
+              title="Navigation Menu"
             >
-              {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {isMenuOpen ? <X className="w-5 h-5 text-[#facc15]" /> : <Menu className="w-5 h-5 text-[#facc15]" />}
             </button>
 
             {user && (
-              <div className="w-11 h-11 bg-surface border border-border-main rounded-xl flex items-center justify-center relative shadow-sm">
-                <NotificationBell userId={user.id} />
-              </div>
+              <NotificationBell userId={user.id} />
             )}
             
             <NavLink to="/profile" className="flex flex-col items-center group cursor-pointer relative">
-              <div className="w-11 h-11 rounded-full bg-surface border border-border-main flex items-center justify-center text-primary font-black text-sm shadow-sm relative overflow-visible group-hover:border-primary/50 transition-colors">
-                <div className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity rounded-full" />
+              <div className="w-11 h-11 rounded-full bg-slate-950 border-2 border-slate-900 flex items-center justify-center text-[#facc15] font-black text-sm shadow-sm relative overflow-visible group-hover:scale-105 transition-transform">
                 <span className="relative z-10 text-sm">{initial}</span>
                 {hasIncompleteProfile && (
-                  <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-[#facc15] border-2 border-[#090a0f] rounded-full animate-pulse z-20" />
+                  <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-600 border-2 border-[#facc15] rounded-full animate-pulse z-20" />
                 )}
               </div>
-              <span className="text-[8px] font-black uppercase tracking-widest text-[#a3a3c2] group-hover:text-primary mt-1 transition-colors relative">
+              <span className="text-[8px] font-black uppercase tracking-widest text-slate-950 group-hover:text-black mt-1 transition-colors relative">
                 Profile
                 {hasIncompleteProfile && (
-                  <span className="absolute -top-1 -right-2 text-[8px] text-[#facc15] font-black animate-pulse">*</span>
+                  <span className="absolute -top-1 -right-2 text-[8px] text-red-700 font-black animate-pulse">*</span>
                 )}
               </span>
             </NavLink>
@@ -132,7 +129,7 @@ export default function Navbar() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute top-full left-0 right-0 bg-surface border-b border-border-main p-6 z-40 backdrop-blur-xl shadow-2xl"
+            className="absolute top-full left-0 right-0 bg-[#facc15] border-b border-yellow-500 p-6 z-40 shadow-2xl"
           >
             <div className="max-w-7xl mx-auto space-y-6">
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -158,23 +155,23 @@ export default function Navbar() {
                         
                         const isRelocated = ['Home', 'Tournaments', 'Matches', 'Wallet'].includes(item.name);
                         return cn(
-                          "flex items-center space-x-4 px-6 py-5 rounded-2xl transition-all",
+                          "flex items-center space-x-4 px-6 py-5 rounded-2xl transition-all cursor-pointer font-black",
                           isRelocated && "hidden md:flex",
                           isItemActive 
-                            ? "bg-primary text-slate-900 border border-primary/20 shadow-[0_0_20px_rgba(var(--color-primary),0.3)]" 
-                            : "bg-background text-text-muted border border-border-main hover:bg-surface-hover hover:border-primary/30"
+                            ? "bg-slate-950 text-[#facc15] shadow-xl border border-slate-900" 
+                            : "bg-yellow-400/80 text-slate-950 border border-yellow-600/30 hover:bg-slate-950 hover:text-[#facc15] hover:border-slate-900"
                         );
                       }}
                     >
-                      <Icon className="w-5 h-5" />
+                      <Icon className="w-5 h-5 shrink-0" />
                       <span className="text-xs font-black uppercase tracking-widest italic">{item.name}</span>
                       {item.name === 'Chat' && unreadChatCount > 0 && (
-                        <span className="bg-primary text-slate-900 text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-lg shadow-primary/20">
+                        <span className="bg-slate-950 text-[#facc15] text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-md">
                           {unreadChatCount}
                         </span>
                       )}
                       {item.name !== 'Chat' && item.name === 'Notifications' && unreadCount > 0 && (
-                        <span className="bg-primary text-slate-900 text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-lg shadow-primary/20">
+                        <span className="bg-slate-950 text-[#facc15] text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-md">
                           {unreadCount}
                         </span>
                       )}
@@ -188,13 +185,13 @@ export default function Navbar() {
       </AnimatePresence>
       
       {((balance !== null && balance === 0) || isInstallable) && (
-        <div className="max-w-7xl mx-auto mt-3 flex items-center justify-end">
+        <div className="max-w-7xl mx-auto mt-2.5 flex items-center justify-end">
           <div className="flex items-center space-x-3">
             {balance !== null && balance === 0 && (
               <motion.div 
                 initial={{ opacity: 0 }} 
                 animate={{ opacity: 1 }}
-                className="text-[7px] font-black text-amber-500 uppercase tracking-widest animate-pulse"
+                className="text-[8px] font-black text-slate-950 uppercase tracking-widest bg-yellow-400 px-2.5 py-0.5 rounded-full border border-yellow-600/30"
               >
                 Low Funds
               </motion.div>
@@ -207,9 +204,9 @@ export default function Navbar() {
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
                   onClick={handleInstallClick}
-                  className="inline-flex items-center gap-2 px-4 py-1.5 bg-[#facc15] text-slate-950 hover:bg-white text-[10px] font-black uppercase tracking-widest rounded-full transition-all duration-200 cursor-pointer shadow-[0_0_20px_rgba(250,204,21,0.35)] active:scale-95"
+                  className="inline-flex items-center gap-2 px-4 py-1.5 bg-slate-950 text-[#facc15] hover:bg-black text-[10px] font-black uppercase tracking-widest rounded-full transition-all duration-200 cursor-pointer shadow-md active:scale-95 border border-slate-900"
                 >
-                  <Download className="w-3 h-3 shrink-0 text-slate-950" />
+                  <Download className="w-3 h-3 shrink-0 text-[#facc15]" />
                   <span>INSTALL APP</span>
                 </motion.button>
               )}

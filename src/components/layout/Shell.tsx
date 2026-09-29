@@ -117,7 +117,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Mobile Bottom Navigation Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[var(--bg-card)] border-t border-[var(--bg-card-border)] py-2 px-3 z-50 flex items-center justify-around shadow-lg">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#facc15] border-t border-yellow-500 py-2.5 px-3 z-50 flex items-center justify-around shadow-[0_-4px_25px_rgba(0,0,0,0.3)]">
         {bottomNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = checkActive(item.path);
@@ -126,26 +126,26 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               key={item.path}
               to={item.path}
               className={cn(
-                "flex flex-col items-center justify-center space-y-0.5 py-1 px-1.5 rounded-lg transition-all duration-200 relative",
+                "flex flex-col items-center justify-center space-y-0.5 py-1 px-2 rounded-xl transition-all duration-200 relative",
                 isActive 
-                  ? "text-[var(--accent)]" 
-                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  ? "text-slate-950 font-black" 
+                  : "text-slate-800 hover:text-black font-bold"
               )}
             >
               {isActive && (
                 <motion.div
                   layoutId="activeBottomIndicator"
-                  className="absolute -top-2 w-10 h-[2px] bg-[var(--accent)] rounded-full"
+                  className="absolute -top-2.5 w-10 h-[3px] bg-slate-950 rounded-full"
                   transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                 />
               )}
               <Icon 
                 className={cn(
-                  "w-4 h-4 transition-transform duration-200",
-                  isActive ? "stroke-[2.2px]" : "stroke-[1.8px]"
+                  "w-5 h-5 transition-transform duration-200",
+                  isActive ? "stroke-[2.5px] scale-110 text-slate-950" : "stroke-[2px] text-slate-800"
                 )} 
               />
-              <span className="text-[11px] font-normal">
+              <span className="text-[10px] font-black uppercase tracking-wider">
                 {item.name}
               </span>
             </Link>

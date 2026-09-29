@@ -162,7 +162,7 @@ export default function VerifyCallback() {
       } catch (err: any) {
         console.error('[VerifyCallback] Exception during verification hook parsing:', err);
         setStatus('error');
-        setErrorDesc(err.message || 'An expected eFootball Tournaments validation issue occurred.');
+        setErrorDesc(err.message || 'An expected security check failure occurred.');
       }
     };
 
