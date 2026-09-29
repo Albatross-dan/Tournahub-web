@@ -12,45 +12,12 @@ import { overrideTournamentChampion } from '../../utils/tournamentOverrides';
 import DownloadShareAction, { DownloadHeader, DownloadFooter } from '../common/DownloadShareAction';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
+import { groupMatchesIntoDisplayUnits, getPlayerUuid } from '../../utils/tieUtils';
+import { matchService } from '../../services/matchService';
 
 interface KnockoutTreeProps {
   tournamentId: string;
   hideIfEmpty?: boolean;
-}
-
-function groupBracketMatchesIntoTies(matchesList: any[]) {
-  const tieMap = new Map<string, any>();
-  for (const m of matchesList) {
-    if (!m) continue;
-    const key = m.tie_id ? `tie-${m.tie_id}` : `single-${m.match_id || m.id}`;
-    if (!tieMap.has(key)) {
-      tieMap.set(key, {
-        ...m,
-        id: key,
-        tie_id: m.tie_id || null,
-        leg1: m.leg === 1 ? m : (!m.leg ? m : null),
-        leg2: m.leg === 2 ? m : null,
-        matches: [m]
-      });
-    } else {
-      const tie = tieMap.get(key);
-      tie.matches.push(m);
-      if (m.leg === 1) tie.leg1 = m;
-      if (m.leg === 2) tie.leg2 = m;
-      if (m.aggregate_score1 !== null && m.aggregate_score1 !== undefined) tie.aggregate_score1 = m.aggregate_score1;
-      if (m.aggregate_score2 !== null && m.aggregate_score2 !== undefined) tie.aggregate_score2 = m.aggregate_score2;
-      if (m.tie_status) tie.tie_status = m.tie_status;
-      if (m.winner) tie.winner = m.winner;
-      if (m.status === 'completed' && tie.status !== 'completed') tie.status = 'completed';
-      if (m.player1_username && m.player1_username !== 'TBD') tie.player1_username = m.player1_username;
-      if (m.player2_username && m.player2_username !== 'TBD') tie.player2_username = m.player2_username;
-      if (m.player1 || m.player1_id || m.player1_user_id) tie.player1 = m.player1 || m.player1_id || m.player1_user_id;
-      if (m.player2 || m.player2_id || m.player2_user_id) tie.player2 = m.player2 || m.player2_id || m.player2_user_id;
-      if (m.player1_badge_id) tie.player1_badge_id = m.player1_badge_id;
-      if (m.player2_badge_id) tie.player2_badge_id = m.player2_badge_id;
-    }
-  }
-  return Array.from(tieMap.values());
 }
 
 export default function KnockoutTree({ tournamentId, hideIfEmpty }: KnockoutTreeProps) {
@@ -209,7 +176,43 @@ export default function KnockoutTree({ tournamentId, hideIfEmpty }: KnockoutTree
     (m) => m && m.stage && (m.stage === 'third_place' || m.stage === 'third-place' || m.stage.toLowerCase().includes('third'))
   );
 
-  const groupedBracketTies = groupBracketMatchesIntoTies(bracketMatches);
+  const displayUnits = groupMatchesIntoDisplayUnits(bracketMatches);
+  const groupedBracketTies = displayUnits.map((unit) => {
+    if (unit.type === 'single') {
+      return unit.match;
+    }
+    const tie = unit.tie;
+    return {
+      ...tie.leg1,
+      id: unit.id,
+      match_id: tie.leg2?.id || tie.leg1?.id || unit.id,
+      tie_id: tie.tie_id,
+      round: tie.round,
+      stage: tie.stage,
+      bracket_slot: tie.leg1?.bracket_slot ?? tie.leg2?.bracket_slot,
+      match_order: tie.leg1?.match_order ?? tie.leg2?.match_order,
+      leg1: tie.leg1,
+      leg2: tie.leg2,
+      player1: tie.player1,
+      player2: tie.player2,
+      player1_id: tie.leg1?.player1_id || tie.leg1?.player1 || tie.player1,
+      player2_id: tie.leg1?.player2_id || tie.leg1?.player2 || tie.player2,
+      player1_username: tie.player1_username,
+      player2_username: tie.player2_username,
+      player1_badge_id: tie.player1_badge_id,
+      player2_badge_id: tie.player2_badge_id,
+      aggregate_score1: tie.aggregate_score1,
+      aggregate_score2: tie.aggregate_score2,
+      score1: tie.aggregate_score1,
+      score2: tie.aggregate_score2,
+      tie_status: tie.tie_status,
+      status: tie.is_completed ? 'completed' : (tie.is_leg1_completed ? 'in_progress' : (tie.leg1?.status || 'scheduled')),
+      winner: tie.winner_username,
+      winner_username: tie.winner_username,
+      is_placeholder: tie.is_placeholder,
+      matches: tie.matches
+    };
+  });
 
   // Group by round
   const roundMap = groupedBracketTies.reduce((acc: any, match) => {
@@ -619,18 +622,26 @@ export default function KnockoutTree({ tournamentId, hideIfEmpty }: KnockoutTree
               <button
                 disabled={resolvingBusy}
                 onClick={async () => {
-                  const winnerId = resolveModalTie.player1_id || resolveModalTie.player1 || resolveModalTie.player1_user_id;
-                  if (!resolveModalTie.tie_id || !winnerId) {
-                    toast.error('Missing tie or player ID');
+                  if (!resolveModalTie.tie_id) {
+                    toast.error('Missing tie ID');
                     return;
                   }
                   setResolvingBusy(true);
                   try {
-                    const { error } = await (supabase as any).rpc('fn_cl_resolve_level_tie', {
-                      p_tie_id: resolveModalTie.tie_id,
-                      p_winner_id: winnerId
-                    });
-                    if (error) throw error;
+                    let winnerId = resolveModalTie.player1_id;
+                    if (!winnerId) {
+                      winnerId = await getPlayerUuid(
+                        resolveModalTie.player1,
+                        resolveModalTie.player1_username,
+                        resolveModalTie.leg1 || resolveModalTie.leg2,
+                        1
+                      );
+                    }
+                    if (!winnerId) {
+                      throw new Error(`Could not resolve user ID for "${resolveModalTie.player1_username || 'Player 1'}".`);
+                    }
+
+                    await matchService.resolveLevelTie(resolveModalTie.tie_id, winnerId);
                     toast.success('Tie resolved! Winner advanced to next round.');
                     setResolveModalTie(null);
                     await fetchMatches();
@@ -640,7 +651,7 @@ export default function KnockoutTree({ tournamentId, hideIfEmpty }: KnockoutTree
                     setResolvingBusy(false);
                   }
                 }}
-                className="w-full p-4 rounded-2xl bg-slate-800/80 hover:bg-primary/20 border border-slate-700 hover:border-primary transition-all flex items-center justify-between group"
+                className="w-full p-4 rounded-2xl bg-slate-800/80 hover:bg-primary/20 border border-slate-700 hover:border-primary transition-all flex items-center justify-between group cursor-pointer"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <PlayerBadge badgeId={resolveModalTie.player1_badge_id} username={resolveModalTie.player1_username || 'Player 1'} size="sm" />
@@ -652,18 +663,26 @@ export default function KnockoutTree({ tournamentId, hideIfEmpty }: KnockoutTree
               <button
                 disabled={resolvingBusy}
                 onClick={async () => {
-                  const winnerId = resolveModalTie.player2_id || resolveModalTie.player2 || resolveModalTie.player2_user_id;
-                  if (!resolveModalTie.tie_id || !winnerId) {
-                    toast.error('Missing tie or player ID');
+                  if (!resolveModalTie.tie_id) {
+                    toast.error('Missing tie ID');
                     return;
                   }
                   setResolvingBusy(true);
                   try {
-                    const { error } = await (supabase as any).rpc('fn_cl_resolve_level_tie', {
-                      p_tie_id: resolveModalTie.tie_id,
-                      p_winner_id: winnerId
-                    });
-                    if (error) throw error;
+                    let winnerId = resolveModalTie.player2_id;
+                    if (!winnerId) {
+                      winnerId = await getPlayerUuid(
+                        resolveModalTie.player2,
+                        resolveModalTie.player2_username,
+                        resolveModalTie.leg1 || resolveModalTie.leg2,
+                        2
+                      );
+                    }
+                    if (!winnerId) {
+                      throw new Error(`Could not resolve user ID for "${resolveModalTie.player2_username || 'Player 2'}".`);
+                    }
+
+                    await matchService.resolveLevelTie(resolveModalTie.tie_id, winnerId);
                     toast.success('Tie resolved! Winner advanced to next round.');
                     setResolveModalTie(null);
                     await fetchMatches();
@@ -673,7 +692,7 @@ export default function KnockoutTree({ tournamentId, hideIfEmpty }: KnockoutTree
                     setResolvingBusy(false);
                   }
                 }}
-                className="w-full p-4 rounded-2xl bg-slate-800/80 hover:bg-primary/20 border border-slate-700 hover:border-primary transition-all flex items-center justify-between group"
+                className="w-full p-4 rounded-2xl bg-slate-800/80 hover:bg-primary/20 border border-slate-700 hover:border-primary transition-all flex items-center justify-between group cursor-pointer"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <PlayerBadge badgeId={resolveModalTie.player2_badge_id} username={resolveModalTie.player2_username || 'Player 2'} size="sm" />

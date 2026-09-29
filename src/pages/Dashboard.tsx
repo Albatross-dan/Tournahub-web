@@ -346,42 +346,61 @@ export default function Dashboard() {
             <p className="text-xs text-text-muted font-bold uppercase tracking-widest leading-none mt-1">Tap a card to open the details view.</p>
           </div>
           
-          <div className="relative overflow-hidden py-4 -mx-4 sm:mx-0" style={{ isolation: 'isolate', transform: 'translate3d(0,0,0)' }}>
-            <div className="flex px-4 sm:px-0">
+          <div className="relative group/slider py-2 -mx-4 sm:mx-0">
+            {/* Quick left/right floating overlay arrows for direct 1-click scrolling */}
+            {activeTournaments.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleScrollSliderLeft}
+                  aria-label="Scroll tournaments left"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-none bg-black/90 border border-white/20 text-white flex items-center justify-center hover:bg-primary hover:text-black hover:border-primary transition-all opacity-0 group-hover/slider:opacity-100 shadow-2xl cursor-pointer"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleScrollSliderRight}
+                  aria-label="Scroll tournaments right"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-none bg-black/90 border border-white/20 text-white flex items-center justify-center hover:bg-primary hover:text-black hover:border-primary transition-all opacity-0 group-hover/slider:opacity-100 shadow-2xl cursor-pointer"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </>
+            )}
+
+            <div 
+              ref={tournamentSliderRef}
+              onMouseEnter={() => setIsSliderHovered(true)}
+              onMouseLeave={() => {
+                setIsSliderHovered(false);
+                handleSliderMouseUp();
+              }}
+              onMouseDown={handleSliderMouseDown}
+              onMouseMove={handleSliderMouseMove}
+              onMouseUp={handleSliderMouseUp}
+              onTouchStart={handleSliderInteraction}
+              onScroll={handleSliderInteraction}
+              onWheel={handleSliderWheel}
+              className="flex gap-6 overflow-x-auto custom-scrollbar select-none cursor-grab active:cursor-grabbing pb-3 scroll-smooth px-4 sm:px-0"
+              style={{ isolation: 'isolate', transform: 'translate3d(0,0,0)' }}
+            >
               {activeLoading ? (
                 <div className="w-full flex gap-6 overflow-hidden">
                   {[1, 2, 3].map(i => (
                     <div key={i} className="w-[300px] sm:w-[500px] aspect-[16/9] sm:aspect-[2.5/1] rounded-3xl bg-surface border border-border-main animate-pulse shrink-0" />
                   ))}
                 </div>
-              ) : (
-                <motion.div 
-                  animate={activeTournaments.length > 0 ? { 
-                    x: ["0%", "-33.33%"]
-                  } : {}}
-                  transition={activeTournaments.length > 0 ? { 
-                    duration: 55, 
-                    repeat: Infinity, 
-                    ease: "linear" 
-                  } : {}}
-                  className="flex gap-6 w-max"
-                  style={{
-                    willChange: 'transform',
-                    transform: 'translate3d(0, 0, 0)',
-                    backfaceVisibility: 'hidden',
-                    WebkitBackfaceVisibility: 'hidden',
-                    isolation: 'isolate'
-                  } as any}
-                >
-                  {sliderItems.map((tournament, idx) => (
-                    <div key={`${tournament.id}-${idx}`} className="w-[300px] sm:w-[500px] shrink-0">
-                       <TournamentHeroCard tournament={tournament} />
-                    </div>
-                  ))}
-                  {activeTournaments.length === 0 && (
-                    <div className="w-[calc(100vw-2rem)] sm:w-full card p-16 text-center space-y-4 rounded-3xl border-2 border-dashed border-border-main bg-surface/20">
-                      <div className="w-16 h-16 bg-surface border border-border-main rounded-full flex items-center justify-center mx-auto">
-                        <Trophy className="w-8 h-8 text-text-muted" />
+              ) : activeTournaments.length === 0 ? (
+                <div className="w-[calc(100vw-2rem)] sm:w-full card p-16 text-center space-y-4 rounded-none border-2 border-dashed border-border-main bg-surface/20">
+                  <div className="w-16 h-16 bg-surface border border-border-main rounded-none flex items-center justify-center mx-auto">
+                    <Trophy className="w-8 h-8 text-text-muted" />
+                  </div>
+                  {isAdmin ? (
+                    <>
+                      <div>
+                        <p className="text-xl font-black text-text-main italic uppercase tracking-tighter">No active arena battles</p>
+                        <p className="text-xs text-text-muted font-bold uppercase tracking-widest mt-1">Start by creating a tournament in the admin panel.</p>
                       </div>
                       {isAdmin ? (
                         <>
@@ -792,29 +811,28 @@ function TournamentHeroCard({ tournament }: { tournament: Tournament }) {
   return (
     <Link 
       to={`/tournaments/${tournament.id}`} 
-      className="block group relative aspect-[1.4/1] rounded-[2.5rem] overflow-hidden border border-border-main hover:border-primary/50 transition-all duration-500 shadow-2xl"
+      onClick={(e) => {
+        if (hasDraggedRef?.current) {
+          e.preventDefault();
+        }
+      }}
+      className="block group relative aspect-[1.4/1] rounded-none overflow-hidden border border-border-main hover:border-primary/50 transition-all duration-500 shadow-2xl select-none"
     >
       <img 
         src={tournament.banner_url || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=800'} 
         alt="" 
-        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 rounded-none pointer-events-none" 
       />
-      <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-black/40 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent sm:bg-gradient-to-br sm:from-black/85 sm:via-black/40 sm:to-transparent rounded-none pointer-events-none" />
       
       {/* Glow Effect */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -mr-10 -mt-10" />
 
       <div className="absolute inset-0 p-8 flex flex-col justify-between">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <span className="px-4 py-1.5 bg-[#d4e157] text-black text-[10px] font-black rounded-full uppercase tracking-widest">
-              {tournament.type.toUpperCase()}
-            </span>
-            <StatusBadge status={tournament.status} />
-          </div>
-          <div className="w-14 h-14 bg-amber-500/90 rounded-full flex items-center justify-center border border-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.3)]">
-            <span className="text-white font-black text-sm italic">${tournament.entry_fee || '0'}</span>
-          </div>
+          <span className="px-2 py-0.5 sm:px-4 sm:py-1.5 bg-[#d4e157] text-black text-[8px] sm:text-[10px] font-black rounded-none uppercase tracking-widest shadow-md">
+            {tournament.type.toUpperCase()}
+          </span>
         </div>
 
         <div>
@@ -824,12 +842,13 @@ function TournamentHeroCard({ tournament }: { tournament: Tournament }) {
           <p className="text-slate-300 text-sm font-medium mt-2 line-clamp-1">{tournament.description || 'Competitive tournament arena.'}</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-black/85 px-5 py-3 rounded-2xl border border-white/10 flex flex-col justify-center relative overflow-hidden">
-            <div className="flex items-center justify-between relative z-10">
-              <div>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Contenders</p>
-                <p className="text-lg font-black text-white italic">{String(regCount)}/{tournament.max_players}</p>
+        {/* Bottom: Contenders (Compact on mobile for clear banner visibility) */}
+        <div>
+          <div className="bg-black/70 sm:bg-black/85 backdrop-blur-md px-2 py-1 sm:px-5 sm:py-3 rounded-none border border-white/10 sm:border-white/15 inline-flex flex-col justify-center relative overflow-hidden max-w-full sm:max-w-xs shadow-lg">
+            <div className="flex items-center justify-between relative z-10 gap-2 sm:gap-4">
+              <div className="flex items-baseline sm:flex-col sm:items-start gap-1 sm:gap-0">
+                <p className="text-[7px] sm:text-[10px] text-slate-400 font-bold uppercase tracking-wider sm:tracking-widest">Contenders</p>
+                <p className="text-[10px] sm:text-lg font-black text-white italic leading-tight">{String(regCount)}/{tournament.max_players}</p>
               </div>
               <Users className="w-5 h-5 text-slate-500" />
             </div>
@@ -838,17 +857,6 @@ function TournamentHeroCard({ tournament }: { tournament: Tournament }) {
               className="absolute bottom-0 left-0 h-1 bg-primary transition-all duration-1000" 
               style={{ width: `${Math.min(100, (Number(regCount) / (tournament.max_players || 1)) * 100)}%` }} 
             />
-          </div>
-          <div className="bg-black/85 px-5 py-3 rounded-2xl border border-white/10 flex flex-col justify-center">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Start time</p>
-                <p className="text-lg font-black text-white italic">
-                  {tournament.start_date ? new Date(tournament.start_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '12:00 AM'}
-                </p>
-              </div>
-              <Timer className="w-5 h-5 text-slate-500" />
-            </div>
           </div>
         </div>
       </div>

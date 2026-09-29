@@ -126,7 +126,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               key={item.path}
               to={item.path}
               className={cn(
-                "flex flex-col items-center justify-center space-y-1 py-1 px-1.5 rounded-xl transition-all duration-300 relative",
+                "flex flex-col items-center justify-center space-y-0.5 py-1 px-1.5 rounded-lg transition-all duration-200 relative",
                 isActive 
                   ? "text-primary font-black scale-102" 
                   : "text-text-muted hover:text-text-main"

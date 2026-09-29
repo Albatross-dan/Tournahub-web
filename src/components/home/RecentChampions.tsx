@@ -122,8 +122,50 @@ export default function RecentChampions() {
         </div>
       </div>
 
-      {/* Square Frame Card with custom sliding animation */}
-      <div className="relative w-full aspect-square rounded-[2rem] overflow-hidden bg-gradient-to-br from-surface to-background border border-border-main hover:border-amber-500/30 transition-all duration-300 shadow-xl group flex flex-col" style={{ isolation: 'isolate', transform: 'translate3d(0,0,0)' }}>
+      {/* Square Frame Card with sharp corners and custom scrolling/swiping */}
+      <div 
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onWheel={(e) => {
+          if (Math.abs(e.deltaX) > 15 || Math.abs(e.deltaY) > 15) {
+            if (e.deltaX > 15 || e.deltaY > 15) {
+              handleNext();
+            } else {
+              handlePrev();
+            }
+          }
+        }}
+        className="relative w-full aspect-square rounded-none overflow-hidden bg-gradient-to-br from-surface to-background border border-border-main hover:border-amber-500/30 transition-all duration-300 shadow-xl group flex flex-col cursor-grab active:cursor-grabbing" 
+        style={{ isolation: 'isolate', transform: 'translate3d(0,0,0)' }}
+      >
+        {/* Navigation Arrows for direct scroll control */}
+        {displayChampions.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handlePrev();
+              }}
+              aria-label="Previous Champion"
+              className="absolute left-2 top-1/2 -translate-y-1/2 z-30 w-7 h-7 rounded-none bg-black/85 border border-white/20 text-white flex items-center justify-center hover:bg-amber-500 hover:text-black hover:border-amber-400 transition-all opacity-0 group-hover:opacity-100 cursor-pointer shadow-lg"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleNext();
+              }}
+              aria-label="Next Champion"
+              className="absolute right-2 top-1/2 -translate-y-1/2 z-30 w-7 h-7 rounded-none bg-black/85 border border-white/20 text-white flex items-center justify-center hover:bg-amber-500 hover:text-black hover:border-amber-400 transition-all opacity-0 group-hover:opacity-100 cursor-pointer shadow-lg"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </>
+        )}
+
         <AnimatePresence initial={false} custom={direction} mode="wait">
           <motion.div
             key={currentIndex}
@@ -132,6 +174,16 @@ export default function RecentChampions() {
             initial="enter"
             animate="center"
             exit="exit"
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.25}
+            onDragEnd={(_, info) => {
+              if (info.offset.x < -35 || info.velocity.x < -400) {
+                handleNext();
+              } else if (info.offset.x > 35 || info.velocity.x > 400) {
+                handlePrev();
+              }
+            }}
             className="absolute inset-0 z-10"
             style={{ willChange: 'transform', transform: 'translate3d(0,0,0)', backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
           >
@@ -141,12 +193,12 @@ export default function RecentChampions() {
             >
               {/* Upper details */}
               <div className="flex items-start justify-between">
-                <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[8px] font-black text-amber-400 uppercase tracking-widest">
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-none text-[8px] font-black text-amber-400 uppercase tracking-widest">
                   <Award className="w-3 h-3 text-amber-400 fill-amber-400/20" />
                   <span>CHAMPION</span>
                 </div>
                 <div
-                  className="w-8 h-8 rounded-full bg-surface border border-border-main flex items-center justify-center text-text-muted group-hover:bg-amber-500 group-hover:text-black group-hover:border-amber-400 transition-all active:scale-90"
+                  className="w-8 h-8 rounded-none bg-surface border border-border-main flex items-center justify-center text-text-muted group-hover:bg-amber-500 group-hover:text-black group-hover:border-amber-400 transition-all active:scale-90"
                 >
                   <ArrowUpRight className="w-4 h-4" />
                 </div>
@@ -158,23 +210,23 @@ export default function RecentChampions() {
                   <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-20">
                     <CrownIcon />
                   </div>
-                  <div className="w-20 h-20 rounded-full p-0.5 bg-gradient-to-tr from-amber-300 via-yellow-400 to-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.25)]">
-                    <div className="w-full h-full rounded-full overflow-hidden border-2 border-slate-950 bg-slate-900">
+                  <div className="w-20 h-20 rounded-none p-0.5 bg-gradient-to-tr from-amber-300 via-yellow-400 to-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.25)]">
+                    <div className="w-full h-full rounded-none overflow-hidden border-2 border-slate-950 bg-slate-900">
                       {currentChampion.winner_avatar_url ? (
                         <img
                           src={currentChampion.winner_avatar_url}
                           alt={currentChampion.winner_username}
                           referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover rounded-none"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-xl font-black text-amber-400">
+                        <div className="w-full h-full flex items-center justify-center text-xl font-black text-amber-400 rounded-none">
                           {(currentChampion.winner_username || 'W').slice(0, 2).toUpperCase()}
                         </div>
                       )}
                     </div>
                   </div>
-                  <div className="absolute inset-x-0 bottom-0 w-24 h-4 bg-amber-500/10 blur-md rounded-full -z-10" />
+                  <div className="absolute inset-x-0 bottom-0 w-24 h-4 bg-amber-500/10 blur-md rounded-none -z-10" />
                 </div>
 
                 <div className="text-center space-y-1 max-w-full">

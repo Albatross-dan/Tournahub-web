@@ -247,17 +247,7 @@ export default function VerifyCallback() {
           
           {/* LOADING STATE */}
           {status === 'loading' && (
-            <div className="flex flex-col items-center text-center space-y-6 py-6 animate-pulse">
-              <Loader2 className="w-12 h-12 text-primary animate-spin" />
-              <div className="space-y-2">
-                <h3 className="text-lg font-black uppercase tracking-tight text-white italic">
-                  AUTHORIZING CREDENTIALS...
-                </h3>
-                <p className="text-[11px] text-slate-400 font-semibold leading-relaxed uppercase tracking-wider">
-                  Establishing secure connection. Hold on, fighter.
-                </p>
-              </div>
-            </div>
+            <LoadingState message="eFootball Tournaments" />
           )}
 
           {/* SUCCESS STATE */}

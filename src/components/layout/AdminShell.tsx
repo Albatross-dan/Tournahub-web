@@ -73,13 +73,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const totalAlerts = disputedMatches.length + singleSubmissionMatches.length + abandonedMatches.length + noShowCount;
 
   if (isShelledLoading) {
-    console.log('[AdminShell] Loading admin shell credentials verification...');
-    return (
-      <div className="min-h-screen bg-[#0a0b1e] flex flex-col items-center justify-center space-y-4">
-        <div className="w-8 h-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-        <span className="text-[10px] uppercase font-black tracking-widest text-slate-500 animate-pulse">Running admin credential check...</span>
-      </div>
-    );
+    return <LoadingState fullPage message="eFootball Tournaments" />;
   }
 
   if (!canAccessAdmin) {

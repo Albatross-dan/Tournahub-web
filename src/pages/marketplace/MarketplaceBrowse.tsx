@@ -7,6 +7,7 @@ import { ListingFilters } from '../../components/marketplace/ListingFilters';
 import { ListingCard } from '../../components/marketplace/ListingCard';
 import { MarketplaceListing } from '../../types/marketplace';
 import { marketplaceService } from '../../services/marketplaceService';
+import LoadingState from '../../components/ui/LoadingState';
 
 export default function MarketplaceBrowse() {
   const [loading, setLoading] = useState<boolean>(true);
@@ -98,23 +99,23 @@ export default function MarketplaceBrowse() {
                 Live Deals Verified — Recently Completed Sales
               </span>
             </div>
-            <div className="flex gap-4 overflow-x-auto pb-2 pt-1 scrollbar-hide scroll-smooth snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div className="flex gap-4 overflow-x-auto pb-2 pt-1 custom-scrollbar scroll-smooth -mx-4 px-4 sm:mx-0 sm:px-0">
               {recentSales.map((sale) => (
                 <div
                   key={sale.id}
                   onClick={() => setSelectedSoldListing(sale)}
-                  className="flex-shrink-0 w-64 bg-surface/80 border border-white/5 hover:border-emerald-500/30 rounded-2xl p-3 flex items-center gap-3 relative overflow-hidden select-none cursor-pointer transition-all hover:scale-[1.02] shadow-sm hover:shadow-emerald-950/20 active:scale-[0.98]"
+                  className="flex-shrink-0 w-64 bg-surface/80 border border-white/5 hover:border-emerald-500/30 rounded-none p-3 flex items-center gap-3 relative overflow-hidden select-none cursor-pointer transition-all hover:scale-[1.02] shadow-sm hover:shadow-emerald-950/20 active:scale-[0.98]"
                 >
                   {/* Thumbnail */}
-                  <div className="w-14 h-14 bg-slate-950 rounded-xl overflow-hidden border border-white/10 shrink-0 relative">
+                  <div className="w-14 h-14 bg-slate-950 rounded-none overflow-hidden border border-white/10 shrink-0 relative">
                     <img
                       src={sale.screenshots && sale.screenshots.length > 0 ? marketplaceService.getListingImageUrl(sale.screenshots[0]) : '/default-card.jpg'}
                       referrerPolicy="no-referrer"
                       alt=""
-                      className="w-full h-full object-cover grayscale opacity-60"
+                      className="w-full h-full object-cover grayscale opacity-60 rounded-none"
                     />
                     <div className="absolute inset-0 bg-slate-950/40 flex items-center justify-center">
-                      <span className="text-[7px] font-black uppercase tracking-widest text-white bg-red-600 px-1 py-0.5 rounded shadow-sm scale-95 font-sans">SOLD</span>
+                      <span className="text-[7px] font-black uppercase tracking-widest text-white bg-red-600 px-1 py-0.5 rounded-none shadow-sm scale-95 font-sans">SOLD</span>
                     </div>
                   </div>
                   
@@ -125,7 +126,7 @@ export default function MarketplaceBrowse() {
                     </h4>
                     <div className="flex items-center gap-1.5">
                       <span className="text-primary font-mono text-xs font-black">${Number(sale.price_usd).toFixed(2)}</span>
-                      <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-white/5 uppercase">
+                      <span className="text-[8px] font-black px-1.5 py-0.5 rounded-none bg-slate-800 text-slate-400 border border-white/5 uppercase">
                         {sale.platform}
                       </span>
                     </div>
@@ -156,12 +157,7 @@ export default function MarketplaceBrowse() {
 
         {/* Content Section */}
         {loading ? (
-          <div className="py-24 flex flex-col items-center justify-center space-y-4 text-slate-400">
-            <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin shadow-lg shadow-primary/20" />
-            <span className="text-xs font-black uppercase tracking-widest text-slate-400">
-              Scanning Marketplace Registry...
-            </span>
-          </div>
+          <LoadingState message="eFootball Tournaments" />
         ) : error ? (
           <div className="py-16 text-center bg-red-950/20 border border-red-900/40 rounded-3xl p-8 max-w-md mx-auto space-y-4">
             <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
