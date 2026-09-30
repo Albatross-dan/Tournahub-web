@@ -12,6 +12,7 @@ import { supabase, ensureAuthenticated } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
 import StorageImage from '../common/StorageImage';
 import { useCountdown } from '../../hooks/useCountdown';
+import GuideTip from '../../guide/GuideTip';
 
 interface SubmitResultPanelProps {
   matchId: string;
@@ -625,6 +626,8 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
       </div>
 
       <div className="p-8 space-y-8">
+        <GuideTip id="result_submit" />
+
         {/* State Status Card Mapping */}
         {(() => {
           const countdownState = state?.countdown_state || 'not_scheduled';

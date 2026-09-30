@@ -30,6 +30,8 @@ import VerificationStatusBanner from '../components/match/VerificationStatusBann
 import { VerificationStatus } from '../types/verification.types';
 import RecentChampions from '../components/home/RecentChampions';
 
+const WelcomeTour = React.lazy(() => import('../guide/WelcomeTour'));
+
 export default function Dashboard() {
   const { user, profile, isAdmin, refetchSignal } = useAuth();
   const navigate = useNavigate();
@@ -381,6 +383,9 @@ export default function Dashboard() {
 
   return (
     <Shell>
+      <React.Suspense fallback={null}>
+        <WelcomeTour />
+      </React.Suspense>
       <motion.div 
         variants={container}
         initial="hidden"

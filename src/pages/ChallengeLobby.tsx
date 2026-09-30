@@ -12,6 +12,8 @@ import { PlayerBadge } from '../components/ui/PlayerBadge';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { tournamentService } from '../services/tournamentService';
+import GuideTip from '../guide/GuideTip';
+import EmptyState from '../guide/EmptyState';
 
 function getFlagEmoji(countryCode: string | null | undefined): string {
   if (!countryCode) return '';
@@ -730,6 +732,8 @@ export default function ChallengeLobby() {
           </button>
         </div>
 
+        <GuideTip id="challenges" />
+
         {/* Featured Winners Carousel Section */}
         {recentWinners.length > 0 && (
           <div className="space-y-3">
@@ -1078,21 +1082,13 @@ export default function ChallengeLobby() {
                 <p className="text-xs uppercase tracking-widest text-zinc-500 animate-pulse">Syncing Challenge Lobby...</p>
               </div>
             ) : challenges.length === 0 ? (
-              <div className="text-center py-20 bg-zinc-950 rounded-3xl border border-zinc-800 border-dashed space-y-4">
-                <div className="w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center mx-auto text-zinc-600">
-                  <Flame className="w-8 h-8" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-lg font-black text-white uppercase italic tracking-tighter">Lobby is Empty</p>
-                  <p className="text-xs text-zinc-500 max-w-sm mx-auto">Be the first to create an open 1v1 challenge and wait for others to join.</p>
-                </div>
-                <button
-                  onClick={handleOpenCreateModal}
-                  className="mt-4 px-5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-black uppercase text-zinc-300 hover:bg-zinc-800 transition-all cursor-pointer"
-                >
-                  Create Open Challenge
-                </button>
-              </div>
+              <EmptyState
+                icon={Flame}
+                title="Lobby is Empty"
+                message="Be the first contender to create an open 1v1 challenge and wait for others to join."
+                actionLabel="Create Challenge"
+                onAction={handleOpenCreateModal}
+              />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {challenges.map((item) => {

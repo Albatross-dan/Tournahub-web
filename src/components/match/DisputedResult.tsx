@@ -3,6 +3,7 @@ import { AlertTriangle, ShieldAlert, Users, Info } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import StorageImage from '../common/StorageImage';
+import GuideTip from '../../guide/GuideTip';
 
 interface DisputedResultProps {
   submissions: any[];
@@ -29,6 +30,8 @@ export function DisputedResult({ submissions, matchId, tournamentId }: DisputedR
       </div>
 
       <div className="p-8 space-y-8">
+        <GuideTip id="disputes" />
+
         <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-2xl flex items-start space-x-4">
           <div className="bg-orange-500/20 p-2 rounded-xl">
             <Info className="w-5 h-5 text-orange-500" />

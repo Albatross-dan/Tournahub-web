@@ -13,6 +13,7 @@ import StatusBadge from '../components/ui/StatusBadge';
 import { TournamentStatus } from '../constants';
 import SEO from '../components/common/SEO';
 import { useAuth } from '../contexts/AuthContext';
+import EmptyState from '../guide/EmptyState';
 
 export default function Tournaments() {
   const [search, setSearch] = useState(() => {
@@ -161,28 +162,13 @@ export default function Tournaments() {
            {loading ? (
              <LoadingState message="eFootball Tournaments" />
            ) : filteredTournaments.length === 0 ? (
-             <div className="flex flex-col items-center justify-center py-16 text-center space-y-4 bg-surface/30 border border-border-main/50 rounded-[2rem] p-8">
-               <div className="w-16 h-16 bg-zinc-900/50 border border-white/5 rounded-full flex items-center justify-center text-zinc-600">
-                 <Trophy className="w-8 h-8 text-emerald-500/60" />
-               </div>
-               <div className="space-y-1">
-                 <p className="text-sm font-extrabold text-zinc-300">
-                   {showJoinedOnly ? "You haven't joined any tournaments yet." : "No tournaments match your current filter."}
-                 </p>
-                 <p className="text-xs text-text-muted">
-                   {showJoinedOnly ? "Claim your spots in the active brackets below!" : "Try adjusting your query or filters."}
-                 </p>
-               </div>
-               {showJoinedOnly && (
-                 <button
-                   type="button"
-                   onClick={() => setShowJoinedOnly(false)}
-                   className="px-6 py-2.5 bg-primary text-slate-900 font-extrabold uppercase text-[10px] tracking-widest rounded-xl hover:bg-opacity-90 transition-all cursor-pointer"
-                 >
-                   Browse Tournaments
-                 </button>
-               )}
-             </div>
+             <EmptyState
+               icon={Trophy}
+               title={showJoinedOnly ? "No Tournaments Joined" : "No Tournaments Found"}
+               message={showJoinedOnly ? "You haven't joined any tournaments yet. Join open brackets to compete!" : "No tournaments match your current filter. Try adjusting your query or filters."}
+               actionLabel={showJoinedOnly ? "Browse Tournaments" : undefined}
+               onAction={showJoinedOnly ? () => setShowJoinedOnly(false) : undefined}
+             />
            ) : (
              <div className="space-y-6">
                 {filteredTournaments.map((tournament) => (

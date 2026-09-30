@@ -13,12 +13,17 @@ import { formatCurrency, cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../../lib/supabase';
 
+const HelpSheet = React.lazy(() => import('../../guide/HelpSheet'));
+const WelcomeTour = React.lazy(() => import('../../guide/WelcomeTour'));
+
 const logoUrl = '/android-chrome-512x512.png';
 
 export default function Navbar() {
   const { profile, user, isAdmin, walletSummary, unreadNotificationsCount, unreadChatCount } = useAuth();
   const { isInstallable, installApp, isInAppBrowser, isIOS, hasNativePrompt } = usePWAInstall();
   const [showInstallGuide, setShowInstallGuide] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isTourReplayOpen, setIsTourReplayOpen] = useState(false);
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const initial = React.useMemo(() => 
@@ -91,6 +96,16 @@ export default function Navbar() {
                 <span className="hidden sm:inline">Staff Hub</span>
               </NavLink>
             )}
+
+            <button
+              type="button"
+              onClick={() => setIsHelpOpen(true)}
+              className="w-11 h-11 rounded-xl bg-slate-950 hover:bg-black border border-slate-900 flex items-center justify-center text-[#facc15] transition-all active:scale-95 shadow-sm cursor-pointer"
+              title="Help & Guides (?)"
+              aria-label="Help & Guides"
+            >
+              <HelpCircle className="w-5 h-5 text-[#facc15]" />
+            </button>
 
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -343,6 +358,23 @@ export default function Navbar() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Lightweight Guide & Help Sheet */}
+      <React.Suspense fallback={null}>
+        {isHelpOpen && (
+          <HelpSheet
+            isOpen={isHelpOpen}
+            onClose={() => setIsHelpOpen(false)}
+            onReplayTour={() => setIsTourReplayOpen(true)}
+          />
+        )}
+        {isTourReplayOpen && (
+          <WelcomeTour
+            forceOpen={true}
+            onClose={() => setIsTourReplayOpen(false)}
+          />
+        )}
+      </React.Suspense>
     </header>
   );
 }

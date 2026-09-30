@@ -23,6 +23,8 @@ import StatusBadge from '../components/ui/StatusBadge';
 import { TournamentStatus } from '../constants';
 import BadgeSelector from '../components/badges/BadgeSelector';
 import { PlayerBadge } from '../components/ui/PlayerBadge';
+import GuideTip from '../guide/GuideTip';
+import FormatExplainer from '../guide/FormatExplainer';
 import { useWallet } from '../hooks/useWallet';
 import toast from 'react-hot-toast';
 import StorageImage from '../components/common/StorageImage';
@@ -407,6 +409,8 @@ export default function TournamentDetails() {
           Back to Tournaments
         </button>
 
+        <GuideTip id="tournament" />
+
           {message && (
             <motion.div 
               initial={{ opacity: 0, y: -20 }}
@@ -494,6 +498,7 @@ export default function TournamentDetails() {
                 <span className="px-3 sm:px-4 py-1 sm:py-1.5 bg-primary/20 text-primary border border-primary/20 text-[10px] sm:text-xs font-black uppercase rounded-full tracking-widest shadow-lg shadow-primary/10">
                   {tournament.type}
                 </span>
+                <FormatExplainer format={(tournament as any).format || tournament.type} />
                 <StatusBadge status={regStatus?.tournament_status || tournament.status} />
               </div>
               <h1 className="text-3xl sm:text-5xl md:text-7xl font-black text-yellow-400 italic tracking-tighter uppercase leading-none drop-shadow-2xl">

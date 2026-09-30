@@ -11,10 +11,12 @@ import {
 import { formatCurrencyDynamic, formatDate, cn } from '../lib/utils';
 import LoadingState from '../components/ui/LoadingState';
 import { Transaction, SupportedCurrency, TransactionType } from '../types/finance';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import EmptyState from '../guide/EmptyState';
 
 export default function WalletHistory() {
   const { user, refetchSignal } = useAuth();
+  const navigate = useNavigate();
   const isInitialLoad = React.useRef(true);
   useRefetchOnFocus(loadHistory);
   const [currency, setCurrency] = useState<SupportedCurrency>('KES');
@@ -166,9 +168,13 @@ export default function WalletHistory() {
                </div>
                
                {transactions.length === 0 && (
-                 <div className="py-20 text-center">
-                   <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">No transaction records found</p>
-                 </div>
+                 <EmptyState
+                   icon={History}
+                   title="No Transactions Yet"
+                   message="Your completed deposits, tournament entries, and prize payouts will appear here."
+                   actionLabel="Go to Wallet"
+                   onAction={() => navigate('/wallet')}
+                 />
                )}
             </div>
 

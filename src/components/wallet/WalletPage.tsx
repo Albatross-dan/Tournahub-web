@@ -5,6 +5,7 @@ import { TransactionHistory } from './TransactionHistory';
 import WithdrawalModal from './WithdrawalModal';
 import Shell from '../layout/Shell';
 import LoadingState from '../ui/LoadingState';
+import GuideTip from '../../guide/GuideTip';
 import { Shield, Sparkles, TrendingUp, HelpCircle, ArrowUpRight, ArrowDownLeft, Lock } from 'lucide-react';
 
 export function WalletPage() {
@@ -52,6 +53,8 @@ export function WalletPage() {
             </span>
           )}
         </div>
+
+        <GuideTip id="wallet" />
 
         {/* Global Security Warning Callout */}
         {isLocked && (
