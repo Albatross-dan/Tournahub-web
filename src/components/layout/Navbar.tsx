@@ -19,7 +19,7 @@ const WelcomeTour = React.lazy(() => import('../../guide/WelcomeTour'));
 const logoUrl = '/android-chrome-512x512.png';
 
 export default function Navbar() {
-  const { profile, user, isAdmin, walletSummary, unreadNotificationsCount, unreadChatCount } = useAuth();
+  const { profile, user, isAdmin, unreadNotificationsCount, unreadChatCount } = useAuth();
   const { isInstallable, installApp, isInAppBrowser, isIOS, hasNativePrompt } = usePWAInstall();
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -30,7 +30,6 @@ export default function Navbar() {
     (profile?.username || user?.email || 'U')[0].toUpperCase(), 
   [profile?.username, user?.email]);
 
-  const balance = walletSummary?.balance_usd ?? null;
   const unreadCount = unreadNotificationsCount;
 
   const isStaff = React.useMemo(() => {
@@ -199,32 +198,20 @@ export default function Navbar() {
         )}
       </AnimatePresence>
       
-      {((balance !== null && balance === 0) || isInstallable) && (
+      {isInstallable && (
         <div className="max-w-7xl mx-auto mt-2.5 flex items-center justify-end">
           <div className="flex items-center space-x-3">
-            {balance !== null && balance === 0 && (
-              <motion.div 
-                initial={{ opacity: 0 }} 
-                animate={{ opacity: 1 }}
-                className="text-[8px] font-black text-slate-950 uppercase tracking-widest bg-yellow-400 px-2.5 py-0.5 rounded-full border border-yellow-600/30"
-              >
-                Low Funds
-              </motion.div>
-            )}
-
             <AnimatePresence>
-              {isInstallable && (
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  onClick={handleInstallClick}
-                  className="inline-flex items-center gap-2 px-4 py-1.5 bg-slate-950 text-[#facc15] hover:bg-black text-[10px] font-black uppercase tracking-widest rounded-full transition-all duration-200 cursor-pointer shadow-md active:scale-95 border border-slate-900"
-                >
-                  <Download className="w-3 h-3 shrink-0 text-[#facc15]" />
-                  <span>INSTALL APP</span>
-                </motion.button>
-              )}
+              <motion.button
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                onClick={handleInstallClick}
+                className="inline-flex items-center gap-2 px-4 py-1.5 bg-slate-950 text-[#facc15] hover:bg-black text-[10px] font-black uppercase tracking-widest rounded-full transition-all duration-200 cursor-pointer shadow-md active:scale-95 border border-slate-900"
+              >
+                <Download className="w-3 h-3 shrink-0 text-[#facc15]" />
+                <span>INSTALL APP</span>
+              </motion.button>
             </AnimatePresence>
           </div>
         </div>

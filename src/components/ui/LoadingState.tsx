@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { motion } from 'motion/react';
 import { cn } from '../../lib/utils';
 
@@ -30,36 +30,15 @@ export function EFootballLogo({
 
   return (
     <div className={cn("flex flex-col items-center select-none relative", className)}>
-      {/* Intense Cyan Stadium Halo behind Logo */}
-      <motion.div
-        animate={{ 
-          scale: [0.92, 1.08, 0.92], 
-          opacity: [0.55, 0.9, 0.55] 
-        }}
-        transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute -top-6 w-44 h-44 md:w-60 md:h-60 rounded-full bg-[radial-gradient(circle,_rgba(0,210,255,0.45)_0%,_rgba(0,100,255,0.2)_50%,_transparent_75%)] blur-2xl pointer-events-none"
-      />
-
-      {/* 1. Official eFootball Circular Emblem - Spinning while loading */}
+      {/* 1. Official eFootball Circular Emblem - Spinning cleanly without glow */}
       <motion.div
         animate={spin ? { 
           rotate: 360,
-          filter: [
-            'drop-shadow(0 0 16px rgba(0, 209, 255, 0.8)) drop-shadow(0 0 4px rgba(255, 255, 255, 0.95))',
-            'drop-shadow(0 0 30px rgba(0, 240, 255, 0.95)) drop-shadow(0 0 8px rgba(255, 255, 255, 1))',
-            'drop-shadow(0 0 16px rgba(0, 209, 255, 0.8)) drop-shadow(0 0 4px rgba(255, 255, 255, 0.95))'
-          ]
         } : { 
           scale: [0.99, 1.015, 0.99],
-          filter: [
-            'drop-shadow(0 0 16px rgba(0, 209, 255, 0.8)) drop-shadow(0 0 4px rgba(255, 255, 255, 0.95))',
-            'drop-shadow(0 0 28px rgba(0, 240, 255, 0.95)) drop-shadow(0 0 8px rgba(255, 255, 255, 1))',
-            'drop-shadow(0 0 16px rgba(0, 209, 255, 0.8)) drop-shadow(0 0 4px rgba(255, 255, 255, 0.95))'
-          ]
         }}
         transition={spin ? { 
           rotate: { duration: 2.0, repeat: Infinity, ease: "linear" },
-          filter: { duration: 2.4, repeat: Infinity, ease: "easeInOut" }
         } : { 
           duration: 2.4, repeat: Infinity, ease: "easeInOut" 
         }}
@@ -87,28 +66,10 @@ export function EFootballLogo({
             fill="#ffffff"
           />
         </svg>
-
-        {/* Shimmer Light Gleam across emblem */}
-        <motion.div
-          animate={{ x: ['-120%', '220%'] }}
-          transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut", repeatDelay: 1 }}
-          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-[-25deg] pointer-events-none"
-        />
       </motion.div>
 
       {/* 2. Official "FOOTBALL™" Stencil Typography */}
-      <motion.div
-        animate={{ 
-          opacity: [0.92, 1, 0.92],
-          filter: [
-            'drop-shadow(0 0 12px rgba(0, 209, 255, 0.6))',
-            'drop-shadow(0 0 20px rgba(0, 209, 255, 0.85))',
-            'drop-shadow(0 0 12px rgba(0, 209, 255, 0.6))'
-          ]
-        }}
-        transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-        className={cn("relative z-10 mt-1.5 md:mt-2.5", textWidth)}
-      >
+      <div className={cn("relative z-10 mt-1.5 md:mt-2.5", textWidth)}>
         <svg viewBox="0 0 540 90" className="w-full h-auto" fill="none">
           {/* LETTER: F */}
           {/* Top Bar */}
@@ -171,7 +132,7 @@ export function EFootballLogo({
             TM
           </text>
         </svg>
-      </motion.div>
+      </div>
     </div>
   );
 }
@@ -183,55 +144,6 @@ export function EFootballSpinner({ size = 72, className }: { size?: number; clas
   return (
     <div className={cn("flex flex-col items-center justify-center", className)}>
       <EFootballLogo size={size < 80 ? 'sm' : 'default'} />
-    </div>
-  );
-}
-
-/**
- * Floating stadium confetti & light spark particles
- */
-function FloatingStadiumParticles() {
-  const particles = useMemo(() => {
-    return Array.from({ length: 14 }).map((_, i) => ({
-      id: i,
-      left: `${(i * 7.5 + (i % 3) * 4) % 95}%`,
-      top: `${(i * 6.5 + (i % 4) * 8) % 90}%`,
-      size: (i % 3 === 0 ? 5 : i % 2 === 0 ? 4 : 3),
-      color: i % 3 === 0 ? '#00d1ff' : i % 2 === 0 ? '#ffffff' : '#facc15',
-      duration: 3 + (i % 4) * 1.2,
-      delay: (i * 0.35) % 2.5,
-    }));
-  }, []);
-
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none z-10">
-      {particles.map((p) => (
-        <motion.div
-          key={p.id}
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ 
-            opacity: [0.2, 0.85, 0.2],
-            y: [-12, 12, -12],
-            rotate: [0, 180, 360]
-          }}
-          transition={{ 
-            duration: p.duration, 
-            repeat: Infinity, 
-            ease: "easeInOut",
-            delay: p.delay 
-          }}
-          style={{
-            position: 'absolute',
-            left: p.left,
-            top: p.top,
-            width: p.size,
-            height: p.size,
-            backgroundColor: p.color,
-            boxShadow: `0 0 8px ${p.color}`,
-            borderRadius: p.size > 3 ? '2px' : '50%'
-          }}
-        />
-      ))}
     </div>
   );
 }
@@ -253,38 +165,30 @@ export default function LoadingState({
         className="absolute inset-0 bg-cover bg-center bg-no-repeat pointer-events-none"
         style={{ backgroundImage: `url(${STADIUM_BG})` }}
       >
-        {/* Dark Vignettes & Cyan Atmosphere Lighting */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#02030a]/95 via-[#030614]/50 to-[#02030a]/85" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(0,180,255,0.22)_0%,_rgba(0,50,180,0.12)_45%,_transparent_75%)]" />
+        {/* Dark Vignettes */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#02030a]/95 via-[#030614]/75 to-[#02030a]/85" />
       </div>
-
-      {/* Floating Stadium Confetti Particles */}
-      <FloatingStadiumParticles />
 
       {/* Main Content Container */}
       <div className="relative z-20 flex flex-col items-center px-4 max-w-lg">
         {/* 1. Official eFootball Konami Logo */}
         <EFootballLogo size={fullPage ? 'default' : 'sm'} />
 
-        {/* 2. Sleek Konami Loading Beam */}
-        <div className="mt-7 md:mt-8 w-44 md:w-56 h-[3px] bg-slate-900/90 rounded-full overflow-hidden relative border border-cyan-400/25 shadow-[0_0_12px_rgba(0,209,255,0.4)]">
+        {/* 2. Sleek Konami Loading Beam - Clean without glow */}
+        <div className="mt-7 md:mt-8 w-44 md:w-56 h-[3px] bg-slate-900 rounded-full overflow-hidden relative border border-slate-700/40">
           <motion.div
             animate={{ x: ['-100%', '100%'] }}
             transition={{ duration: 1.35, repeat: Infinity, ease: "easeInOut" }}
-            className="w-1/2 h-full bg-gradient-to-r from-transparent via-[#00d1ff] to-[#facc15] shadow-[0_0_14px_#00d1ff]"
+            className="w-1/2 h-full bg-gradient-to-r from-transparent via-[#00d1ff] to-[#facc15]"
           />
         </div>
 
         {/* 3. Status Text / Message */}
         <div className="mt-4 flex items-center justify-center space-x-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#00d1ff] animate-ping" />
-          <motion.span 
-            animate={{ opacity: [0.85, 1, 0.85] }}
-            transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
-            className="text-[11px] md:text-xs font-black uppercase tracking-[0.25em] text-white/90 drop-shadow-[0_0_10px_rgba(0,209,255,0.5)] italic"
-          >
+          <span className="w-1.5 h-1.5 rounded-full bg-[#00d1ff]" />
+          <span className="text-[11px] md:text-xs font-black uppercase tracking-[0.25em] text-white/90 italic">
             {message}
-          </motion.span>
+          </span>
         </div>
       </div>
     </div>
