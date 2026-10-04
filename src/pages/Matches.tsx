@@ -75,6 +75,13 @@ export default function Matches() {
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
+        table: 'tournaments'
+      }, () => {
+        if (activeTab === 'matches') loadMatches(false);
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
         table: 'messages'
       }, () => {
         if (activeTab === 'chat') loadConversations(false);
@@ -96,8 +103,9 @@ export default function Matches() {
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setMatches(parsed);
-          if (showLoading) setLoading(false);
+          const activeMatches = parsed.filter((m: any) => m.tournaments?.status !== 'completed');
+          setMatches(activeMatches);
+          if (showLoading && activeMatches.length > 0) setLoading(false);
         }
       }
     } catch (e) {
@@ -114,7 +122,7 @@ export default function Matches() {
         }
       }, 10000);
       
-      const data = await matchService.getUserMatches(user.id);
+      const data = await matchService.getUserMatches(user.id, { activeOnly: true });
       if (data && Array.isArray(data)) {
         setMatches(data);
         localStorage.setItem(cacheKey, JSON.stringify(data));

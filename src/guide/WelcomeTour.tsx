@@ -3,14 +3,19 @@ import { Trophy, Gamepad2, CheckCircle2, Wallet, X, ChevronRight, Check } from '
 import { welcomeTourSteps } from './guideContent';
 import { useGuideState } from './useGuideState';
 
-const STEP_ICONS = {
+const STEP_ICONS: Record<string, React.ElementType> = {
   find_tournament: Trophy,
   play_match: Gamepad2,
   submit_result: CheckCircle2,
   wallet_prizes: Wallet,
 };
 
-export default function WelcomeTour({ forceOpen = false, onClose }) {
+interface WelcomeTourProps {
+  forceOpen?: boolean;
+  onClose?: () => void;
+}
+
+export default function WelcomeTour({ forceOpen = false, onClose }: WelcomeTourProps) {
   const { shouldShowTour, completeTour } = useGuideState();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
 
@@ -56,6 +61,7 @@ export default function WelcomeTour({ forceOpen = false, onClose }) {
           </div>
 
           <button
+            type="button"
             onClick={handleSkip}
             className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
             aria-label="Close guide"
@@ -84,6 +90,7 @@ export default function WelcomeTour({ forceOpen = false, onClose }) {
           {welcomeTourSteps.map((step, idx) => (
             <button
               key={step.id}
+              type="button"
               onClick={() => setCurrentStepIndex(idx)}
               className={`h-1.5 rounded-full transition-all duration-200 ${
                 idx === currentStepIndex

@@ -13,95 +13,72 @@ interface DisputedResultProps {
 
 export function DisputedResult({ submissions, matchId, tournamentId }: DisputedResultProps) {
   return (
-    <div className="bg-slate-900 border border-red-500/30 rounded-3xl overflow-hidden shadow-2xl animate-in fade-in duration-500">
-      <div className="bg-red-600 p-8 flex flex-col items-center justify-center text-center space-y-3">
-        <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center animate-bounce">
-          <AlertTriangle className="w-10 h-10 text-white" />
+    <div className="bg-zinc-900 border border-red-500/30 rounded-2xl overflow-hidden shadow-xl animate-in fade-in duration-300">
+      <div className="bg-red-600 px-4 py-3 sm:py-4 flex items-center gap-3 text-white">
+        <div className="w-8 h-8 bg-black/20 rounded-lg flex items-center justify-center shrink-0">
+          <AlertTriangle className="w-5 h-5 text-white" />
         </div>
-        <div>
-          <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter leading-none mb-1">Score Conflict</h3>
-          <p className="text-white font-bold uppercase tracking-widest text-[11px] mt-1">
-            An admin will review both submissions.
-          </p>
-          <p className="text-white/80 font-bold uppercase tracking-widest text-[9px] mt-1">
-            Your screenshot is safely saved and recorded.
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-black italic uppercase tracking-wider leading-none">Score Conflict</h3>
+          <p className="text-white/80 font-bold uppercase tracking-wider text-[10px] mt-0.5 truncate">
+            An admin will review both submissions
           </p>
         </div>
       </div>
 
-      <div className="p-8 space-y-8">
+      <div className="p-4 sm:p-5 space-y-4">
         <GuideTip id="disputes" />
 
-        <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-2xl flex items-start space-x-4">
-          <div className="bg-orange-500/20 p-2 rounded-xl">
-            <Info className="w-5 h-5 text-orange-500" />
-          </div>
-          <div className="space-y-1">
-            <h4 className="text-sm font-black text-white uppercase italic tracking-widest">Protocol Alert</h4>
-            <p className="text-[10px] font-bold text-slate-400 leading-relaxed uppercase tracking-tight">
-              Scores submitted by both combatants do not match. An automated dispute ticket has been generated for admin review.
-            </p>
-          </div>
+        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center space-x-3">
+          <Info className="w-4 h-4 text-amber-500 shrink-0" />
+          <p className="text-[10px] font-bold text-zinc-300 leading-tight">
+            Scores submitted by both players do not match. An automated dispute ticket has been generated for admin review.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {submissions.map((sub, idx) => (
-            <div key={sub.id} className="bg-slate-950 border border-slate-800 p-6 rounded-2xl space-y-4 relative overflow-hidden group">
-              {/* Submission Number Decor */}
-              <div className="absolute -top-4 -right-4 w-16 h-16 bg-slate-900/50 rounded-full flex items-center justify-center">
-                <span className="text-4xl font-black text-slate-800/10 italic">0{idx + 1}</span>
-              </div>
-
-              <div className="flex items-center space-x-3 mb-2">
-                <div className="w-10 h-10 bg-slate-800 rounded-full border border-slate-700 flex items-center justify-center">
-                  <Users className="w-5 h-5 text-slate-500" />
-                </div>
-                <div>
-                  <span className="text-[10px] font-black uppercase text-white block leading-tight">
-                    {sub.username || `Operator ${idx + 1}`}
+            <div key={sub.id} className="bg-zinc-950 border border-zinc-800 p-3.5 rounded-xl space-y-2.5 relative overflow-hidden group">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2 min-w-0">
+                  <div className="w-7 h-7 bg-zinc-800 rounded-lg flex items-center justify-center shrink-0">
+                    <Users className="w-3.5 h-3.5 text-zinc-400" />
+                  </div>
+                  <span className="text-xs font-black uppercase text-white truncate">
+                    {sub.username || `Player ${idx + 1}`}
                   </span>
-                  <span className="text-[10px] font-bold text-slate-600 block leading-tight">Submitted Score</span>
                 </div>
+                <span className="text-[9px] font-mono text-zinc-500">#{idx + 1}</span>
               </div>
 
-              <div className="flex flex-col items-center justify-center py-4 bg-slate-900/50 rounded-2xl border border-slate-800/50">
-                <span className="text-5xl font-black italic tracking-tighter text-white tabular-nums drop-shadow-lg">
+              <div className="flex items-center justify-center py-2 bg-zinc-900 border border-zinc-800/80 rounded-lg">
+                <span className="text-2xl sm:text-3xl font-black italic tracking-tight text-white tabular-nums">
                   {(sub.player1_score ?? sub.score1) ?? 0} – {(sub.player2_score ?? sub.score2) ?? 0}
                 </span>
               </div>
 
-              <div className="space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 block">Intel Evidence</span>
-                <div className="aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-950 relative group-hover:border-primary/30 transition-all">
+              {sub.screenshot_url && (
+                <div className="aspect-video rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900">
                   <StorageImage 
                     bucket="result-screenshots" 
                     path={sub.screenshot_url} 
                     alt="Proof" 
-                    className="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500" 
+                    className="w-full h-full object-cover" 
                   />
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="px-3 py-1 bg-primary text-black text-[8px] font-black uppercase tracking-widest rounded-lg">View Full Intel</span>
-                  </div>
                 </div>
-              </div>
+              )}
             </div>
           ))}
         </div>
 
         {/* Footer Actions */}
-        <div className="flex flex-col sm:flex-row items-center gap-3 pt-4 border-t border-slate-800">
+        <div className="pt-2 border-t border-zinc-800">
           <Link 
             to={tournamentId ? `/tournaments/${tournamentId}` : "/tournaments"}
-            className="w-full h-14 bg-white text-black rounded-2xl flex items-center justify-center font-black uppercase italic tracking-widest hover:bg-primary transition-all active:scale-95 text-xs"
+            className="w-full h-11 bg-white text-black rounded-xl flex items-center justify-center font-black uppercase italic tracking-wider hover:bg-primary transition-all active:scale-95 text-xs"
           >
             Back to Tournament
           </Link>
-        </div>
-
-        <div className="text-center">
-          <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest italic animate-pulse">
-            Establishing connection to Moderation HQ... No further action required.
-          </p>
         </div>
       </div>
     </div>

@@ -8,7 +8,7 @@ import Shell from '../components/layout/Shell';
 import { 
   Info, ArrowLeft, Trophy,
   Shield, ArrowUpRight, X, XCircle,
-  Upload, Loader2, CheckCircle, AlertCircle
+  Upload, Loader2, CheckCircle, AlertCircle, Clock
 } from 'lucide-react';
 import { getPublicIdentity, cn } from '../lib/utils';
 import LoadingState from '../components/ui/LoadingState';
@@ -20,6 +20,7 @@ import { useTournamentBadges } from '../hooks/useTournamentBadges';
 import { VerificationStatus } from '../types/verification.types';
 import { PlayerBadge } from '../components/ui/PlayerBadge';
 import { NoShowUnderReview } from '../components/match/NoShowUnderReview';
+import { useCountdown } from '../hooks/useCountdown';
 
 export default function MatchDetails() {
   const { id } = useParams<{ id: string }>();
@@ -149,6 +150,51 @@ export default function MatchDetails() {
   const activePlayer1Id = typeof match?.player1 === 'object' ? (match.player1 as any)?.id : match?.player1;
   const activePlayer2Id = typeof match?.player2 === 'object' ? (match.player2 as any)?.id : match?.player2;
   const isParticipant = !!(user && (activePlayer1Id === user.id || activePlayer2Id === user.id));
+
+  const scheduledAt = match?.scheduled_at;
+  const countdown = useCountdown(scheduledAt || '');
+  const [waLink, setWaLink] = useState<string>('');
+
+  useEffect(() => {
+    if (!match?.id || !user?.id || !isParticipant) return;
+    let isCancelled = false;
+
+    async function checkWaAction() {
+      try {
+        const { data: conv } = await (supabase as any)
+          .from('match_conversations')
+          .select('id')
+          .eq('match_id', match!.id)
+          .maybeSingle();
+
+        if (conv && (conv as any).id && !isCancelled) {
+          const { data: waMsg } = await (supabase as any)
+            .from('messages')
+            .select('content')
+            .eq('conversation_id', (conv as any).id)
+            .eq('message_type', 'whatsapp_action')
+            .maybeSingle();
+
+          if (waMsg && (waMsg as any).content && !isCancelled) {
+            const rawContent = (waMsg as any).content;
+            const actionData = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+            const isP1 = user!.id === actionData?.player1?.id;
+            const rawWa = isP1 ? actionData?.player2?.whatsapp : actionData?.player1?.whatsapp;
+            const waNum = rawWa ? rawWa.replace(/\D/g, '') : '';
+            const customText = isP1 ? actionData?.player1?.wa_text : actionData?.player2?.wa_text;
+            if (waNum) {
+              setWaLink(`https://wa.me/${waNum}?text=${encodeURIComponent(customText || '')}`);
+            }
+          }
+        }
+      } catch (e) {
+        // Fallback
+      }
+    }
+
+    checkWaAction();
+    return () => { isCancelled = true; };
+  }, [match?.id, user?.id, isParticipant]);
 
   useEffect(() => {
     isInitialLoad.current = true;
@@ -313,7 +359,6 @@ export default function MatchDetails() {
   
   if (!match || !user) return <Shell>Match not found</Shell>;
 
-  const scheduledAt = match?.scheduled_at;
   const playWindowMinutes = match?.play_window_minutes ?? 30;
 
   let isNoShowButtonEnabled = now.getHours() >= 22;
@@ -342,425 +387,441 @@ export default function MatchDetails() {
     }
   }
 
+  const opponent = user && activePlayer1Id === user.id ? match?.player2 : match?.player1;
+  const opponentProfile = typeof opponent === 'object' ? opponent : null;
+  const opponentWhatsapp = opponentProfile?.whatsapp_number ? opponentProfile.whatsapp_number.replace(/\D/g, '') : '';
+  const hasWhatsapp = !!opponentWhatsapp && opponentWhatsapp.length > 0;
+  const oppUsername = getPublicIdentity(opponent);
+  const p1Name = getPublicIdentity(match?.player1);
+  const p2Name = getPublicIdentity(match?.player2);
+
+  const tournamentName = (match as any)?.tournaments?.name || 'Tournament';
+  const defaultWaText = `Hi @${oppUsername || 'Opponent'}, let's coordinate our match for ${tournamentName} on TournaHub!`;
+  const defaultWaUrl = opponentWhatsapp ? `https://wa.me/${opponentWhatsapp}?text=${encodeURIComponent(defaultWaText)}` : '#';
+  const finalWaUrl = waLink && waLink !== '#' ? waLink : defaultWaUrl;
+
+  const kickoffFormatted = scheduledAt 
+    ? new Date(scheduledAt).toLocaleDateString([], { 
+        month: 'short', 
+        day: 'numeric' 
+      }) + ' ' + new Date(scheduledAt).toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      })
+    : 'Schedule pending';
+
+  const stageLabel = ((match?.stage === 'playoffs' || match?.stage === 'playoff' || match?.stage === 'play_off') && Number(match?.round) === 1) ? 'Quarter Final' :
+    ((match?.stage === 'playoffs' || match?.stage === 'playoff' || match?.stage === 'play_off') && Number(match?.round) === 2) ? 'Semi Final' :
+    ((match?.stage === 'playoffs' || match?.stage === 'playoff' || match?.stage === 'play_off') && Number(match?.round) === 3) ? 'Final' :
+    `Round ${match?.round}`;
+
   return (
     <Shell>
-      <div className="space-y-8 min-h-screen pb-20">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-           <div className="flex items-center space-x-4 md:space-x-6">
-             <button onClick={() => navigate(-1)} className="p-3 bg-zinc-900 border-zinc-800 rounded-2xl hover:bg-zinc-800 transition-all group shrink-0">
-               <ArrowLeft className="w-5 h-5 text-zinc-400 group-hover:text-white group-hover:-translate-x-1 transition-all" />
-             </button>
-             <div className="min-w-0">
-               <div className="flex items-center space-x-2 md:space-x-3 mb-1">
-                 <Trophy className="text-primary w-5 h-5 md:w-6 md:h-6 shrink-0" />
-                 <h1 className="text-2xl md:text-3xl font-black text-primary uppercase italic tracking-tighter">
-                  {(match as any).tournaments?.name || 'BATTLE HUB'}
-                </h1>
-               </div>
-               <p className="text-zinc-500 text-[10px] md:text-xs font-bold uppercase tracking-[0.15em] md:tracking-[0.3em] leading-none">
-                 {((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 1) ? 'Quarter Final' :
-                  ((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 2) ? 'Semi Final' :
-                  ((match.stage === 'playoffs' || match.stage === 'playoff' || match.stage === 'play_off') && Number(match.round) === 3) ? 'Final' :
-                  `Round ${match.round}`} • Match #{match.match_order}
-               </p>
-             </div>
-           </div>
-           
-           <div className="flex items-center space-x-3">
-             <VerificationStatusBadge status={match.result_verification_status as VerificationStatus || 'none'} />
-           </div>
-        </div>
+      <div className="space-y-3 sm:space-y-4 min-h-screen pb-28 max-w-4xl mx-auto">
+        {/* 1. Compact Match Header */}
+        <div className="card p-3.5 sm:p-4 bg-zinc-900 border-zinc-800 rounded-2xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center space-x-3 min-w-0">
+              <button 
+                onClick={() => navigate(-1)} 
+                className="p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-all text-zinc-400 hover:text-white shrink-0 cursor-pointer"
+                aria-label="Back"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Combatants Card */}
-            <div className="card p-6 md:p-8 bg-zinc-900 border-zinc-800">
-               <div className="grid grid-cols-3 items-center">
-                 {/* Player 1 */}
-                 <div className="flex flex-col items-center space-y-3">
-                    <PlayerBadge 
-                      badgeId={badges[(match.player1 as any)?.id || (match.player1 as any)]} 
-                      username={getPublicIdentity(match.player1)} 
-                      size="lg"
-                    />
-                    <div className="text-center flex flex-col items-center">
-                      <p className="text-sm md:text-base font-black text-white italic uppercase tracking-tighter truncate max-w-[100px] md:max-w-none">
-                        {getPublicIdentity(match.player1)}
-                      </p>
-                      {match.status === 'completed' && match.score1 !== null && (
-                        <p className="text-3xl font-black text-primary italic leading-none mt-1">{match.score1}</p>
-                      )}
-                    </div>
-                  </div>
+              <div className="min-w-0">
+                <div className="flex items-center space-x-2 truncate">
+                  <span className="text-sm sm:text-base font-black text-white italic uppercase tracking-tight truncate max-w-[120px] sm:max-w-[200px]" title={p1Name}>
+                    {p1Name}
+                  </span>
+                  <span className="text-[10px] font-black text-zinc-600 italic">VS</span>
+                  <span className="text-sm sm:text-base font-black text-white italic uppercase tracking-tight truncate max-w-[120px] sm:max-w-[200px]" title={p2Name}>
+                    {p2Name}
+                  </span>
+                  {match.status === 'completed' && match.score1 !== null && match.score2 !== null && (
+                    <span className="ml-1.5 px-2 py-0.5 rounded bg-primary/10 border border-primary/20 text-primary font-black text-xs italic shrink-0">
+                      {match.score1} - {match.score2}
+                    </span>
+                  )}
+                </div>
 
-                  <div className="flex flex-col items-center">
-                    <div className="w-12 h-12 bg-zinc-950 rounded-full flex items-center justify-center border border-zinc-800 relative shadow-[0_0_30px_rgba(0,0,0,0.5)]">
-                      <span className="text-[10px] font-black text-zinc-600 italic">VS</span>
-                    </div>
-                  </div>
-
-                  {/* Player 2 */}
-                  <div className="flex flex-col items-center space-y-3">
-                    <PlayerBadge 
-                      badgeId={badges[(match.player2 as any)?.id || (match.player2 as any)]} 
-                      username={getPublicIdentity(match.player2)} 
-                      size="lg"
-                    />
-                    <div className="text-center flex flex-col items-center">
-                      <p className="text-sm md:text-base font-black text-white italic uppercase tracking-tighter truncate max-w-[100px] md:max-w-none">
-                        {getPublicIdentity(match.player2)}
-                      </p>
-                      {match.status === 'completed' && match.score2 !== null && (
-                        <p className="text-3xl font-black text-primary italic leading-none mt-1">{match.score2}</p>
-                      )}
-                    </div>
-                  </div>
-               </div>
-
-               {/* Live Streams Section */}
-               {(isParticipant || streamUrls.length > 0) && (
-                 <div className="mt-6 pt-6 border-t border-zinc-800 space-y-4">
-                   {/* Opponent's Stream URL Display (or all URLs for spectator) */}
-                   {isParticipant ? (
-                     streamUrls.find((s: any) => s.submitted_by !== user?.id) && (
-                       <div className="p-4 bg-zinc-950/60 border border-zinc-800 rounded-2xl flex items-center justify-between gap-4">
-                         <div className="flex items-center space-x-3 min-w-0">
-                           {streamUrls.find((s: any) => s.submitted_by !== user?.id).profiles?.avatar_url ? (
-                             <img
-                               src={streamUrls.find((s: any) => s.submitted_by !== user?.id).profiles.avatar_url}
-                               alt={streamUrls.find((s: any) => s.submitted_by !== user?.id).profiles.username}
-                               className="w-8 h-8 rounded-xl object-cover shrink-0"
-                               referrerPolicy="no-referrer"
-                             />
-                           ) : (
-                             <div className="w-8 h-8 rounded-xl bg-zinc-800 flex items-center justify-center font-black text-xs text-zinc-400 uppercase shrink-0">
-                               {streamUrls.find((s: any) => s.submitted_by !== user?.id).profiles?.username?.[0] || 'O'}
-                             </div>
-                           )}
-                           <div className="min-w-0">
-                             <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block leading-none mb-1">Live Stream</span>
-                             <span className="text-xs font-black text-white truncate block">{streamUrls.find((s: any) => s.submitted_by !== user?.id).profiles?.username || 'Opponent'}</span>
-                           </div>
-                         </div>
-                         <a
-                           href={streamUrls.find((s: any) => s.submitted_by !== user?.id).stream_url}
-                           target="_blank"
-                           rel="noopener noreferrer"
-                           className="btn-secondary py-1.5 px-4 text-xs font-black uppercase italic flex items-center space-x-1.5 shrink-0"
-                         >
-                           <span>Watch Play</span>
-                           <ArrowUpRight className="w-3.5 h-3.5" />
-                         </a>
-                       </div>
-                     )
-                   ) : (
-                     streamUrls.length > 0 && (
-                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                         {streamUrls.map((s) => (
-                           <div key={s.id} className="p-3 bg-zinc-950/60 border border-zinc-800 rounded-2xl flex items-center justify-between gap-4">
-                             <div className="flex items-center space-x-3 min-w-0">
-                               {s.profiles?.avatar_url ? (
-                                 <img
-                                   src={s.profiles.avatar_url}
-                                   alt={s.profiles.username}
-                                   className="w-8 h-8 rounded-xl object-cover shrink-0"
-                                   referrerPolicy="no-referrer"
-                                 />
-                               ) : (
-                                 <div className="w-8 h-8 rounded-xl bg-zinc-800 flex items-center justify-center font-black text-xs text-zinc-400 uppercase shrink-0">
-                                   {s.profiles?.username?.[0] || 'P'}
-                                 </div>
-                               )}
-                               <div className="min-w-0">
-                                 <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block leading-none mb-1">Live Broadcast</span>
-                                 <span className="text-xs font-black text-white truncate block">{s.profiles?.username || 'Player'}</span>
-                               </div>
-                             </div>
-                             <a
-                               href={s.stream_url}
-                               target="_blank"
-                               rel="noopener noreferrer"
-                               className="btn-secondary py-1.5 px-4 text-xs font-black uppercase italic flex items-center space-x-1.5 shrink-0"
-                             >
-                               <span>Watch Live</span>
-                               <ArrowUpRight className="w-3.5 h-3.5" />
-                             </a>
-                           </div>
-                         ))}
-                       </div>
-                     )
-                   )}
-
-                   {/* Add / Update Form for Participant */}
-                   {isParticipant && (
-                     <div className="bg-zinc-950/40 p-4 border border-zinc-800/60 rounded-2xl space-y-3">
-                       <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest leading-none">
-                         Add stream URL (optional)
-                       </label>
-                       <form onSubmit={handleUpsertStream} className="flex flex-col sm:flex-row gap-2">
-                         <input
-                           type="url"
-                           placeholder="https://twitch.tv/yourusername"
-                           value={myStreamUrlInput}
-                           onChange={(e) => setMyStreamUrlInput(e.target.value)}
-                           className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-primary transition-all placeholder:text-zinc-600"
-                         />
-                         <div className="flex gap-2 shrink-0">
-                           {streamUrls.some((s: any) => s.submitted_by === user?.id) ? (
-                             <>
-                               <button
-                                 type="submit"
-                                 disabled={submittingStream}
-                                 className="btn-primary py-2 px-4 text-xs font-black uppercase italic"
-                               >
-                                 {submittingStream ? 'Saving...' : 'Update'}
-                               </button>
-                               <button
-                                 type="button"
-                                 onClick={handleRemoveStream}
-                                 disabled={submittingStream}
-                                 className="px-4 py-2 bg-red-950/15 border border-red-900/30 text-red-400 hover:bg-red-900/20 text-xs font-black uppercase italic rounded-xl hover:text-red-200 transition-colors"
-                               >
-                                 Remove
-                               </button>
-                             </>
-                           ) : (
-                             <button
-                               type="submit"
-                               disabled={submittingStream || !myStreamUrlInput.trim()}
-                               className="btn-primary py-2 px-6 text-xs font-black uppercase italic disabled:opacity-50 disabled:cursor-not-allowed"
-                             >
-                               {submittingStream ? 'Saving...' : 'Add'}
-                             </button>
-                           )}
-                         </div>
-                       </form>
-                       {streamError && (
-                         <p className="text-red-400 text-[10px] font-bold uppercase tracking-wider">{streamError}</p>
-                       )}
-                     </div>
-                   )}
-                 </div>
-               )}
+                <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-[10px] sm:text-xs font-bold text-zinc-400 mt-0.5">
+                  <span className="uppercase tracking-wider">{stageLabel} • #{match.match_order}</span>
+                  <span className="text-zinc-600">•</span>
+                  <span className="text-zinc-400">{kickoffFormatted}</span>
+                </div>
+              </div>
             </div>
 
-            {isParticipant ? (
-              <div className="space-y-6">
-                {noShowReport && noShowReport.status === 'pending' ? (
-                  <NoShowUnderReview
-                    reportedBy={noShowReport.reported_by}
-                    absentPlayer={noShowReport.absent_player}
-                    currentUserId={user.id}
-                    tournamentId={match.tournament_id}
-                  />
-                ) : (
-                  <>
-                    <SubmitResultPanel 
-                      matchId={match.id}
-                      currentUserId={user.id}
-                      playerName={getPublicIdentity(profile || { id: user.id, username: user.user_metadata?.username })}
-                      match={match}
-                    />
-                
-                {/* No-Show Report Action */}
-                {match && ['scheduled', 'match_in_progress', 'lobby_open', 'awaiting_result', 'under_review'].includes(match.status) && (
-                  <button
-                    disabled={match.status === 'under_review' || !isNoShowButtonEnabled}
-                    onClick={() => setShowNoShowModal(true)}
-                    className={cn(
-                      "w-full h-14 flex items-center justify-center gap-2 rounded-2xl font-black uppercase italic tracking-widest transition-all text-xs border cursor-pointer",
-                      match.status === 'under_review' || !isNoShowButtonEnabled
-                        ? "bg-zinc-950 border-zinc-900 text-zinc-500 cursor-not-allowed"
-                        : "bg-red-950/30 border-red-900/40 text-red-500 hover:bg-red-900/20 hover:border-red-700 hover:text-red-400"
-                    )}
-                  >
-                    <XCircle className="w-4 h-4" />
-                    {match.status === 'under_review' 
-                      ? "No-Show Under Review" 
-                      : !isNoShowButtonEnabled
-                        ? `Opponent Didn't Show Up (${timeRemainingStr ? `Unlocks in ${timeRemainingStr}` : unlockTimeStr ? `Unlocks at ${unlockTimeStr}` : 'Locked'})`
-                        : "Opponent Didn't Show Up"}
-                  </button>
+            <div className="flex items-center flex-wrap gap-2 shrink-0">
+              {!countdown.isExpired && scheduledAt && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-400 font-mono text-[10px] sm:text-xs font-black uppercase tracking-wider">
+                  <Clock className="w-3 h-3 text-sky-400" />
+                  MATCH STARTS IN {countdown.formatted}
+                </span>
+              )}
+              <VerificationStatusBadge status={match.result_verification_status as VerificationStatus || 'none'} />
+            </div>
+          </div>
+        </div>
+
+        {/* 2. WhatsApp Button Directly Under Header */}
+        {isParticipant && (
+          <div className="w-full">
+            {hasWhatsapp ? (
+              <a
+                href={finalWaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full min-h-[48px] py-3.5 px-4 bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-[0.99] shadow-lg shadow-emerald-500/10 cursor-pointer"
+              >
+                <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
+                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.18 1.449 4.825 1.451 5.436 0 9.859-4.42 9.862-9.859.002-2.636-1.023-5.11-2.884-6.974C16.591 1.908 14.113.882 11.997.882c-5.441 0-9.863 4.425-9.866 9.866-.001 1.772.464 3.5 1.344 5.03l-.1.545-1.03 3.766 3.844-1.008.528-.109z" />
+                </svg>
+                <span>Chat on WhatsApp</span>
+              </a>
+            ) : (
+              <button
+                disabled
+                className="w-full min-h-[48px] py-3.5 px-4 bg-zinc-900 border border-zinc-800 text-zinc-500 font-black uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-not-allowed text-center"
+              >
+                Opponent hasn't added their WhatsApp yet
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* 3. Result Submission Section & Participant Flow */}
+        {isParticipant ? (
+          <div className="space-y-3 sm:space-y-4">
+            {noShowReport && noShowReport.status === 'pending' ? (
+              <NoShowUnderReview
+                reportedBy={noShowReport.reported_by}
+                absentPlayer={noShowReport.absent_player}
+                currentUserId={user.id}
+                tournamentId={match.tournament_id}
+              />
+            ) : (
+              <SubmitResultPanel 
+                matchId={match.id}
+                currentUserId={user.id}
+                playerName={getPublicIdentity(profile || { id: user.id, username: user.user_metadata?.username })}
+                match={match}
+              />
+            )}
+
+            {/* 4. Opponent Didn't Show Up Action */}
+            {match && ['scheduled', 'match_in_progress', 'lobby_open', 'awaiting_result', 'under_review'].includes(match.status) && (
+              <button
+                disabled={match.status === 'under_review' || !isNoShowButtonEnabled}
+                onClick={() => setShowNoShowModal(true)}
+                className={cn(
+                  "w-full py-2.5 px-3 flex items-center justify-center gap-1.5 rounded-xl font-bold uppercase tracking-wider transition-all text-[11px] border cursor-pointer",
+                  match.status === 'under_review' || !isNoShowButtonEnabled
+                    ? "bg-transparent border-zinc-800 text-zinc-600 cursor-not-allowed"
+                    : "bg-transparent border-red-900/30 text-red-400 hover:border-red-700/60 hover:text-red-300 hover:bg-red-950/20 active:scale-[0.99]"
                 )}
+              >
+                <XCircle className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">
+                  {match.status === 'under_review' 
+                    ? "No-Show Under Review" 
+                    : !isNoShowButtonEnabled
+                      ? `Opponent Didn't Show Up (${timeRemainingStr ? `Unlocks in ${timeRemainingStr}` : unlockTimeStr ? `Unlocks at ${unlockTimeStr}` : 'Locked'})`
+                      : "Opponent Didn't Show Up"}
+                </span>
+              </button>
+            )}
 
-                {showNoShowModal && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-                    <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 max-w-md w-full relative space-y-6 overflow-hidden shadow-2xl text-left">
-                      {/* Close Header button */}
-                      <button 
-                        onClick={closeNoShowModal}
-                        className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors cursor-pointer"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
+            {/* 5. Chat Card Last */}
+            <MatchChat 
+              matchId={match.id} 
+              currentUserId={user.id} 
+              tournamentId={match.tournament_id} 
+            />
 
-                      {!noShowSuccess ? (
-                        <>
-                          <div className="space-y-2">
-                            <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500">
-                              <XCircle className="w-6 h-6" />
-                            </div>
-                            <h3 className="text-lg font-black text-white uppercase italic tracking-wider">Report Opponent No-Show</h3>
-                            <p className="text-xs text-zinc-400 leading-relaxed font-bold">
-                              If your opponent did not show up or communicate within the tournament window, you can submit a report. Proof of unanswered WhatsApp coordination is required.
-                            </p>
-                          </div>
+            {/* Live Streams Section (if participant has stream or streams exist) */}
+            {(isParticipant || streamUrls.length > 0) && (
+              <div className="card p-4 sm:p-5 bg-zinc-900 border-zinc-800 rounded-2xl space-y-3">
+                <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block">
+                  Match Broadcast & Live Streams
+                </span>
 
-                          {/* Screenshot File upload */}
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 block">WhatsApp Screenshot Proof (Required)</label>
-                            
-                            {noShowScreenshot ? (
-                              <div className="relative rounded-2xl overflow-hidden border border-zinc-805 aspect-video bg-zinc-900">
-                                <img 
-                                  src={noShowPreviewUrl || ''} 
-                                  alt="WhatsApp screenshot proof" 
-                                  className="w-full h-full object-cover" 
-                                />
-                                {noShowUploading && (
-                                  <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center space-y-2">
-                                    <Loader2 className="w-6 h-6 text-primary animate-spin" />
-                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block text-center">Uploading Evidence...</span>
-                                  </div>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setNoShowScreenshot(null);
-                                    if (noShowPreviewUrl) URL.revokeObjectURL(noShowPreviewUrl);
-                                    setNoShowPreviewUrl(null);
-                                  }}
-                                  disabled={noShowUploading}
-                                  className="absolute top-2 right-2 bg-red-600/90 hover:bg-red-700/95 text-white text-[10px] px-2.5 py-1 rounded font-bold uppercase tracking-widest cursor-pointer transition-colors z-20"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="border border-zinc-800 hover:border-zinc-700 transition-colors border-dashed rounded-2xl p-8 bg-zinc-900/40 relative cursor-pointer group flex flex-col items-center justify-center text-center">
-                                <input 
-                                  type="file" 
-                                  accept="image/*"
-                                  onChange={handleNoShowFileChange}
-                                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                />
-                                <Upload className="w-6 h-6 text-zinc-650 group-hover:text-primary transition-colors mb-2 animate-pulse" />
-                                <span className="text-xs font-bold text-zinc-400 group-hover:text-zinc-200 transition-colors">Select WhatsApp Screenshot</span>
-                                <span className="text-[9px] font-black uppercase tracking-wider text-zinc-600 mt-1">JPEG, PNG, or JPG up to 10MB</span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Notes field */}
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 block">Additional Notes (Optional)</label>
-                            <textarea
-                              rows={3}
-                              placeholder="Describe the context (e.g. 'I messaged the opponent 15 mins ago and got no response...')"
-                              value={noShowNotes}
-                              onChange={(e) => setNoShowNotes(e.target.value)}
-                              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-red-500 transition-colors placeholder:text-zinc-655 resize-none font-bold"
-                            />
-                          </div>
-
-                          {/* Error message */}
-                          {noShowError && (
-                            <div className="p-3.5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
-                              <AlertCircle className="w-4 h-4 shrink-0" />
-                              <span>{noShowError}</span>
-                            </div>
-                          )}
-
-                          {/* Buttons flow */}
-                          <div className="flex gap-3 pt-2">
-                            <button
-                              type="button"
-                              onClick={closeNoShowModal}
-                              className="flex-1 h-12 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl text-xs font-black uppercase tracking-widest cursor-pointer transition-colors border border-zinc-800"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              disabled={!noShowScreenshot || noShowUploading}
-                              onClick={handleNoShowSubmit}
-                              className="flex-1 h-12 bg-red-500 text-black hover:bg-white disabled:bg-zinc-900 disabled:text-zinc-600 disabled:cursor-not-allowed rounded-xl text-xs font-black uppercase tracking-widest cursor-pointer transition-all flex items-center justify-center gap-2"
-                            >
-                              {noShowUploading ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                  <span>Submitting...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span>Submit Report</span>
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </>
+                {streamUrls.find((s: any) => s.submitted_by !== user?.id) && (
+                  <div className="p-3 bg-zinc-950/60 border border-zinc-800 rounded-xl flex items-center justify-between gap-3">
+                    <div className="flex items-center space-x-3 min-w-0">
+                      {streamUrls.find((s: any) => s.submitted_by !== user?.id).profiles?.avatar_url ? (
+                        <img
+                          src={streamUrls.find((s: any) => s.submitted_by !== user?.id).profiles.avatar_url}
+                          alt={streamUrls.find((s: any) => s.submitted_by !== user?.id).profiles.username}
+                          className="w-8 h-8 rounded-xl object-cover shrink-0"
+                          referrerPolicy="no-referrer"
+                        />
                       ) : (
-                        <div className="flex flex-col items-center justify-center text-center py-6 space-y-4 animate-in zoom-in-95 duration-250">
-                          <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500">
-                             <CheckCircle className="w-8 h-8" />
-                          </div>
-                          <div className="space-y-2">
-                            <h3 className="text-base font-black text-white uppercase italic tracking-wider animate-pulse">Report Received</h3>
-                            <p className="text-xs text-zinc-400 max-w-xs leading-relaxed font-bold animate-pulse">
-                              Report submitted. An admin will review within 24 hours.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={closeNoShowModal}
-                            className="h-11 px-8 bg-zinc-900 hover:bg-zinc-800 hover:text-white rounded-xl text-xs font-black uppercase tracking-widest cursor-pointer transition-colors border border-zinc-800 text-zinc-400"
-                          >
-                            Dismiss
-                          </button>
+                        <div className="w-8 h-8 rounded-xl bg-zinc-800 flex items-center justify-center font-black text-xs text-zinc-400 uppercase shrink-0">
+                          {streamUrls.find((s: any) => s.submitted_by !== user?.id).profiles?.username?.[0] || 'O'}
                         </div>
                       )}
+                      <div className="min-w-0">
+                        <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block leading-none mb-1">Live Stream</span>
+                        <span className="text-xs font-black text-white truncate block">{streamUrls.find((s: any) => s.submitted_by !== user?.id).profiles?.username || 'Opponent'}</span>
+                      </div>
                     </div>
+                    <a
+                      href={streamUrls.find((s: any) => s.submitted_by !== user?.id).stream_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-secondary py-1.5 px-3 text-xs font-black uppercase italic flex items-center space-x-1.5 shrink-0"
+                    >
+                      <span>Watch</span>
+                      <ArrowUpRight className="w-3.5 h-3.5" />
+                    </a>
                   </div>
                 )}
 
-                <MatchChat 
-                  matchId={match.id} 
-                  currentUserId={user.id} 
-                  tournamentId={match.tournament_id} 
-                />
-              </>
+                {/* Add / Update Stream Form */}
+                <div className="bg-zinc-950/40 p-3 border border-zinc-800/60 rounded-xl space-y-2">
+                  <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest leading-none">
+                    Add stream URL (optional)
+                  </label>
+                  <form onSubmit={handleUpsertStream} className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="url"
+                      placeholder="https://twitch.tv/yourusername"
+                      value={myStreamUrlInput}
+                      onChange={(e) => setMyStreamUrlInput(e.target.value)}
+                      className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-primary transition-all placeholder:text-zinc-600"
+                    />
+                    <div className="flex gap-2 shrink-0">
+                      {streamUrls.some((s: any) => s.submitted_by === user?.id) ? (
+                        <>
+                          <button
+                            type="submit"
+                            disabled={submittingStream}
+                            className="btn-primary py-1.5 px-4 text-xs font-black uppercase italic"
+                          >
+                            {submittingStream ? 'Saving...' : 'Update'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleRemoveStream}
+                            disabled={submittingStream}
+                            className="px-3 py-1.5 bg-red-950/15 border border-red-900/30 text-red-400 hover:bg-red-900/20 text-xs font-black uppercase italic rounded-xl hover:text-red-200 transition-colors"
+                          >
+                            Remove
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="submit"
+                          disabled={submittingStream || !myStreamUrlInput.trim()}
+                          className="btn-primary py-1.5 px-5 text-xs font-black uppercase italic disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {submittingStream ? 'Saving...' : 'Add'}
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                  {streamError && (
+                    <p className="text-red-400 text-[10px] font-bold uppercase tracking-wider">{streamError}</p>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         ) : (
-              <div className="bg-zinc-950 rounded-3xl border border-zinc-900 overflow-hidden shadow-2xl p-12 text-center h-[500px] flex flex-col items-center justify-center space-y-4">
-                <div className="w-16 h-16 rounded-2xl bg-zinc-900 flex items-center justify-center border border-zinc-800">
-                  <Shield className="w-8 h-8 text-zinc-700" />
-                </div>
-                <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">Spectator Mode</h3>
-                <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs max-w-xs mx-auto">
-                  Encrypted communication channels are private to combatants. 
-                  You are observing as a tactical analyst.
-                </p>
+          /* Spectator Mode */
+          <div className="space-y-4">
+            <div className="bg-zinc-950 rounded-2xl border border-zinc-900 overflow-hidden shadow-2xl p-8 sm:p-12 text-center flex flex-col items-center justify-center space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-zinc-900 flex items-center justify-center border border-zinc-800">
+                <Shield className="w-8 h-8 text-zinc-700" />
+              </div>
+              <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">Spectator Mode</h3>
+              <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs max-w-xs mx-auto">
+                Encrypted communication channels are private to combatants. 
+                You are observing as a tactical analyst.
+              </p>
+            </div>
+
+            {streamUrls.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {streamUrls.map((s) => (
+                  <div key={s.id} className="p-3 bg-zinc-950/60 border border-zinc-800 rounded-2xl flex items-center justify-between gap-4">
+                    <div className="flex items-center space-x-3 min-w-0">
+                      {s.profiles?.avatar_url ? (
+                        <img
+                          src={s.profiles.avatar_url}
+                          alt={s.profiles.username}
+                          className="w-8 h-8 rounded-xl object-cover shrink-0"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-xl bg-zinc-800 flex items-center justify-center font-black text-xs text-zinc-400 uppercase shrink-0">
+                          {s.profiles?.username?.[0] || 'P'}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block leading-none mb-1">Live Broadcast</span>
+                        <span className="text-xs font-black text-white truncate block">{s.profiles?.username || 'Player'}</span>
+                      </div>
+                    </div>
+                    <a
+                      href={s.stream_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-secondary py-1.5 px-4 text-xs font-black uppercase italic flex items-center space-x-1.5 shrink-0"
+                    >
+                      <span>Watch Live</span>
+                      <ArrowUpRight className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                ))}
               </div>
             )}
           </div>
+        )}
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            <div className="card p-8 bg-black border-zinc-800 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-primary/10 transition-all duration-700" />
-              <h3 className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-8 border-b border-zinc-900 pb-4">Match Directive</h3>
-              <div className="space-y-4">
-                <RuleItem text={`Format: ${(match as any).tournaments?.type || 'Standard'} Mode`} />
-                <RuleItem text="Communication: Encrypted Link Active" />
-                <RuleItem text="Verification: Required After Match" />
-                <RuleItem text="Governance: Platform Standard Rules" />
-              </div>
+        {/* No-Show Modal */}
+        {showNoShowModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+            <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 max-w-md w-full relative space-y-6 overflow-hidden shadow-2xl text-left">
+              {/* Close Header button */}
+              <button 
+                onClick={closeNoShowModal}
+                className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {!noShowSuccess ? (
+                <>
+                  <div className="space-y-2">
+                    <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500">
+                      <XCircle className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-lg font-black text-white uppercase italic tracking-wider">Report Opponent No-Show</h3>
+                    <p className="text-xs text-zinc-400 leading-relaxed font-bold">
+                      If your opponent did not show up or communicate within the tournament window, you can submit a report. Proof of unanswered WhatsApp coordination is required.
+                    </p>
+                  </div>
+
+                  {/* Screenshot File upload */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 block">WhatsApp Screenshot Proof (Required)</label>
+                    
+                    {noShowScreenshot ? (
+                      <div className="relative rounded-2xl overflow-hidden border border-zinc-805 aspect-video bg-zinc-900">
+                        <img 
+                          src={noShowPreviewUrl || ''} 
+                          alt="WhatsApp screenshot proof" 
+                          className="w-full h-full object-cover" 
+                        />
+                        {noShowUploading && (
+                          <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center space-y-2">
+                            <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block text-center">Uploading Evidence...</span>
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNoShowScreenshot(null);
+                            if (noShowPreviewUrl) URL.revokeObjectURL(noShowPreviewUrl);
+                            setNoShowPreviewUrl(null);
+                          }}
+                          disabled={noShowUploading}
+                          className="absolute top-2 right-2 bg-red-600/90 hover:bg-red-700/95 text-white text-[10px] px-2.5 py-1 rounded font-bold uppercase tracking-widest cursor-pointer transition-colors z-20"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="border border-zinc-800 hover:border-zinc-700 transition-colors border-dashed rounded-2xl p-8 bg-zinc-900/40 relative cursor-pointer group flex flex-col items-center justify-center text-center">
+                        <input 
+                          type="file" 
+                          accept="image/*"
+                          onChange={handleNoShowFileChange}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                        <Upload className="w-6 h-6 text-zinc-650 group-hover:text-primary transition-colors mb-2 animate-pulse" />
+                        <span className="text-xs font-bold text-zinc-400 group-hover:text-zinc-200 transition-colors">Select WhatsApp Screenshot</span>
+                        <span className="text-[9px] font-black uppercase tracking-wider text-zinc-600 mt-1">JPEG, PNG, or JPG up to 10MB</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Notes field */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 block">Additional Notes (Optional)</label>
+                    <textarea
+                      rows={3}
+                      placeholder="Describe the context (e.g. 'I messaged the opponent 15 mins ago and got no response...')"
+                      value={noShowNotes}
+                      onChange={(e) => setNoShowNotes(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-red-500 transition-colors placeholder:text-zinc-655 resize-none font-bold"
+                    />
+                  </div>
+
+                  {/* Error message */}
+                  {noShowError && (
+                    <div className="p-3.5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{noShowError}</span>
+                    </div>
+                  )}
+
+                  {/* Buttons flow */}
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={closeNoShowModal}
+                      className="flex-1 h-12 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl text-xs font-black uppercase tracking-widest cursor-pointer transition-colors border border-zinc-800"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!noShowScreenshot || noShowUploading}
+                      onClick={handleNoShowSubmit}
+                      className="flex-1 h-12 bg-red-500 text-black hover:bg-white disabled:bg-zinc-900 disabled:text-zinc-600 disabled:cursor-not-allowed rounded-xl text-xs font-black uppercase tracking-widest cursor-pointer transition-all flex items-center justify-center gap-2"
+                    >
+                      {noShowUploading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Submitting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Submit Report</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center text-center py-6 space-y-4 animate-in zoom-in-95 duration-250">
+                  <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500">
+                     <CheckCircle className="w-8 h-8" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-base font-black text-white uppercase italic tracking-wider animate-pulse">Report Received</h3>
+                    <p className="text-xs text-zinc-400 max-w-xs leading-relaxed font-bold animate-pulse">
+                      Report submitted. An admin will review within 24 hours.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeNoShowModal}
+                    className="h-11 px-8 bg-zinc-900 hover:bg-zinc-800 hover:text-white rounded-xl text-xs font-black uppercase tracking-widest cursor-pointer transition-colors border border-zinc-800 text-zinc-400"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
             </div>
           </div>
-        </div>
+        )}
       </div>
     </Shell>
   );

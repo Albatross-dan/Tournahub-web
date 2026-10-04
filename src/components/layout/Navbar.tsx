@@ -12,9 +12,8 @@ import { walletService } from '../../services/walletService';
 import { formatCurrency, cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../../lib/supabase';
-
-const HelpSheet = React.lazy(() => import('../../guide/HelpSheet'));
-const WelcomeTour = React.lazy(() => import('../../guide/WelcomeTour'));
+import HelpSheet from '../../guide/HelpSheet';
+import WelcomeTour from '../../guide/WelcomeTour';
 
 const logoUrl = '/android-chrome-512x512.png';
 

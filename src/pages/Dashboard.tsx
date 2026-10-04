@@ -29,8 +29,7 @@ import VerificationStatusBadge from '../components/match/VerificationStatusBadge
 import VerificationStatusBanner from '../components/match/VerificationStatusBanner';
 import { VerificationStatus } from '../types/verification.types';
 import RecentChampions from '../components/home/RecentChampions';
-
-const WelcomeTour = React.lazy(() => import('../guide/WelcomeTour'));
+import WelcomeTour from '../guide/WelcomeTour';
 
 export default function Dashboard() {
   const { user, profile, isAdmin, refetchSignal } = useAuth();

@@ -55,19 +55,29 @@ export const matchService = {
     }
   },
 
-  async getUserMatches(userId: string) {
+  async getUserMatches(userId: string, options?: { activeOnly?: boolean }) {
     try {
       // Ensure session is hydrated for RLS propagation
       await supabase.auth.getSession();
       
-      const { data, error } = await (supabase as any)
+      const tournamentsJoin = options?.activeOnly
+        ? 'tournaments:tournament_id!inner(*)'
+        : 'tournaments:tournament_id(*)';
+
+      let query = (supabase as any)
         .from('matches')
         .select(`
           *, 
-          tournaments:tournament_id(*), 
+          ${tournamentsJoin}, 
           player1:profiles!matches_player1_fkey(id, username, avatar_url), 
           player2:profiles!matches_player2_fkey(id, username, avatar_url)
-        `)
+        `);
+
+      if (options?.activeOnly) {
+        query = query.neq('tournaments.status', 'completed');
+      }
+
+      const { data, error } = await query
         .or(`player1.eq.${userId},player2.eq.${userId}`)
         .order('scheduled_at', { ascending: true, nullsFirst: false });
       

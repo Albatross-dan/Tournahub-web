@@ -1,6 +1,15 @@
 import React from 'react';
 import { ArrowRight } from 'lucide-react';
 
+interface EmptyStateProps {
+  icon?: React.ElementType;
+  title?: string;
+  message?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  className?: string;
+}
+
 export default function EmptyState({
   icon: Icon,
   title,
@@ -8,7 +17,7 @@ export default function EmptyState({
   actionLabel,
   onAction,
   className = '',
-}) {
+}: EmptyStateProps) {
   return (
     <div
       className={`w-full py-10 px-4 text-center flex flex-col items-center justify-center rounded-2xl bg-[#0a0d1d]/80 border border-slate-800/80 shadow-sm ${className}`}

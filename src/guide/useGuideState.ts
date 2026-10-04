@@ -3,7 +3,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { GUIDE_LAUNCH_DATE, ENABLE_GUIDE_DB_SYNC, GUIDE_STORAGE_KEY } from './guideConfig';
 
-const DEFAULT_GUIDE_STATE = {
+export interface GuideState {
+  welcome_tour: boolean;
+  tips: Record<string, boolean>;
+}
+
+const DEFAULT_GUIDE_STATE: GuideState = {
   welcome_tour: false,
   tips: {
     wallet: false,
@@ -14,7 +19,7 @@ const DEFAULT_GUIDE_STATE = {
   },
 };
 
-function getLocalState() {
+function getLocalState(): GuideState {
   if (typeof window === 'undefined') return DEFAULT_GUIDE_STATE;
   try {
     const raw = localStorage.getItem(GUIDE_STORAGE_KEY);
@@ -27,23 +32,23 @@ function getLocalState() {
         ...(parsed?.tips || {}),
       },
     };
-  } catch (e) {
+  } catch {
     return DEFAULT_GUIDE_STATE;
   }
 }
 
-function saveLocalState(state) {
+function saveLocalState(state: GuideState) {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(GUIDE_STORAGE_KEY, JSON.stringify(state));
-  } catch (e) {
+  } catch {
     // Silent fallback
   }
 }
 
 export function useGuideState() {
   const { profile, user } = useAuth();
-  const [guideState, setGuideState] = useState(getLocalState);
+  const [guideState, setGuideState] = useState<GuideState>(getLocalState);
 
   // Determine if this user is a NEW user (created after feature launch date)
   const isNewUser = useMemo(() => {
@@ -67,23 +72,24 @@ export function useGuideState() {
         const { data, error } = await supabase
           .from('profiles')
           .select('onboarding_state')
-          .eq('id', user.id)
+          .eq('id', user!.id)
           .single();
 
-        if (!error && data?.onboarding_state && isMounted) {
+        if (!error && (data as any)?.onboarding_state && isMounted) {
+          const obState = (data as any).onboarding_state;
           setGuideState((prev) => {
-            const merged = {
-              welcome_tour: Boolean(data.onboarding_state.welcome_tour || prev.welcome_tour),
+            const merged: GuideState = {
+              welcome_tour: Boolean(obState.welcome_tour || prev.welcome_tour),
               tips: {
                 ...prev.tips,
-                ...(data.onboarding_state.tips || {}),
+                ...(obState.tips || {}),
               },
             };
             saveLocalState(merged);
             return merged;
           });
         }
-      } catch (err) {
+      } catch {
         // Silent failure - never break the UI
       }
     }
@@ -95,11 +101,11 @@ export function useGuideState() {
   }, [user?.id]);
 
   // Helper to sync step to DB if flag is on
-  const syncStepToDb = useCallback(async (stepKey) => {
+  const syncStepToDb = useCallback(async (stepKey: string) => {
     if (!ENABLE_GUIDE_DB_SYNC || !user?.id) return;
     try {
-      await supabase.rpc('set_onboarding_step', { p_step: stepKey });
-    } catch (e) {
+      await (supabase.rpc as any)('set_onboarding_step', { p_step: stepKey });
+    } catch {
       // Silent error - offline safe
     }
   }, [user?.id]);
@@ -121,7 +127,7 @@ export function useGuideState() {
     });
   }, []);
 
-  const dismissTip = useCallback((tipId) => {
+  const dismissTip = useCallback((tipId: string) => {
     setGuideState((prev) => {
       const next = {
         ...prev,
@@ -138,7 +144,7 @@ export function useGuideState() {
 
   const shouldShowTour = Boolean(isNewUser && !guideState.welcome_tour);
 
-  const shouldShowTip = useCallback((tipId) => {
+  const shouldShowTip = useCallback((tipId: string) => {
     if (!isNewUser) return false;
     return !guideState.tips?.[tipId];
   }, [isNewUser, guideState.tips]);

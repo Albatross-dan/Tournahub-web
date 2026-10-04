@@ -3,13 +3,21 @@
  * Edit wording here without modifying components.
  */
 
-export const welcomeTourSteps = [
+export interface TourStep {
+  id: string;
+  step: number;
+  title: string;
+  description: string;
+  media: string | null;
+}
+
+export const welcomeTourSteps: TourStep[] = [
   {
     id: 'find_tournament',
     step: 1,
     title: 'Find & Join Tournaments',
     description: 'Browse upcoming football competitions, pick your bracket, and register with one tap.',
-    media: null, // Optional media asset placeholder for future use
+    media: null,
   },
   {
     id: 'play_match',
@@ -34,7 +42,12 @@ export const welcomeTourSteps = [
   },
 ];
 
-export const contextualTips = {
+export interface ContextualTip {
+  title: string;
+  text: string;
+}
+
+export const contextualTips: Record<string, ContextualTip> = {
   wallet: {
     title: 'Wallet Safety',
     text: 'Your balance is protected. Deposits and withdrawals are handled quickly and securely.',
@@ -57,7 +70,12 @@ export const contextualTips = {
   },
 };
 
-export const formatExplorations = {
+export interface FormatExploration {
+  name: string;
+  summary: string;
+}
+
+export const formatExplorations: Record<string, FormatExploration> = {
   knockout: {
     name: 'Knockout (Single Elimination)',
     summary: 'A classic bracket format. Win your match to advance to the next round. If you lose, your tournament run ends. High stakes with every game.',
@@ -80,7 +98,14 @@ export const formatExplorations = {
   },
 };
 
-export const helpGuides = [
+export interface HelpGuide {
+  id: string;
+  title: string;
+  icon: string;
+  steps: string[];
+}
+
+export const helpGuides: HelpGuide[] = [
   {
     id: 'join_tournament',
     title: 'Joining a Tournament',

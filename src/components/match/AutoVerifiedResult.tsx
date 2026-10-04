@@ -61,71 +61,76 @@ export function AutoVerifiedResult({ finalScore1, finalScore2, submissions = [],
   }
 
   return (
-    <div className="bg-slate-900 border border-emerald-500/30 rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-500">
-      <div className="bg-emerald-500 p-8 flex flex-col items-center justify-center text-center space-y-3">
-        <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center animate-in zoom-in-50 delay-300 duration-500">
-          <CheckCircle2 className="w-10 h-10 text-white" />
+    <div className="bg-zinc-900 border border-emerald-500/30 rounded-2xl overflow-hidden shadow-xl animate-in zoom-in-95 duration-300">
+      <div className="bg-emerald-500 px-4 py-3 sm:py-4 flex items-center justify-between gap-3 text-black">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 bg-black/15 rounded-lg flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-5 h-5 text-black" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-sm font-black italic uppercase tracking-wider leading-none">Match Complete</h3>
+            <p className="text-black/80 font-bold uppercase tracking-wider text-[10px] mt-0.5 truncate">
+              Consensus: {finalScore1} – {finalScore2}
+            </p>
+          </div>
         </div>
-        <div>
-          <h3 className="text-2xl font-black text-white italic uppercase tracking-tighter leading-none mb-1">Match Complete!</h3>
-          <p className="text-white font-bold uppercase tracking-widest text-[11px] mt-1">
-            Both players agreed: {finalScore1} – {finalScore2}
-          </p>
-          <p className="text-white/80 font-bold uppercase tracking-widest text-[9px] mt-1">Parity check successful • Consensus reached</p>
-        </div>
-      </div>
-
-      <div className="p-10 space-y-12">
         {outcomeBadge && (
-          <div className="flex justify-center -mb-4">
+          <div className="shrink-0">
             {outcomeBadge}
           </div>
         )}
+      </div>
+
+      <div className="p-4 sm:p-5 space-y-4">
         {/* Scores */}
-        <div className="flex items-center justify-center space-x-12">
-          <div className="text-center group">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-4 group-hover:text-primary transition-colors">Player 1</span>
-            <span className="text-8xl font-black italic tracking-tighter text-white tabular-nums drop-shadow-xl">{finalScore1}</span>
+        <div className="flex items-center justify-center space-x-8 bg-zinc-950/60 border border-zinc-800 p-3 rounded-xl">
+          <div className="text-center group flex-1">
+            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 block mb-1">Player 1</span>
+            <span className="text-4xl sm:text-5xl font-black italic tracking-tighter text-white tabular-nums">{finalScore1}</span>
           </div>
-          <div className="h-20 w-px bg-slate-800 rotate-[15deg]"></div>
-          <div className="text-center group">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-4 group-hover:text-primary transition-colors">Player 2</span>
-            <span className="text-8xl font-black italic tracking-tighter text-white tabular-nums drop-shadow-xl">{finalScore2}</span>
+          <div className="h-10 w-px bg-zinc-800 rotate-[15deg]"></div>
+          <div className="text-center group flex-1">
+            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 block mb-1">Player 2</span>
+            <span className="text-4xl sm:text-5xl font-black italic tracking-tighter text-white tabular-nums">{finalScore2}</span>
           </div>
         </div>
 
         {/* Evidence Grid */}
-        <div className="grid grid-cols-2 gap-4">
-          {submissions.map((sub, idx) => (
-            <div key={sub.id} className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Log #{idx + 1}</span>
-                <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase tracking-widest rounded-full border border-emerald-500/20">Matching</span>
+        {submissions.length > 0 && (
+          <div className="grid grid-cols-2 gap-2.5">
+            {submissions.map((sub, idx) => (
+              <div key={sub.id} className="bg-zinc-950 border border-zinc-800 p-2.5 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-zinc-400">Log #{idx + 1}</span>
+                  <span className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 text-[9px] font-black uppercase tracking-wider rounded border border-emerald-500/20">Matching</span>
+                </div>
+                {sub.screenshot_url && (
+                  <StorageImage 
+                    bucket="result-screenshots" 
+                    path={sub.screenshot_url} 
+                    alt={`Proof ${idx + 1}`} 
+                    className="w-full aspect-video rounded-lg border border-zinc-800 object-cover" 
+                  />
+                )}
               </div>
-              <StorageImage 
-                bucket="result-screenshots" 
-                path={sub.screenshot_url} 
-                alt={`Proof ${idx + 1}`} 
-                className="w-full aspect-video rounded-xl border border-slate-800 hover:scale-[1.02] transition-transform duration-300 cursor-zoom-in" 
-              />
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Footer Actions */}
-        <div className="flex flex-col sm:flex-row items-center gap-3 pt-4 border-t border-slate-800">
+        <div className="flex flex-col sm:flex-row items-center gap-2 pt-2 border-t border-zinc-800">
           <Link 
-            to="/tournaments" // Replace with actual tournament link if possible
-            className="w-full sm:flex-1 h-14 bg-white text-black rounded-2xl flex items-center justify-center font-black uppercase italic tracking-widest hover:bg-primary transition-all active:scale-95 text-xs"
+            to="/tournaments"
+            className="w-full sm:flex-1 h-11 bg-white text-black rounded-xl flex items-center justify-center font-black uppercase italic tracking-wider hover:bg-primary transition-all active:scale-95 text-xs"
           >
-            <Trophy className="w-4 h-4 mr-2" />
+            <Trophy className="w-3.5 h-3.5 mr-1.5" />
             Tournament Standings
           </Link>
           <Link 
             to="/dashboard"
-            className="w-full sm:flex-1 h-14 bg-slate-800 text-white rounded-2xl flex items-center justify-center font-black uppercase italic tracking-widest hover:bg-slate-700 transition-all border border-slate-700 active:scale-95 text-xs"
+            className="w-full sm:flex-1 h-11 bg-zinc-800 text-white rounded-xl flex items-center justify-center font-black uppercase italic tracking-wider hover:bg-zinc-700 transition-all border border-zinc-700 active:scale-95 text-xs"
           >
-            <Layout className="w-4 h-4 mr-2" />
+            <Layout className="w-3.5 h-3.5 mr-1.5" />
             Command Center
           </Link>
         </div>

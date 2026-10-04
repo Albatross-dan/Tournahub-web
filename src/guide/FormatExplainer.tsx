@@ -2,7 +2,12 @@ import React, { useState } from 'react';
 import { HelpCircle, X, Layers } from 'lucide-react';
 import { formatExplorations } from './guideContent';
 
-export default function FormatExplainer({ format, className = '' }) {
+interface FormatExplainerProps {
+  format?: string;
+  className?: string;
+}
+
+export default function FormatExplainer({ format, className = '' }: FormatExplainerProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   // Normalize format key (e.g. 'single_elimination' -> 'knockout', 'double_elimination' -> 'knockout', etc.)

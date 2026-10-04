@@ -159,20 +159,26 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
 
   if (myResult) {
     return (
-      <div className="submission-locked-card bg-slate-900 border border-slate-800 rounded-3xl p-8 space-y-4 shadow-2xl relative flex flex-col items-center text-center">
-        <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 mx-auto mb-2">
-          <CheckCircle2 className="text-emerald-500 w-8 h-8" />
+      <div className="submission-locked-card bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5 flex items-center gap-3.5 shadow-xl relative">
+        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 shrink-0">
+          <CheckCircle2 className="text-emerald-500 w-5 h-5" />
         </div>
-        <p className="font-black text-lg text-white uppercase italic tracking-wider leading-none">You've already submitted</p>
-        <p className="text-xs text-emerald-400 font-bold uppercase tracking-widest mt-1">Status: {myResult.status.replace('_', ' ')}</p>
-        <p className="text-sm text-slate-400 max-w-md">
-          You submitted {myResult.player1_score} – {myResult.player2_score}.
-          {myResult.status === 'disputed' 
-            ? ' Your opponent submitted a different score — an admin will review this shortly.'
-            : myResult.status === 'verified'
-            ? ' This result has been confirmed.'
-            : ' Waiting for your opponent to confirm.'}
-        </p>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="font-black text-xs sm:text-sm text-white uppercase italic tracking-wider leading-none">You've already submitted</p>
+            <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
+              {myResult.status.replace('_', ' ')}
+            </span>
+          </div>
+          <p className="text-xs text-zinc-400 mt-1">
+            You submitted <span className="text-white font-bold">{myResult.player1_score} – {myResult.player2_score}</span>.
+            {myResult.status === 'disputed' 
+              ? ' Your opponent submitted a different score — an admin will review this shortly.'
+              : myResult.status === 'verified'
+              ? ' This result has been confirmed.'
+              : ' Waiting for your opponent to confirm.'}
+          </p>
+        </div>
       </div>
     );
   }
@@ -531,6 +537,19 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
     }
   };
 
+  const handleStepScore = (field: 'score1' | 'score2', delta: number) => {
+    if (!can_submit || isSubmitting || formDisabled || hasAlreadySubmitted) return;
+    if (field === 'score1') {
+      const current = score1 === '' ? 0 : parseInt(score1, 10);
+      const nextVal = Math.max(0, isNaN(current) ? 0 : current + delta);
+      setScore1(String(nextVal));
+    } else {
+      const current = score2 === '' ? 0 : parseInt(score2, 10);
+      const nextVal = Math.max(0, isNaN(current) ? 0 : current + delta);
+      setScore2(String(nextVal));
+    }
+  };
+
   const isFormValid = score1 !== '' && score2 !== '';
 
   const formatSecondsRemaining = (secs: number) => {
@@ -572,35 +591,67 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
     return "SUBMIT RESULT ✓";
   };
 
+  const countdownState = state?.countdown_state || 'not_scheduled';
+
+  // Window NOT open yet: replace the big form with ONE slim locked row (about 48px)
+  if (countdownState === 'pre_match' || countdownState === 'not_scheduled') {
+    return (
+      <div className="h-12 px-4 bg-zinc-900 border border-zinc-800 rounded-xl flex items-center justify-center gap-2 text-zinc-400 font-bold text-xs uppercase tracking-wider shadow-lg">
+        <Clock className="w-4 h-4 text-zinc-500 shrink-0" />
+        <span>Submissions open when the match starts</span>
+      </div>
+    );
+  }
+
+  if (countdownState === 'deadline_expired') {
+    return (
+      <div className="h-12 px-4 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center justify-center gap-2 text-rose-400 font-bold text-xs uppercase tracking-wider shadow-lg">
+        <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+        <span>Time's up — awaiting admin review</span>
+      </div>
+    );
+  }
+
+  if (countdownState === 'finished') {
+    return (
+      <div className="h-12 px-4 bg-zinc-900 border border-zinc-800 rounded-xl flex items-center justify-center gap-2 text-zinc-500 font-bold text-xs uppercase tracking-wider shadow-lg">
+        <Clock className="w-4 h-4 text-zinc-500 shrink-0" />
+        <span>Match complete — submissions closed</span>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl relative">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl relative p-3.5 sm:p-4 space-y-3">
       {/* Confirmation Overlay */}
       {showConfirm && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-6 text-center animate-in fade-in duration-200">
-          <div className="space-y-6 max-w-sm w-full">
-            <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto text-primary animate-bounce">
-              <Trophy className="w-8 h-8" />
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 text-center animate-in fade-in duration-200">
+          <div className="space-y-4 max-w-xs w-full">
+            <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto text-primary">
+              <Trophy className="w-6 h-6" />
             </div>
-            <div className="space-y-2">
-              <h4 className="text-lg font-black text-white uppercase italic tracking-widest">Verify Scores</h4>
-              <p className="text-xs text-slate-400">
-                Confirm: You scored <span className="font-mono text-white font-extrabold text-sm">{score1}</span>, opponent scored <span className="font-mono text-white font-extrabold text-sm">{score2}</span>.
+            <div className="space-y-1">
+              <h4 className="text-base font-black text-white uppercase italic tracking-wider">Verify Scores</h4>
+              <p className="text-xs text-zinc-400">
+                Confirm: You scored <span className="font-mono text-white font-black text-sm">{score1}</span>, opponent scored <span className="font-mono text-white font-black text-sm">{score2}</span>.
               </p>
-              <p className="text-red-400 uppercase tracking-widest text-[9px] font-black mt-2">
+              <p className="text-red-400 uppercase tracking-widest text-[9px] font-black mt-1">
                 This cannot be changed.
               </p>
             </div>
-            <div className="flex space-x-3">
+            <div className="flex space-x-2">
               <button
+                type="button"
                 onClick={() => setShowConfirm(false)}
-                className="flex-1 h-12 bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-700 transition-all cursor-pointer"
+                className="flex-1 h-10 bg-zinc-800 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-zinc-700 transition-all cursor-pointer"
               >
                 No, Edit
               </button>
               <button
+                type="button"
                 onClick={handleFinalConfirmSubmit}
                 disabled={isSubmitting}
-                className="flex-1 h-12 bg-primary text-black rounded-xl text-xs font-black uppercase tracking-widest hover:bg-white transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center"
+                className="flex-1 h-10 bg-primary text-black rounded-xl text-xs font-black uppercase tracking-wider hover:bg-white transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center"
               >
                 {isSubmitting ? (
                   <Loader2 className="w-4 h-4 animate-spin text-black" />
@@ -613,94 +664,50 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
         </div>
       )}
 
-      <div className="p-6 border-b border-slate-800 flex items-center justify-between">
-        <div className="flex flex-col">
-          <h3 className="text-sm font-black text-white uppercase italic tracking-widest flex items-center text-[10px] sm:text-xs">
-            <Trophy className="w-4 h-4 mr-2 text-primary shrink-0" />
-            Play your Match and submit results here
-          </h3>
-          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">
-            {myName} vs {opponentName}
+      {/* Active Deadline Countdown Bar */}
+      {countdownState === 'active' && match_deadline && (
+        <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-mono font-bold text-emerald-400 px-1">
+          <span className="flex items-center gap-1.5 uppercase tracking-wider">
+            <Clock className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+            Submit by {(() => {
+              try {
+                return new Date(match_deadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              } catch (e) {
+                return 'deadline';
+              }
+            })()}
+          </span>
+          <span className="text-emerald-400 font-black">{formatSecondsRemaining(secondsRemaining)} left</span>
+        </div>
+      )}
+
+      {rejectedResult && (
+        <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center space-x-2">
+          <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+          <p className="text-[10px] font-semibold text-red-400">
+            Previous submission rejected. Please resubmit with a clear screenshot.
           </p>
         </div>
-      </div>
+      )}
 
-      <div className="p-8 space-y-8">
-        <GuideTip id="result_submit" />
-
-        {/* State Status Card Mapping */}
-        {(() => {
-          const countdownState = state?.countdown_state || 'not_scheduled';
-          switch (countdownState) {
-            case 'not_scheduled':
-              return (
-                <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-center space-x-2 text-slate-400 font-mono text-xs font-black uppercase italic tracking-wider">
-                  <Clock className="w-4 h-4 text-slate-500" />
-                  <span>Awaiting schedule</span>
-                </div>
-              );
-            case 'pre_match':
-              return (
-                <div className="p-4 bg-sky-500/5 border border-sky-500/20 rounded-2xl flex items-center justify-center space-x-2 text-sky-400 font-mono text-xs font-black uppercase italic tracking-wider">
-                  <Clock className="w-4 h-4 text-sky-400" />
-                  <span>Match starts in {preMatchCountdown.formatted}</span>
-                </div>
-              );
-            case 'active': {
-              let deadlineLabel = 'N/A';
-              if (match_deadline) {
-                try {
-                  const deadline = new Date(match_deadline);
-                  deadlineLabel = deadline.toLocaleTimeString([], { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  });
-                } catch (e) {
-                  console.error('Error parsing match_deadline:', e);
-                }
-              }
-              return (
-                <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl flex items-center justify-center space-x-2 text-emerald-400 animate-pulse font-mono text-xs font-black uppercase italic tracking-wider">
-                  <Clock className="w-4 h-4 text-emerald-400" />
-                  <span>Submit by {deadlineLabel}  •  {formatSecondsRemaining(secondsRemaining)} left</span>
-                </div>
-              );
-            }
-            case 'deadline_expired':
-              return (
-                <div className="p-4 bg-rose-500/5 border border-rose-500/20 rounded-2xl flex items-center justify-center space-x-2 text-rose-400 font-mono text-xs font-black uppercase italic tracking-wider">
-                  <Clock className="w-4 h-4 text-rose-400" />
-                  <span>Time's up — awaiting admin review</span>
-                </div>
-              );
-            case 'finished':
-              return (
-                <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-center space-x-2 text-slate-500 font-mono text-xs font-black uppercase italic tracking-wider">
-                  <Clock className="w-4 h-4 text-slate-500" />
-                  <span>Match complete</span>
-                </div>
-              );
-            default:
-              return null;
-          }
-        })()}
-
-        {rejectedResult && (
-          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center space-x-3 mb-2">
-            <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
-            <p className="text-xs font-semibold text-red-400">
-              Your previous submission was rejected. Please resubmit with a clear screenshot.
-            </p>
-          </div>
-        )}
-
-        {/* Scores */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <div className="space-y-3">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block">
-              {myName} Score (You)
-            </label>
-            <input 
+      {/* Both scores on ONE row: [YOU/name] [ - ] 0 [ + ] - [ - ] 0 [ + ] [OPPONENT name] */}
+      <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-2 sm:p-2.5 flex items-center justify-between gap-1 sm:gap-2">
+        {/* Left: You */}
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          <span className="text-xs font-black text-white italic uppercase tracking-tight truncate max-w-[65px] sm:max-w-[100px]" title={myName}>
+            {myName}
+          </span>
+          <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => handleStepScore('score1', -1)}
+              disabled={!can_submit || isSubmitting || formDisabled || hasAlreadySubmitted || Number(score1) <= 0}
+              className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-700/80 text-white font-black text-sm flex items-center justify-center hover:bg-zinc-800 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+              aria-label="Decrease your score"
+            >
+              -
+            </button>
+            <input
               type="number"
               min="0"
               step="1"
@@ -708,15 +715,37 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
               onChange={(e) => setScore1(e.target.value)}
               disabled={!can_submit || isSubmitting || formDisabled || hasAlreadySubmitted}
               aria-label="Your score"
-              className="w-full h-16 bg-slate-950 border-2 border-slate-800 rounded-2xl text-3xl font-black text-center text-white focus:border-primary focus:ring-0 transition-all disabled:opacity-50"
+              className="w-9 sm:w-11 h-7 bg-zinc-900 border border-zinc-700 rounded-lg text-base sm:text-lg font-black text-center text-white focus:border-primary focus:outline-none transition-all disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               placeholder="0"
             />
+            <button
+              type="button"
+              onClick={() => handleStepScore('score1', 1)}
+              disabled={!can_submit || isSubmitting || formDisabled || hasAlreadySubmitted}
+              className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-700/80 text-white font-black text-sm flex items-center justify-center hover:bg-zinc-800 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+              aria-label="Increase your score"
+            >
+              +
+            </button>
           </div>
-          <div className="space-y-3">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block">
-              {opponentName} Score
-            </label>
-            <input 
+        </div>
+
+        {/* Divider */}
+        <span className="text-xs font-black text-zinc-600 px-0.5 shrink-0">-</span>
+
+        {/* Right: Opponent */}
+        <div className="flex items-center justify-end gap-1.5 min-w-0 flex-1">
+          <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => handleStepScore('score2', -1)}
+              disabled={!can_submit || isSubmitting || formDisabled || hasAlreadySubmitted || Number(score2) <= 0}
+              className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-700/80 text-white font-black text-sm flex items-center justify-center hover:bg-zinc-800 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+              aria-label="Decrease opponent score"
+            >
+              -
+            </button>
+            <input
               type="number"
               min="0"
               step="1"
@@ -724,195 +753,164 @@ export function SubmitResultPanel({ matchId, currentUserId, playerName, match }:
               onChange={(e) => setScore2(e.target.value)}
               disabled={!can_submit || isSubmitting || formDisabled || hasAlreadySubmitted}
               aria-label="Opponent score"
-              className="w-full h-16 bg-slate-950 border-2 border-slate-800 rounded-2xl text-3xl font-black text-center text-white focus:border-primary focus:ring-0 transition-all disabled:opacity-50"
+              className="w-9 sm:w-11 h-7 bg-zinc-900 border border-zinc-700 rounded-lg text-base sm:text-lg font-black text-center text-white focus:border-primary focus:outline-none transition-all disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               placeholder="0"
             />
+            <button
+              type="button"
+              onClick={() => handleStepScore('score2', 1)}
+              disabled={!can_submit || isSubmitting || formDisabled || hasAlreadySubmitted}
+              className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-700/80 text-white font-black text-sm flex items-center justify-center hover:bg-zinc-800 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+              aria-label="Increase opponent score"
+            >
+              +
+            </button>
           </div>
+          <span className="text-xs font-black text-white italic uppercase tracking-tight truncate max-w-[65px] sm:max-w-[100px] text-right" title={opponentName}>
+            {opponentName}
+          </span>
         </div>
+      </div>
 
-        {/* Screenshot Upload */}
-        <div ref={uploadSectionRef} className="space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Screenshot Evidence</label>
-            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-white/5">Required</span>
-          </div>
-          
-          {screenshotFile ? (
-            <div className="relative group rounded-2xl overflow-hidden border-2 border-primary/20 aspect-video bg-slate-950">
-              <img 
-                src={previewUrl || ''} 
-                alt="Match proof preview" 
-                className="w-full h-full object-cover" 
-              />
-              {uploading && (
-                <div className="absolute inset-0 bg-slate-950/70 flex flex-col items-center justify-center space-y-2 z-10 transition-all">
-                  <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                  <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Uploading Encrypted Intel...</span>
-                </div>
-              )}
-              {uploadError && !uploading && (
-                <div className="absolute inset-0 bg-slate-950/80 flex flex-col items-center justify-center p-4 text-center z-10 space-y-3">
-                  <AlertCircle className="w-8 h-8 text-red-500 animate-bounce" />
-                  <p className="text-red-400 font-bold uppercase tracking-wider text-[10px] px-2">{uploadError}</p>
-                  <div className="flex space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (screenshotBuffer && screenshotFile) {
-                          performUpload(screenshotBuffer, screenshotFile.name, screenshotFile.type);
-                        }
-                      }}
-                      className="px-3 py-1.5 bg-primary/20 border border-primary/40 text-primary hover:bg-primary/30 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors cursor-pointer"
-                    >
-                      Retry Upload
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (previewUrl) {
-                          URL.revokeObjectURL(previewUrl);
-                        }
-                        setPreviewUrl(null);
-                        setScreenshotFile(null);
-                        setPublicUrl(null);
-                        setUploadError(null);
-                      }}
-                      className="px-3 py-1.5 bg-red-600 border border-red-700 text-white hover:bg-red-700 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors cursor-pointer"
-                    >
-                      Remove
-                    </button>
+      {/* Screenshot Upload: compact row (~56px tall) */}
+      <div ref={uploadSectionRef} className="space-y-1">
+        {screenshotFile ? (
+          <div className="h-14 px-3 bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-12 h-12 rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900 shrink-0 relative">
+                <img 
+                  src={previewUrl || ''} 
+                  alt="Proof preview" 
+                  className="w-full h-full object-cover" 
+                />
+                {uploading && (
+                  <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
+                    <Loader2 className="w-4 h-4 text-primary animate-spin" />
                   </div>
-                </div>
-              )}
-              {!uploading && !uploadError && (
-                <button 
-                  onClick={() => { 
-                    if (previewUrl) {
-                      URL.revokeObjectURL(previewUrl);
-                    }
-                    setPreviewUrl(null);
-                    setScreenshotFile(null); 
-                    setPublicUrl(null);
-                    setUploadError(null);
-                  }}
-                  className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
-                  disabled={!can_submit || formDisabled || isSubmitting || hasAlreadySubmitted}
-                >
-                  <div className="bg-red-600 p-2 rounded-lg text-white text-[10px] font-black uppercase tracking-widest">Remove</div>
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className={cn(
-              "relative border-2 border-dashed rounded-2xl p-12 transition-all group",
-              isScreenshotError ? "border-red-500/50 bg-red-500/5" : "border-slate-800",
-              can_submit && !hasAlreadySubmitted && !formDisabled ? "hover:border-primary/50 cursor-pointer" : "opacity-50 cursor-not-allowed"
-            )}>
-              <input 
-                type="file"
-                accept="image/*"
-                onChange={handleFileUpload}
-                onClick={(e) => {
-                  console.log('[SubmitResultPanel] File input element clicked, resetting value to allow repeating same file selection.');
-                  (e.target as HTMLInputElement).value = '';
-                }}
-                disabled={!can_submit || uploading || isSubmitting || formDisabled || hasAlreadySubmitted}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-              />
-              <div className="flex flex-col items-center justify-center text-center">
-                {uploading ? (
-                  <>
-                    <Loader2 className="w-8 h-8 text-primary animate-spin mb-3" />
-                    <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Uploading Encrypted Intel...</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-8 h-8 text-slate-600 group-hover:text-primary transition-colors mb-3" />
-                    <span className="text-slate-400 font-bold uppercase tracking-tight mb-1">Click or drag to upload proof</span>
-                    <span className="text-slate-600 text-[10px] font-black uppercase tracking-widest">PNG, JPG up to 10MB</span>
-                  </>
                 )}
               </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-white truncate max-w-[120px] sm:max-w-[190px]">
+                  {screenshotFile.name}
+                </p>
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">
+                  {uploading ? 'Uploading proof...' : uploadError ? 'Upload failed' : 'Proof attached'}
+                </span>
+              </div>
             </div>
-          )}
-          {uploadError && <p className="text-red-500 text-[10px] font-black uppercase tracking-widest mt-1 italic">{uploadError}</p>}
-          {isScreenshotError && !uploadError && (
-            <p className="text-red-500 text-[10px] font-black uppercase tracking-widest mt-1 italic">
-              Verification proof required. Highlight error: Screenshot issue detected.
-            </p>
-          )}
-        </div>
 
-        {/* Inform user they already submitted */}
-        {hasAlreadySubmitted && !successMsg && (
-          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center space-x-3">
-            <Check className="w-4 h-4 text-amber-500 shrink-0" />
-            <p className="text-[10px] font-black uppercase tracking-widest text-amber-500">
-              Your results are successfully logged. Double submissions are locked.
-            </p>
+            <div className="flex items-center gap-2 shrink-0">
+              {uploadError && !uploading && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (screenshotBuffer && screenshotFile) {
+                      performUpload(screenshotBuffer, screenshotFile.name, screenshotFile.type);
+                    }
+                  }}
+                  className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider bg-primary/20 text-primary border border-primary/30 rounded-lg hover:bg-primary/30 cursor-pointer"
+                >
+                  Retry
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  if (previewUrl) URL.revokeObjectURL(previewUrl);
+                  setPreviewUrl(null);
+                  setScreenshotFile(null);
+                  setPublicUrl(null);
+                  setUploadError(null);
+                }}
+                disabled={uploading || isSubmitting}
+                className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider bg-red-600/80 hover:bg-red-600 text-white rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className={cn(
+            "relative h-14 px-3 bg-zinc-950 border border-dashed rounded-xl flex items-center justify-between gap-2 transition-all",
+            isScreenshotError ? "border-red-500/50 bg-red-500/5" : "border-zinc-800 hover:border-primary/50",
+            can_submit && !hasAlreadySubmitted && !formDisabled ? "cursor-pointer" : "opacity-50 cursor-not-allowed"
+          )}>
+            <input 
+              type="file" 
+              accept="image/*"
+              onChange={handleFileUpload}
+              onClick={(e) => {
+                (e.target as HTMLInputElement).value = '';
+              }}
+              disabled={!can_submit || uploading || isSubmitting || formDisabled || hasAlreadySubmitted}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
+            />
+            <div className="flex items-center gap-2 min-w-0">
+              <Upload className="w-4 h-4 text-zinc-500 shrink-0" />
+              <span className="text-xs font-bold text-zinc-300 truncate">
+                <span className="md:hidden">Tap to upload proof</span>
+                <span className="hidden md:inline">Click or drag to upload proof</span>
+              </span>
+            </div>
+            <span className="text-[9px] font-black uppercase tracking-wider text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded shrink-0">
+              REQUIRED
+            </span>
           </div>
         )}
-
-        {/* Submission Error Message Displays */}
-        {finalSubmitError && !isAlreadySubmitted && (
-          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center space-x-3">
-            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-            <p className="text-[10px] font-black uppercase tracking-widest text-red-500">
-               {isDeadlineExpired ? "Submission deadline has passed." : finalSubmitError}
-            </p>
-          </div>
-        )}
-
-        {/* Submission Success Message Display */}
-        {successMsg && (
-          <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center space-x-3">
-            <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500">
-              {successMsg}
-            </p>
-          </div>
-        )}
-
-        {/* Submit Button */}
-        <button 
-          onClick={handleSubmit}
-          disabled={!can_submit || !isFormValid || isSubmitting || uploading || formDisabled || hasAlreadySubmitted || !publicUrl}
-          className={cn(
-            "w-full h-16 flex items-center justify-center space-x-3 rounded-2xl font-black uppercase italic tracking-widest transition-all cursor-pointer",
-            can_submit && isFormValid && !hasAlreadySubmitted && !formDisabled && !uploading && !!publicUrl
-              ? "bg-primary text-black hover:bg-white hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-primary/20"
-              : "bg-slate-800 text-slate-600 cursor-not-allowed"
-          )}
-        >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              <span>Transmitting...</span>
-            </>
-          ) : (
-            <>
-              <span>{getSubmitButtonLabel()}</span>
-              {can_submit && !hasAlreadySubmitted && <Check className="w-5 h-5" />}
-            </>
-          )}
-        </button>
-
-        {state?.countdown_state === 'pre_match' && (
-          <p className="text-center text-slate-600 text-[10px] font-black uppercase tracking-widest italic animate-pulse">
-            Submissions window is not yet active (Match starts soon)
-          </p>
-        )}
-        {state?.countdown_state === 'deadline_expired' && (
-          <p className="text-center text-red-500 text-[10px] font-black uppercase tracking-widest italic animate-pulse">
-            The deadline for submitting results has expired.
-          </p>
-        )}
-        {state?.countdown_state === 'finished' && (
-          <p className="text-center text-slate-600 text-[10px] font-black uppercase tracking-widest italic animate-pulse">
-            The match has been completed or expired.
-          </p>
-        )}
+        {uploadError && <p className="text-red-500 text-[10px] font-bold uppercase tracking-wider">{uploadError}</p>}
       </div>
+
+      {/* Messages */}
+      {hasAlreadySubmitted && !successMsg && (
+        <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center space-x-2">
+          <Check className="w-4 h-4 text-amber-500 shrink-0" />
+          <p className="text-[10px] font-black uppercase tracking-wider text-amber-500">
+            Results logged. Double submissions are locked.
+          </p>
+        </div>
+      )}
+
+      {finalSubmitError && !isAlreadySubmitted && (
+        <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center space-x-2">
+          <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+          <p className="text-[10px] font-black uppercase tracking-wider text-red-500">
+            {isDeadlineExpired ? "Submission deadline has passed." : finalSubmitError}
+          </p>
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center space-x-2">
+          <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+          <p className="text-[10px] font-black uppercase tracking-wider text-emerald-500">
+            {successMsg}
+          </p>
+        </div>
+      )}
+
+      {/* Submit Button */}
+      <button 
+        onClick={handleSubmit}
+        disabled={!can_submit || !isFormValid || isSubmitting || uploading || formDisabled || hasAlreadySubmitted || (Boolean(screenshotFile) && !publicUrl)}
+        className={cn(
+          "w-full h-12 flex items-center justify-center space-x-2 rounded-xl font-black uppercase italic tracking-wider transition-all text-xs cursor-pointer",
+          can_submit && isFormValid && !hasAlreadySubmitted && !formDisabled && !uploading && (!screenshotFile || Boolean(publicUrl))
+            ? "bg-primary text-black hover:bg-white active:scale-[0.99] shadow-lg shadow-primary/20"
+            : "bg-zinc-800 text-zinc-600 cursor-not-allowed"
+        )}
+      >
+        {isSubmitting ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Transmitting...</span>
+          </>
+        ) : (
+          <>
+            <span>{getSubmitButtonLabel()}</span>
+            {can_submit && !hasAlreadySubmitted && <Check className="w-4 h-4" />}
+          </>
+        )}
+      </button>
     </div>
   );
 }

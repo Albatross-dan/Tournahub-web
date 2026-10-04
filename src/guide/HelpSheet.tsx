@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { helpGuides } from './guideContent';
 
-const GUIDE_ICONS = {
+const GUIDE_ICONS: Record<string, React.ElementType> = {
   join_tournament: Trophy,
   submit_result: CheckCircle2,
   escrow_prizes: Shield,
@@ -14,12 +14,18 @@ const GUIDE_ICONS = {
   formats: Layers,
 };
 
-export default function HelpSheet({ isOpen, onClose, onReplayTour }) {
-  const [expandedGuideId, setExpandedGuideId] = useState(null);
+interface HelpSheetProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onReplayTour?: () => void;
+}
+
+export default function HelpSheet({ isOpen, onClose, onReplayTour }: HelpSheetProps) {
+  const [expandedGuideId, setExpandedGuideId] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const toggleGuide = (id) => {
+  const toggleGuide = (id: string) => {
     setExpandedGuideId((prev) => (prev === id ? null : id));
   };
 

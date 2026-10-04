@@ -1,9 +1,14 @@
 import React from 'react';
-import { Lightbulb, X, Check } from 'lucide-react';
+import { Lightbulb, X } from 'lucide-react';
 import { contextualTips } from './guideContent';
 import { useGuideState } from './useGuideState';
 
-export default function GuideTip({ id, className = '' }) {
+interface GuideTipProps {
+  id?: string;
+  className?: string;
+}
+
+export default function GuideTip({ id, className = '' }: GuideTipProps) {
   const { shouldShowTip, dismissTip } = useGuideState();
 
   if (!id || !shouldShowTip(id)) {
